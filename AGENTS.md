@@ -14,7 +14,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Environment Variables
 
-Required in `.env.local` (see `.env.example`):
+Required in `.env` (see `.env.example`; `.env.local` holds other local-only secrets):
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` - Supabase backend
 
 Required in Supabase Edge Function secrets:
@@ -22,7 +22,7 @@ Required in Supabase Edge Function secrets:
 
 ## Architecture Overview
 
-**Stack**: React 19 + TypeScript 5.8 + Vite 6 + Tailwind CSS 4 + Framer Motion 11 + Supabase + Capacitor (Android)
+**Stack**: React 19 + TypeScript 7 + Vite 8 (Rolldown) + Tailwind CSS 4 + Motion 14 (`motion/react`) + Supabase + Capacitor 8 (Android)
 
 ### Navigation & Routing
 
@@ -41,7 +41,7 @@ Three-layer architecture:
 
 ### App.tsx Decomposition
 
-`App.tsx` (~1380 lines) is the orchestrator. Logic is extracted into hooks:
+`App.tsx` (~585 lines) is the orchestrator. Logic is extracted into hooks:
 - `useAuth` - sign up/in/out, user caching, account deletion
 - `useAppState` - central state, segmented persistence, theme application
 - `useModals` - toggle state for modal flows

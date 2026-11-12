@@ -13,7 +13,7 @@ This contains everything you need to run your app locally.
 
 1. Install dependencies:
    `npm install`
-2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env.local`
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env`
 3. In Supabase, configure `OPENAI_API_KEY` as an Edge Function secret for AI features
 4. Run the app:
    `npm run dev`
