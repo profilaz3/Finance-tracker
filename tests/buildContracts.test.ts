@@ -6,7 +6,7 @@ describe('build contracts', () => {
     const viteConfig = readFileSync('vite.config.ts', 'utf8');
 
     expect(viteConfig).toContain("const normalizedId = id.replace(/\\\\/g, '/')");
-    expect(viteConfig).toContain('const isPackagePath = (packageName: string) =>');
+    expect(viteConfig).toContain('const isPackagePath = (id: string, packageName: string) =>');
     expect(viteConfig).not.toContain("id.includes('react') || id.includes('react-dom')");
     expect(viteConfig).not.toContain("return 'react-vendor'");
   });
@@ -31,10 +31,10 @@ describe('build contracts', () => {
   it('splits shared animation and icon libraries into dedicated vendor chunks', () => {
     const viteConfig = readFileSync('vite.config.ts', 'utf8');
 
-    expect(viteConfig).toContain("if (isPackagePath('framer-motion'))");
-    expect(viteConfig).toContain("return 'motion'");
-    expect(viteConfig).toContain("if (isPackagePath('lucide-react'))");
-    expect(viteConfig).toContain("return 'icons'");
+    expect(viteConfig).toContain("name: 'motion'");
+    expect(viteConfig).toContain("isPackagePath(id, 'framer-motion')");
+    expect(viteConfig).toContain("name: 'icons'");
+    expect(viteConfig).toContain("isPackagePath(id, 'lucide-react')");
   });
 
   it('cleans dist before building so stale chunk files do not confuse verification', () => {

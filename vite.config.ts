@@ -1,10 +1,18 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 
+// Match a module id against a package directory, normalising Windows separators.
+// Package-path matching (instead of a bare substring like 'react') keeps unrelated
+// packages out of the vendor chunks.
+const isPackagePath = (id: string, packageName: string) => {
+  const normalizedId = id.replace(/\\/g, '/');
+  const prefix = packageName.endsWith('/') ? packageName : `${packageName}/`;
+  return normalizedId.includes(`/node_modules/${prefix}`);
+};
+
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
   return {
     server: {
       port: 3000,
@@ -12,17 +20,18 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
-      visualizer({
-        open: mode === 'analyze',
-        gzipSize: true,
-        brotliSize: true,
-        filename: 'dist/stats.html',
-        template: 'treemap',
-        projectRoot: path.resolve(__dirname)
-      }),
+      // Only run the bundle visualizer for `npm run analyze`; it roughly doubles build time.
+      mode === 'analyze' &&
+        visualizer({
+          open: true,
+          gzipSize: true,
+          brotliSize: true,
+          filename: 'dist/stats.html',
+          template: 'treemap',
+          projectRoot: import.meta.dirname,
+        }),
     ],
     build: {
-      minify: 'terser',
       sourcemap: mode === 'development',
       modulePreload: {
         resolveDependencies: (_filename, deps, context) => {
@@ -38,51 +47,27 @@ export default defineConfig(({ mode }) => {
           );
         },
       },
-      rollupOptions: {
+      rolldownOptions: {
         output: {
           chunkFileNames: 'assets/[name]-[hash].js',
           entryFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]',
-          manualChunks(id) {
-            const normalizedId = id.replace(/\\/g, '/');
-            const isPackagePath = (packageName: string) =>
-              normalizedId.includes(`/node_modules/${packageName}/`);
-
-            if (
-              normalizedId.includes('commonjsHelpers') ||
-              normalizedId.includes('vite/preload-helper')
-            ) {
-              return 'vendor-helpers';
-            }
-
-            if (!normalizedId.includes('/node_modules/')) {
-              return undefined;
-            }
-
-            if (isPackagePath('jspdf') || isPackagePath('jspdf-autotable')) {
-              return 'pdf-tools';
-            }
-
-            if (isPackagePath('react-markdown')) {
-              return 'markdown';
-            }
-
-            if (isPackagePath('framer-motion')) {
-              return 'motion';
-            }
-
-            if (isPackagePath('lucide-react')) {
-              return 'icons';
-            }
-
-            if (isPackagePath('@supabase/supabase-js')) {
-              return 'supabase';
-            }
-
-            return undefined;
-          }
+          codeSplitting: {
+            groups: [
+              { name: 'markdown', test: (id) => isPackagePath(id, 'react-markdown') },
+              {
+                name: 'motion',
+                test: (id) =>
+                  isPackagePath(id, 'motion') ||
+                  isPackagePath(id, 'framer-motion') ||
+                  isPackagePath(id, 'motion-dom') ||
+                  isPackagePath(id, 'motion-utils'),
+              },
+              { name: 'icons', test: (id) => isPackagePath(id, 'lucide-react') },
+              { name: 'supabase', test: (id) => isPackagePath(id, '@supabase/') },
+            ],
+          },
         },
-        treeshake: true
       },
       target: 'es2020',
       cssCodeSplit: true,
@@ -90,7 +75,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       }
     },
   }
