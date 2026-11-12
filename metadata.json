@@ -1,0 +1,5 @@
+{
+  "name": "Finance Tracker",
+  "description": "A smart expense tracker that simulates a spreadsheet database. Features AI-powered transaction parsing, multi-currency support (USD, EUR, RSD), and extensive data visualization.",
+  "requestFramePermissions": []
+}

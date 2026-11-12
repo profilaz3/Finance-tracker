@@ -1,0 +1,17 @@
+# ========================================
+# Android Signing Configuration
+# ========================================
+# Copy this file to local.properties and fill in your actual values
+# DO NOT commit local.properties with real credentials to version control
+
+# Keystore file path (relative to android/ directory)
+KEYSTORE_FILE=my-release-key.keystore
+
+# Keystore password
+KEYSTORE_PASSWORD=your-keystore-password-here
+
+# Key alias
+KEY_ALIAS=my-key-alias
+
+# Key password
+KEY_PASSWORD=your-key-password-here

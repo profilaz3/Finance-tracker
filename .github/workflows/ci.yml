@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run typecheck
+        run: npx tsc --noEmit
+
+      - name: Build app
+        run: npm run build
+
+      - name: Check bundle budget
+        run: npm run bundle:budget
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  browser-regressions:
+    runs-on: ubuntu-latest
+    needs: verify
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      CLEANUP_RECURRING_URL: http://127.0.0.1:4173
+      CLEANUP_RECURRING_EMAIL: ${{ secrets.CI_E2E_EMAIL }}
+      CLEANUP_RECURRING_PASSWORD: ${{ secrets.CI_E2E_PASSWORD }}
+      EVENT_SUMMARY_REGRESSION_URL: http://127.0.0.1:4173
+      EVENT_SUMMARY_REGRESSION_EMAIL: ${{ secrets.CI_E2E_EMAIL }}
+      EVENT_SUMMARY_REGRESSION_PASSWORD: ${{ secrets.CI_E2E_PASSWORD }}
+      DASHBOARD_SUMMARY_REGRESSION_URL: http://127.0.0.1:4173
+      DASHBOARD_SUMMARY_REGRESSION_EMAIL: ${{ secrets.CI_E2E_EMAIL }}
+      DASHBOARD_SUMMARY_REGRESSION_PASSWORD: ${{ secrets.CI_E2E_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check browser regression secrets
+        id: browser-secrets
+        shell: bash
+        run: |
+          if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_ANON_KEY" ] && [ -n "$CLEANUP_RECURRING_EMAIL" ] && [ -n "$CLEANUP_RECURRING_PASSWORD" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Browser regressions skipped because required secrets are not configured."
+          fi
+
+      - name: Setup Node
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Cache Playwright browsers
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        run: npm ci
+
+      - name: Install Playwright browser
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        run: npm run build
+
+      - name: Start preview server
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > preview.log 2>&1 &
+          echo $! > preview.pid
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173 > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Preview server failed to start"
+          cat preview.log
+          exit 1
+
+      - name: Clean recurring regression rows
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        run: npm run cleanup:recurring-regressions
+
+      - name: Run event summary regression
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        run: npm run test:event-summary-regression
+
+      - name: Run dashboard summary regression
+        if: steps.browser-secrets.outputs.enabled == 'true'
+        run: npm run test:dashboard-summary-regression
+
+      - name: Upload Playwright artifacts
+        if: always() && steps.browser-secrets.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            output/playwright
+            preview.log
+
+      - name: Stop preview server
+        if: always() && steps.browser-secrets.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          if [ -f preview.pid ]; then
+            kill "$(cat preview.pid)" || true
+          fi

@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: personal-finance
+created: 2026-08-25T03:49:16+02:00
