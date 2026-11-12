@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import clsx from 'clsx';
 import { Banknote, Plus, Split } from 'lucide-react';
 

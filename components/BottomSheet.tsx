@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { motion, AnimatePresence, PanInfo, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence, PanInfo, useDragControls } from 'motion/react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
 import { MOTION } from '../config';

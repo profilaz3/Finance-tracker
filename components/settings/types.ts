@@ -1,4 +1,4 @@
-import { Variants } from 'framer-motion';
+import { Variants } from 'motion/react';
 import { AppState, Account, Person, TransactionType, Currency, Category, RecurringTransaction } from '../../types';
 
 export interface SettingsViewProps {

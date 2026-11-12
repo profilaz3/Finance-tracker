@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Receipt, TrendingUp, Plus } from 'lucide-react';
 
 // SVG Illustrations for different empty states

@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from 'react';
-import { motion, Variants } from 'framer-motion';
+import { motion, Variants } from 'motion/react';
 import { Sparkles, RefreshCw, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { Transaction, Category, Currency } from '../types';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { User, Trash2, Plus } from 'lucide-react';
 import { AppState, Account, Currency } from '../../types';
 import { TRANSLATIONS, CURRENCIES } from '../../constants';

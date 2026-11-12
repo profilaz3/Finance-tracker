@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { getSupabaseService } from '../services/runtimeServices';
 import { LogIn, UserPlus, AlertCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 interface AuthViewProps {
     onAuthSuccess: () => void;

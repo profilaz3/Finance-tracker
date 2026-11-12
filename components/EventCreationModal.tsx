@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Upload, Image as ImageIcon, Check, Loader2, Users, Type, Palette, Camera } from 'lucide-react';
 import { Person, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';

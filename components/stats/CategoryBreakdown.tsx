@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { Category, Currency, ExchangeRates, Transaction } from '../../types';

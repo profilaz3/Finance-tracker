@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Person, Currency, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { Plus, User, ArrowUpDown, ArrowDownLeft, ArrowUpRight, Search, Handshake, Check, Wallet, Banknote } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { EmptyState } from './EmptyState';
 import { formatCurrency } from '../utils/formatters';
 import { calculateDashboardDebtSummary, getActiveDashboardPeople } from '../utils/dashboardSummarySelectors';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Edit, Trash2, Receipt, Plus } from 'lucide-react';
 import { EmptyState } from '../EmptyState';
 import { TransactionItem } from '../TransactionItem';

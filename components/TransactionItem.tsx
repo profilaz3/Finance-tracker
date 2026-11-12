@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Split, Pencil, Trash2, Receipt, User, MapPin, Users, Check, Copy, Bookmark } from 'lucide-react';
 import clsx from 'clsx';
 import { Transaction, Category, Account, Person, AppState, Event } from '../types';

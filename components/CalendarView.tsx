@@ -17,7 +17,7 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Receipt } from 'lucide-react';
 import { EmptyState } from './EmptyState';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
 import { AppState, Transaction, View } from '../types';
 import { MOTION } from '../config';

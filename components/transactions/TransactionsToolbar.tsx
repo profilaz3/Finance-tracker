@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { Calendar, CheckCircle2, CheckSquare, ChevronDown, Download, FileText, FileSpreadsheet, Loader2, Search, Sparkles, Square, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState, TransactionType } from '../../types';

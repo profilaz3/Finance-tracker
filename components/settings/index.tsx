@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import clsx from 'clsx';
 import { Breadcrumb } from '../Breadcrumb';
 import { SettingsViewProps, containerVariants } from './types';

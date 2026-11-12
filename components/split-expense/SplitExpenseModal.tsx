@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { Currency, Transaction, SplitMode, SplitMethod, SplitShare } from '../../types';
 import { v4 as uuidv4 } from 'uuid';

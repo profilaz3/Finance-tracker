@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Category, TransactionType } from '../types';
 import { TRANSLATIONS, INITIAL_CATEGORIES } from '../constants';
 import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Tag } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
 import { IconPicker, ICONS, IconName } from './IconPicker';
 import { v4 as uuidv4 } from 'uuid';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { User, Plus, Trash2, RefreshCw, Play, Pause, Calendar, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';

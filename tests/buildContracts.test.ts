@@ -90,12 +90,12 @@ describe('build contracts', () => {
     const syncStatus = readFileSync('components/SyncStatus.tsx', 'utf8');
     const errorBoundary = readFileSync('components/ErrorBoundary.tsx', 'utf8');
 
-    expect(app).not.toContain("from 'framer-motion'");
+    expect(app).not.toContain("from 'motion/react'");
     expect(app).not.toContain('AnimatePresence');
     expect(app).not.toContain("from 'uuid'");
     expect(app).toContain('crypto.randomUUID()');
-    expect(toast).not.toContain("from 'framer-motion'");
-    expect(syncStatus).not.toContain("from 'framer-motion'");
+    expect(toast).not.toContain("from 'motion/react'");
+    expect(syncStatus).not.toContain("from 'motion/react'");
     expect(app).not.toContain("from 'lucide-react'");
     expect(toast).not.toContain("from 'lucide-react'");
     expect(syncStatus).not.toContain("from 'lucide-react'");

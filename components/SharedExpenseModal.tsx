@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { X, Check, Users, DollarSign, Calendar, Divide, Calculator } from 'lucide-react';
 import { Person, SharedExpense, Currency } from '../types';
 import { v4 as uuidv4 } from 'uuid';

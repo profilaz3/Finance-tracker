@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Transaction, Currency, ExchangeRates } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 interface StatsSummaryProps {
   transactions: Transaction[];

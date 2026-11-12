@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, User, AlertCircle, Palette, Coins, Camera } from 'lucide-react';
 import { Currency, Person } from '../types';
 import { TRANSLATIONS, CHART_COLORS, CURRENCIES } from '../constants';

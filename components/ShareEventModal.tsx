@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Mail, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { MOTION } from '../config';

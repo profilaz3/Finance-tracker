@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, FileSpreadsheet, FileJson, Calendar, Download, CheckCircle2 } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState } from '../types';

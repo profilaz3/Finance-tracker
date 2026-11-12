@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Plus, MapPin } from 'lucide-react';
 import { AppState, Event, Currency } from '../types';
 import { EventCard } from './EventCard';

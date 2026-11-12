@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { X, Split } from 'lucide-react';
 import { Account, Person, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';

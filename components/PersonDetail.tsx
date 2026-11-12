@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Person, Transaction, Currency, Category, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { X, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, Wallet, Calendar, Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { formatCurrency, getShortDate } from '../utils/formatters';
 import { convertAmount } from '../services/currencyService';
 import { BalanceInput } from './BalanceInput';

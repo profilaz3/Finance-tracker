@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useMemo, useRef, useCallback } from 'react';
-import { motion, Variants } from 'framer-motion';
+import { motion, Variants } from 'motion/react';
 import { exportToCSV } from '../services/storageService';
 import { AppState, Transaction, TransactionType } from '../types';
 import { parseTransaction, isAIAvailable, ParsedTransaction } from '../services/aiService';

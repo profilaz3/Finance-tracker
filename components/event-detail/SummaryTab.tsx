@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { AppState, SharedExpense, Person, Currency } from '../../types';
 import { PersonStatsRing } from '../PersonStatsRing';
 import { PersonStatCard } from '../PersonStatCard';

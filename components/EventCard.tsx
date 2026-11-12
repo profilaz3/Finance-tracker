@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Calendar, Users, ArrowRight, MapPin, CheckCircle2, Archive, PlayCircle } from 'lucide-react';
 import { Event, Person, Currency } from '../types';
 import { formatCurrency } from '../utils/currencyUtils';

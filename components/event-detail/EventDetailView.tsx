@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'motion/react';
 import { MapPin } from 'lucide-react';
 import { AppState, Event, Transaction, SharedExpense, Person, Currency } from '../../types';
 import { SharedExpenseModal } from '../SharedExpenseModal';

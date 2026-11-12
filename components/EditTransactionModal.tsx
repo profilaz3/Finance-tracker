@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import clsx from 'clsx';
 import { ArrowDownLeft, ArrowUpRight, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';

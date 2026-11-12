@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { motion, Variants, AnimatePresence } from 'framer-motion';
+import { motion, Variants, AnimatePresence } from 'motion/react';
 import { Banknote, CreditCard, Globe, User, Sparkles, Loader2, Camera, Split, X, Plus, MapPin, ExternalLink, ToggleLeft, ToggleRight, Bookmark, Trash2 } from 'lucide-react';
 import { ICONS, IconName } from './IconPicker';
 import { EmptyState } from './EmptyState';
