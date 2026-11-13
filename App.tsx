@@ -3,6 +3,7 @@ import { Transaction, Category, Person, View, TransactionType, Event } from './t
 
 import { getSupabaseService } from './services/runtimeServices';
 import { subscribeStorageErrors } from './services/storageHealth';
+import { subscribeAiErrors } from './services/aiErrors';
 import { CONFIG } from './config';
 import { TRANSLATIONS } from './constants';
 import { getIntlLocale, setAppLanguage } from './utils/locale';
@@ -175,13 +176,21 @@ const App: React.FC = () => {
       if (now - lastShownAt < CONFIG.STORAGE_WARNING_THROTTLE_MS) return;
       lastShownAt = now;
       const id = `toast-storage-${now}`;
-      const message = storageWarningLanguageRef.current === 'sr'
-        ? 'Memorija uređaja je puna: najnovije izmene možda nisu sačuvane lokalno'
-        : 'Device storage is full: recent changes may not be saved locally';
+      const message = TRANSLATIONS[storageWarningLanguageRef.current].storageFull;
       setToasts(prev => [...prev, { id, message, type: 'error', duration: 6000 }]);
       setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
     });
   }, []);
+
+  // AI limits and outages: say why the AI feature returned nothing.
+  useEffect(() => subscribeAiErrors(({ kind }) => {
+    if (kind !== 'quota' && kind !== 'unavailable') return;
+    const strings = TRANSLATIONS[storageWarningLanguageRef.current];
+    const id = `toast-ai-${kind}`;
+    const message = kind === 'quota' ? strings.aiDailyLimitReached : strings.aiServiceUnavailable;
+    setToasts(prev => [...prev.filter(t => t.id !== id), { id, message, type: 'warning', duration: 6000 }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
+  }), []);
 
   const dismissToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));

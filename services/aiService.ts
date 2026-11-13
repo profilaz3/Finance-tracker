@@ -7,6 +7,7 @@ import {
   validateParsedReceipt,
   validateParsedTransaction,
 } from '../utils/aiShared';
+import { classifyAiStatus, emitAiError } from './aiErrors';
 
 export type { ParsedReceipt, ParsedTransaction } from '../utils/aiShared';
 
@@ -27,44 +28,8 @@ const unwrapFunctionData = <T>(payload: unknown): T | null => {
   return (payload as T) ?? null;
 };
 
-export type AiErrorKind = 'quota' | 'unavailable' | 'rejected' | 'network' | 'unknown';
-
-export interface AiErrorInfo {
-  fn: EdgeFunctionName;
-  kind: AiErrorKind;
-  status?: number;
-  message?: string;
-}
-
-type AiErrorListener = (info: AiErrorInfo) => void;
-
-const aiErrorListeners = new Set<AiErrorListener>();
-
-/** AI calls still resolve to null on failure; subscribe here to tell the user why. */
-export const subscribeAiErrors = (listener: AiErrorListener): (() => void) => {
-  aiErrorListeners.add(listener);
-  return () => {
-    aiErrorListeners.delete(listener);
-  };
-};
-
-const emitAiError = (info: AiErrorInfo): void => {
-  aiErrorListeners.forEach(listener => {
-    try {
-      listener(info);
-    } catch {
-      // A broken listener must not break the caller
-    }
-  });
-};
-
-export const classifyAiStatus = (status: number | undefined): AiErrorKind => {
-  if (status === undefined) return 'network';
-  if (status === 429) return 'quota';
-  if (status === 502 || status === 503 || status === 504) return 'unavailable';
-  if (status >= 400 && status < 500) return 'rejected';
-  return 'unknown';
-};
+export { classifyAiStatus, subscribeAiErrors } from './aiErrors';
+export type { AiErrorInfo, AiErrorKind } from './aiErrors';
 
 const describeFunctionError = async (error: unknown): Promise<{ status?: number; message?: string }> => {
   const context = (error as { context?: unknown } | null)?.context;
