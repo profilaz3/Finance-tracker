@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
     "test:share-regression": "node scripts/share-event-regression.mjs",
     "test:analytics-regression": "node scripts/analytics-regression.mjs",
     "test:export-regression": "node scripts/export-regression.mjs",

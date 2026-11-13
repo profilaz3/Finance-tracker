@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -43,64 +43,63 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   browser-regressions:
+    # Runs against a throwaway local Supabase stack (migrations + supabase/seed.sql),
+    # never against production data.
     runs-on: ubuntu-latest
     needs: verify
     env:
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-      CLEANUP_RECURRING_URL: http://127.0.0.1:4173
-      CLEANUP_RECURRING_EMAIL: ${{ secrets.CI_E2E_EMAIL }}
-      CLEANUP_RECURRING_PASSWORD: ${{ secrets.CI_E2E_PASSWORD }}
-      EVENT_SUMMARY_REGRESSION_URL: http://127.0.0.1:4173
-      EVENT_SUMMARY_REGRESSION_EMAIL: ${{ secrets.CI_E2E_EMAIL }}
-      EVENT_SUMMARY_REGRESSION_PASSWORD: ${{ secrets.CI_E2E_PASSWORD }}
-      DASHBOARD_SUMMARY_REGRESSION_URL: http://127.0.0.1:4173
-      DASHBOARD_SUMMARY_REGRESSION_EMAIL: ${{ secrets.CI_E2E_EMAIL }}
-      DASHBOARD_SUMMARY_REGRESSION_PASSWORD: ${{ secrets.CI_E2E_PASSWORD }}
+      E2E_EMAIL: ci-owner@example.test
+      E2E_PASSWORD: CiPassword123
+      E2E_URL: http://127.0.0.1:4173
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check browser regression secrets
-        id: browser-secrets
-        shell: bash
-        run: |
-          if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_ANON_KEY" ] && [ -n "$CLEANUP_RECURRING_EMAIL" ] && [ -n "$CLEANUP_RECURRING_PASSWORD" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Browser regressions skipped because required secrets are not configured."
-          fi
-
       - name: Setup Node
-        if: steps.browser-secrets.outputs.enabled == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,logflare,vector,supavisor,postgres-meta,mailpit,realtime,edge-runtime
+
+      - name: Export local Supabase env
+        shell: bash
+        run: |
+          supabase status -o env > supabase.env
+          set -a; . ./supabase.env; set +a
+          echo "VITE_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          rm supabase.env
+
       - name: Cache Playwright browsers
-        if: steps.browser-secrets.outputs.enabled == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
-        if: steps.browser-secrets.outputs.enabled == 'true'
         run: npm ci
 
+      - name: Run RLS integration tests
+        run: npm run test:integration
+
       - name: Install Playwright browser
-        if: steps.browser-secrets.outputs.enabled == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Build app
-        if: steps.browser-secrets.outputs.enabled == 'true'
         run: npm run build
 
       - name: Start preview server
-        if: steps.browser-secrets.outputs.enabled == 'true'
         shell: bash
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > preview.log 2>&1 &
@@ -115,20 +114,29 @@ jobs:
           cat preview.log
           exit 1
 
-      - name: Clean recurring regression rows
-        if: steps.browser-secrets.outputs.enabled == 'true'
-        run: npm run cleanup:recurring-regressions
-
       - name: Run event summary regression
-        if: steps.browser-secrets.outputs.enabled == 'true'
+        env:
+          EVENT_SUMMARY_REGRESSION_URL: ${{ env.E2E_URL }}
+          EVENT_SUMMARY_REGRESSION_EMAIL: ${{ env.E2E_EMAIL }}
+          EVENT_SUMMARY_REGRESSION_PASSWORD: ${{ env.E2E_PASSWORD }}
         run: npm run test:event-summary-regression
 
       - name: Run dashboard summary regression
-        if: steps.browser-secrets.outputs.enabled == 'true'
+        env:
+          DASHBOARD_SUMMARY_REGRESSION_URL: ${{ env.E2E_URL }}
+          DASHBOARD_SUMMARY_REGRESSION_EMAIL: ${{ env.E2E_EMAIL }}
+          DASHBOARD_SUMMARY_REGRESSION_PASSWORD: ${{ env.E2E_PASSWORD }}
         run: npm run test:dashboard-summary-regression
 
+      - name: Run transaction CRUD regression
+        env:
+          TRANSACTION_REGRESSION_URL: ${{ env.E2E_URL }}
+          TRANSACTION_REGRESSION_EMAIL: ${{ env.E2E_EMAIL }}
+          TRANSACTION_REGRESSION_PASSWORD: ${{ env.E2E_PASSWORD }}
+        run: npm run test:transaction-crud-regression
+
       - name: Upload Playwright artifacts
-        if: always() && steps.browser-secrets.outputs.enabled == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts
@@ -136,10 +144,41 @@ jobs:
             output/playwright
             preview.log
 
-      - name: Stop preview server
-        if: always() && steps.browser-secrets.outputs.enabled == 'true'
+      - name: Stop services
+        if: always()
         shell: bash
         run: |
           if [ -f preview.pid ]; then
             kill "$(cat preview.pid)" || true
           fi
+          supabase stop --no-backup || true
+
+  deploy-supabase:
+    # Applies migrations and deploys edge functions after main is green.
+    # Opt in by setting the repository variable ENABLE_SUPABASE_DEPLOY=true and the
+    # SUPABASE_ACCESS_TOKEN secret on the "production" environment.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && vars.ENABLE_SUPABASE_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    needs: [verify, browser-regressions]
+    environment: production
+    concurrency: supabase-production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ccgmzhffcnjcxivetgzv
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Show pending migrations
+        run: supabase migration list --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Apply migrations
+        run: supabase db push --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy edge functions
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
