@@ -43,7 +43,6 @@ const EXPECTED_TRANSLITERATIONS: Record<string, string[]> = {
     'Dodajte pretplate ili redovne racune',
   ],
   'components/settings/AccountSettings.tsx': [
-    'Da li ste sigurni da zelite da obrisete nalog? Ova radnja se ne moze ponistiti.',
     'Obrisi nalog',
   ],
   'components/settings/useSettingsViewState.tsx': [

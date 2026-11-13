@@ -122,6 +122,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 fileInputRef={fileInputRef}
                 openPicker={openPicker}
                 handleFileChange={handleFileChange}
+                language={state.language}
             />
 
             {/* Breadcrumb Navigation */}

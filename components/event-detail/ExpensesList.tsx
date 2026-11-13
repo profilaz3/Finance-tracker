@@ -190,9 +190,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                         role="menuitem"
                                                         onClick={() => {
                                                             setOpenMenuId(null);
-                                                            if (window.confirm(`Delete "${expense.name}"?`)) {
-                                                                onDeleteSharedExpense(expense.id);
-                                                            }
+                                                            // Single-item delete: the handler offers Undo.
+                                                            onDeleteSharedExpense(expense.id);
                                                         }}
                                                         className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
                                                     >

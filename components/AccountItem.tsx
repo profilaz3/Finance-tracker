@@ -8,6 +8,8 @@ import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
 import { formatCurrency } from '../utils/formatters';
 import { calculateAdjustedInitialBalance } from '../utils/balanceMutations';
+import { ConfirmDialog } from './ConfirmDialog';
+import { TRANSLATIONS } from '../constants';
 
 interface AccountItemProps {
     account: Account;
@@ -27,6 +29,8 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
     const dragControls = useDragControls();
     const [isEditingIcon, setIsEditingIcon] = useState(false);
     const [isEditingBalance, setIsEditingBalance] = useState(false);
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const t = TRANSLATIONS[language];
 
     // Determine icon
     const Icon = ICONS[account.icon as IconName] || (account.type === 'cash' ? Banknote : CreditCard);
@@ -120,15 +124,28 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
                     {/* Delete Action */}
                     {onDelete && (
                         <button
-                            onClick={() => {
-                                if (window.confirm('Delete this wallet? Transactions will be preserved but unlinked.')) {
-                                    onDelete(account.id);
-                                }
-                            }}
+                            type="button"
+                            onClick={() => setIsConfirmingDelete(true)}
+                            aria-label={`${t.delete}: ${account.name}`}
                             className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error-container/20 rounded-lg transition-colors flex-shrink-0"
                         >
-                            <Trash2 size={18} className="opacity-70" />
+                            <Trash2 size={18} className="opacity-70" aria-hidden="true" />
                         </button>
+                    )}
+                    {onDelete && (
+                        <ConfirmDialog
+                            isOpen={isConfirmingDelete}
+                            type="danger"
+                            title={t.deleteWalletTitle}
+                            message={t.deleteWalletMessage}
+                            confirmLabel={t.delete}
+                            cancelLabel={t.cancel}
+                            onCancel={() => setIsConfirmingDelete(false)}
+                            onConfirm={() => {
+                                setIsConfirmingDelete(false);
+                                onDelete(account.id);
+                            }}
+                        />
                     )}
                 </div>
                 {/* Type badge - on separate row */}

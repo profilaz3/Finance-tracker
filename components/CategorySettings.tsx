@@ -74,10 +74,9 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
         resetForm();
     };
 
+    // Single-item delete: the handler shows an Undo toast instead of asking first.
     const handleDelete = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this category? Transactions using this category might display incorrectly.')) {
-            onDeleteCategory(id);
-        }
+        onDeleteCategory(id);
     };
 
     const addSubcategory = () => {

@@ -8,6 +8,7 @@ import { convertAmount } from '../services/currencyService';
 import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
 import { useDialog } from '../hooks/useFocusTrap';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface PersonDetailProps {
     person: Person;
@@ -38,6 +39,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 }) => {
     const t = TRANSLATIONS[language];
     const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const { dialogProps, titleId } = useDialog(true, onClose);
 
     // Filter transactions related to this person
@@ -64,6 +66,20 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 className="bg-surface-container w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-outline-variant/10"
             >
+                {/* Deleting a person drops their balances: confirm first. */}
+                <ConfirmDialog
+                    isOpen={isConfirmingDelete}
+                    type="danger"
+                    title={t.deletePersonTitle}
+                    message={t.deletePersonMessage}
+                    confirmLabel={t.delete}
+                    cancelLabel={t.cancel}
+                    onCancel={() => setIsConfirmingDelete(false)}
+                    onConfirm={() => {
+                        setIsConfirmingDelete(false);
+                        onDelete(person.id);
+                    }}
+                />
                 {/* Avant-Garde Header */}
                 <div className="relative p-8 pb-0">
                     <div className="absolute top-4 right-4 flex gap-2">
@@ -76,7 +92,8 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                             <Edit2 size={20} className="opacity-75" aria-hidden="true" />
                         </button>
                         <button
-                            onClick={() => onDelete(person.id)}
+                            type="button"
+                            onClick={() => setIsConfirmingDelete(true)}
                             className="p-2 hover:bg-error-container/20 hover:text-error rounded-full text-on-surface-variant transition-colors"
                             title={t.delete}
                             aria-label={t.delete}

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { m, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
@@ -206,7 +207,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     const { dialogProps, titleId } = useDialog(isOpen, onCancel);
     const messageId = useId();
 
-    return (
+    // Portalled so a transformed ancestor (animated view, reorder item) cannot clip the fixed overlay.
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
                 <m.div
@@ -214,7 +216,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 z-[200] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
-                    onClick={onCancel}
+                    onClick={(e) => { e.stopPropagation(); onCancel(); }}
                 >
                     <m.div
                         initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -270,6 +272,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                     </m.div>
                 </m.div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 };

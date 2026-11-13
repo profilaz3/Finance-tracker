@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { m, AnimatePresence, LazyMotion } from 'motion/react';
 import { Reorder } from 'motion/react-m';
 import { User, Trash2, Plus } from 'lucide-react';
@@ -6,6 +6,7 @@ import { AppState, Account, Currency } from '../../types';
 import { TRANSLATIONS, CURRENCIES } from '../../constants';
 import { MyProfileSection } from '../MyProfileSection';
 import { AccountItem } from '../AccountItem';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { useAccountSettingsState } from './useAccountSettingsState';
 
 // Reorder needs drag + layout (domMax); load those features only for this list.
@@ -39,6 +40,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     onEditUserProfile
 }) => {
     const t = TRANSLATIONS[state.language];
+    const [isConfirmingUserDelete, setIsConfirmingUserDelete] = useState(false);
     const {
         isAddingAccount,
         setIsAddingAccount,
@@ -81,18 +83,28 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                             )}
                             {onDeleteAccount && (
                                 <button
-                                    onClick={() => {
-                                        if (window.confirm(state.language === 'sr'
-                                            ? 'Da li ste sigurni da zelite da obrisete nalog? Ova radnja se ne moze ponistiti.'
-                                            : 'Are you sure you want to delete your account? This action cannot be undone.')) {
-                                            onDeleteAccount();
-                                        }
-                                    }}
+                                    type="button"
+                                    onClick={() => setIsConfirmingUserDelete(true)}
                                     className="w-full px-4 py-3 bg-error text-on-error rounded-xl font-medium transition-all hover:bg-error/80 flex items-center justify-center gap-2"
                                 >
                                     <Trash2 size={18} />
                                     {state.language === 'sr' ? 'Obrisi nalog' : 'Delete Account'}
                                 </button>
+                            )}
+                            {onDeleteAccount && (
+                                <ConfirmDialog
+                                    isOpen={isConfirmingUserDelete}
+                                    type="danger"
+                                    title={t.deleteUserAccountTitle}
+                                    message={t.deleteUserAccountMessage}
+                                    confirmLabel={t.delete}
+                                    cancelLabel={t.cancel}
+                                    onCancel={() => setIsConfirmingUserDelete(false)}
+                                    onConfirm={() => {
+                                        setIsConfirmingUserDelete(false);
+                                        onDeleteAccount();
+                                    }}
+                                />
                             )}
                         </div>
                     </section>

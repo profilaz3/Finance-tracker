@@ -11,6 +11,7 @@ import {
   upsertSharedExpenseInCollection,
 } from '../domain/events';
 import { normalizeParticipantEmail } from '../utils/eventParticipants';
+import { TRANSLATIONS } from '../constants';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -61,8 +62,7 @@ export function useEventHandlers({
   }, [selectedEvent?.id, setSelectedEvent, setState, state.events]);
 
   const handleDeleteEvent = useCallback(async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this event?')) return;
-
+    // Cascading delete (removes its shared expenses): EventHeader confirms with ConfirmDialog first.
     setState(prev => ({ ...prev, events: deleteEventFromCollection(prev.events, id) }));
     if (selectedEvent?.id === id) setSelectedEvent(null);
 
@@ -90,7 +90,10 @@ export function useEventHandlers({
     }
   }, [addToast, setState, state.sharedExpenses]);
 
+  // Single-item delete: no confirm, an Undo toast restores the expense.
   const handleDeleteSharedExpense = useCallback(async (id: string) => {
+    const deleted = state.sharedExpenses.find(expense => expense.id === id);
+
     setState(prev => ({ ...prev, sharedExpenses: deleteSharedExpenseFromCollection(prev.sharedExpenses, id) }));
     try {
       const syncManager = await getSyncManager();
@@ -98,7 +101,22 @@ export function useEventHandlers({
     } catch (error) {
       console.error('Failed to delete shared expense:', error);
     }
-  }, [setState]);
+
+    if (!deleted) return;
+    const t = TRANSLATIONS[state.language];
+    addToast(t.sharedExpenseDeleted, 'info', {
+      label: t.undo,
+      onClick: () => {
+        setState(prev => ({
+          ...prev,
+          sharedExpenses: upsertSharedExpenseInCollection(prev.sharedExpenses, deleted).expenses,
+        }));
+        void getSyncManager()
+          .then(syncManager => syncManager.syncSharedExpense(deleted))
+          .catch(error => console.error('Failed to sync restored shared expense:', error));
+      },
+    });
+  }, [addToast, setState, state.language, state.sharedExpenses]);
 
   const handleShareEvent = useCallback(async (id: string, email: string) => {
     const event = state.events.find(e => e.id === id);

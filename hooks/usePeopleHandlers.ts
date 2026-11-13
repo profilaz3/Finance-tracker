@@ -13,6 +13,7 @@ import {
   updatePersonInCollection,
 } from '../domain/people';
 import { LEGACY_USER_PROFILE_ID, normalizeUserProfileId } from '../utils/remotePeople';
+import { TRANSLATIONS } from '../constants';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -163,10 +164,7 @@ export function usePeopleHandlers({
       return;
     }
 
-    if (!window.confirm('Are you sure? Transactions linked to this account will remain but might need attention.')) {
-      return;
-    }
-
+    // The wallet row asks for confirmation (ConfirmDialog) before calling this.
     setState(prev => ({ ...prev, accounts: removeAccountFromCollection(prev.accounts, id) }));
 
     try {
@@ -235,7 +233,11 @@ export function usePeopleHandlers({
     }
   }, [setState]);
 
+  // Single-item delete: no confirm, an Undo toast puts the category back where it was.
   const handleDeleteCategory = useCallback(async (id: string) => {
+    const index = state.categories.findIndex(category => category.id === id);
+    const deleted = index === -1 ? undefined : state.categories[index];
+
     setState(prev => ({ ...prev, categories: prev.categories.filter(category => category.id !== id) }));
     try {
       const syncManager = await getSyncManager();
@@ -243,7 +245,24 @@ export function usePeopleHandlers({
     } catch (error) {
       console.error(error);
     }
-  }, [setState]);
+
+    if (!deleted) return;
+    const t = TRANSLATIONS[state.language];
+    addToast(t.categoryDeleted, 'info', {
+      label: t.undo,
+      onClick: () => {
+        setState(prev => {
+          if (prev.categories.some(category => category.id === deleted.id)) return prev;
+          const categories = [...prev.categories];
+          categories.splice(Math.min(index, categories.length), 0, deleted);
+          return { ...prev, categories };
+        });
+        void getSyncManager()
+          .then(syncManager => syncManager.syncCategory(deleted))
+          .catch(error => console.error('Failed to sync restored category:', error));
+      },
+    });
+  }, [addToast, setState, state.categories, state.language]);
 
   return {
     addPerson,
