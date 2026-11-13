@@ -2,6 +2,7 @@ import React from 'react';
 import type { AnalyticsCategorySummary } from '../../utils/analyticsSelectors';
 import type { Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { formatPercent } from '../../utils/locale';
 
 export interface CategoryDrilldownPanelProps {
   categories: AnalyticsCategorySummary[];
@@ -32,7 +33,7 @@ const formatCategoryDelta = (
     ? ''
     : ` - ${selected.delta.direction === 'down' ? labels.improved : labels.worsened}`;
 
-  return `${selected.delta.absolute >= 0 ? '+' : ''}${selected.delta.percentage.toFixed(1)}% ${labels.previousPeriod}${toneLabel}`;
+  return `${selected.delta.absolute >= 0 ? '+' : ''}${formatPercent(selected.delta.percentage, 1)} ${labels.previousPeriod}${toneLabel}`;
 };
 
 export const CategoryDrilldownPanel: React.FC<CategoryDrilldownPanelProps> = ({
@@ -91,7 +92,7 @@ export const CategoryDrilldownPanel: React.FC<CategoryDrilldownPanelProps> = ({
             </div>
             <div className="min-w-0">
               <dt className="text-xs text-on-surface-variant break-words">{labels.shareOfExpenses}</dt>
-              <dd className="font-medium text-on-surface break-words">{selected.shareOfExpense.toFixed(1)}%</dd>
+              <dd className="font-medium text-on-surface break-words">{formatPercent(selected.shareOfExpense, 1)}</dd>
             </div>
           </dl>
         </div>

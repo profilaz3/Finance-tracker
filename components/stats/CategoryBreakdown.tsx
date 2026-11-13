@@ -15,6 +15,7 @@ import {
   getMonthRange,
 } from './types';
 import { DonutChart, HorizontalBarChart } from './lightCharts';
+import { formatPercent } from '../../utils/locale';
 
 interface CategoryBreakdownProps {
   transactions: Transaction[];
@@ -177,7 +178,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
                           style={{ width: `${percent}%`, minWidth: percent > 0 ? '6px' : '0px', backgroundColor: item.color }}
                         />
                       </div>
-                      <span className="text-[11px] text-on-surface-variant w-10 text-right">{percent.toFixed(0)}%</span>
+                      <span className="text-[11px] text-on-surface-variant w-10 text-right">{formatPercent(percent)}</span>
                     </div>
                   </div>
                 );

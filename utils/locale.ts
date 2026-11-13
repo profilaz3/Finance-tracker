@@ -92,6 +92,20 @@ export const formatNumber = (
     return getNumberFormat(getIntlLocale(language), options).format(safeValue);
 };
 
+/** Percentage (value already in 0-100) with locale decimal separator, e.g. "12,5%" in Serbian. */
+export const formatPercent = (
+    value: number,
+    fractionDigits = 0,
+    language: AppLanguage = currentLanguage
+): string => `${formatNumber(value, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }, language)}%`;
+
+/** Fixed-decimal amount without a currency symbol (for inline split previews). */
+export const formatDecimal = (
+    value: number,
+    fractionDigits = 2,
+    language: AppLanguage = currentLanguage
+): string => formatNumber(value, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }, language);
+
 /** Generic date formatting; returns '' for invalid dates. */
 export const formatDate = (
     value: Date | string | number,

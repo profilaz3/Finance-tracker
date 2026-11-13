@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Person, SharedExpense, Currency, ExchangeRates } from '../types';
 import { formatCurrency, convertCurrency } from '../utils/currencyUtils';
 import { getTranslations } from '../utils/i18n';
-import { formatNumber } from '../utils/locale';
+import { formatNumber, formatPercent } from '../utils/locale';
 
 interface PersonStatsRingProps {
     people: Person[];
@@ -152,7 +152,7 @@ export const PersonStatsRing: React.FC<PersonStatsRingProps> = ({ people, expens
                                 {formatCurrency(segment.stat.totalSpent, stats.displayCurrency as Currency)}
                             </span>
                             <span className="text-on-surface-variant text-xs">
-                                ({segment.stat.percentage.toFixed(0)}%)
+                                ({formatPercent(segment.stat.percentage)})
                             </span>
                         </div>
                     </div>

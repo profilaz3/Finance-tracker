@@ -19,6 +19,7 @@ import {
 } from './types';
 import { GroupedBarChart, LineAreaChart, StackedSignedBarChart } from './lightCharts';
 import { ChartLegend } from './types';
+import { formatPercent } from '../../utils/locale';
 
 interface ExpenseChartProps {
   transactions: Transaction[];
@@ -287,8 +288,8 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
                 valueKey="rate"
                 stroke={chartColors.accent}
                 fill={chartColors.accent}
-                yTickFormatter={(value) => `${value.toFixed(0)}%`}
-                valueFormatter={(value) => `${value.toFixed(1)}%`}
+                yTickFormatter={(value) => formatPercent(value)}
+                valueFormatter={(value) => formatPercent(value, 1)}
                 referenceLine={{ value: savingsTarget, color: chartColors.gridStrong, dashed: true }}
               />
             ) : (

@@ -6,7 +6,8 @@ const distIndexHtml = path.resolve('dist', 'index.html');
 
 const budgets = [
   { label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false },
-  { label: 'startup-js', prefix: null, maxBytes: 360 * 1024, aggregate: false },
+  // Raised from 360 KB: the complete EN+SR translation table (~50 KB raw, ~122 KB gzip startup total) is eager by design.
+  { label: 'startup-js', prefix: null, maxBytes: 400 * 1024, aggregate: false },
   { label: 'transactions-route', prefix: 'TransactionsView-', maxBytes: 80 * 1024, aggregate: false },
   { label: 'stats-shell', prefix: 'Stats-', maxBytes: 12 * 1024, aggregate: false },
   { label: 'export-modal', prefix: 'ExportModal-', maxBytes: 8 * 1024, aggregate: false },

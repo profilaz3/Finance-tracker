@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Check, Users, Divide, Calculator, Percent } from 'lucide-react';
 import clsx from 'clsx';
 import { IPaidSectionProps } from './types';
+import { formatPercent, formatDecimal } from '../../utils/locale';
 
 export const IPaidSection: React.FC<IPaidSectionProps> = ({
     splitMethod,
@@ -78,7 +79,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                         {t.myPortion}
                     </span>
                     <span className="font-bold text-tertiary">
-                        {yourPortionPreview.toFixed(2)} {currency}
+                        {formatDecimal(yourPortionPreview)} {currency}
                     </span>
                 </div>
             )}
@@ -134,7 +135,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                                         <>
                                             <Check size={14} />
                                             <span className="text-xs opacity-70">
-                                                {share.amount.toFixed(2)}
+                                                {formatDecimal(share.amount)}
                                             </span>
                                         </>
                                     )}
@@ -184,7 +185,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                                     </div>
                                     {splitMethod === 'percentage' && (
                                         <span className="text-xs text-on-surface-variant w-16 text-right">
-                                            = {share.amount.toFixed(2)}
+                                            = {formatDecimal(share.amount)}
                                         </span>
                                     )}
                                     <button
@@ -241,8 +242,8 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                             </span>
                             <span className="font-medium">
                                 {splitMethod === 'percentage'
-                                    ? `${remainingPercentage.toFixed(1)}%`
-                                    : `${remainingAmount.toFixed(2)} ${currency}`
+                                    ? formatPercent(remainingPercentage, 1)
+                                    : `${formatDecimal(remainingAmount)} ${currency}`
                                 }
                             </span>
                         </div>

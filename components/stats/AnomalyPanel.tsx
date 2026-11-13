@@ -2,6 +2,7 @@ import React from 'react';
 import type { AnalyticsAnomaly } from '../../utils/analyticsSelectors';
 import type { Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { formatPercent } from '../../utils/locale';
 
 export interface AnomalyPanelProps {
   anomalies: AnalyticsAnomaly[];
@@ -17,7 +18,7 @@ export interface AnomalyPanelProps {
 }
 
 const formatPercentage = (percentage: number | undefined): string | null => (
-  percentage === undefined ? null : `${percentage.toFixed(1)}%`
+  percentage === undefined ? null : formatPercent(percentage, 1)
 );
 
 const getAnomalyDetail = (

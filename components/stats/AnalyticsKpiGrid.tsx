@@ -2,6 +2,7 @@ import React from 'react';
 import type { AnalyticsDeltaDirection, AnalyticsStudioSummary } from '../../utils/analyticsSelectors';
 import type { Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { formatPercent } from '../../utils/locale';
 
 type AnalyticsKpiMetric = 'income' | 'expense' | 'net' | 'savingsRate';
 type DeltaTone = 'improved' | 'worsened' | 'neutral';
@@ -45,7 +46,7 @@ const formatDelta = (
   const tone = getDeltaTone(metric, delta.direction);
   const toneLabel = tone === 'neutral' ? '' : ` - ${labels[tone]}`;
 
-  return `${delta.absolute >= 0 ? '+' : ''}${delta.percentage.toFixed(1)}% ${labels.vsPreviousPeriod}${toneLabel}`;
+  return `${delta.absolute >= 0 ? '+' : ''}${formatPercent(delta.percentage, 1)} ${labels.vsPreviousPeriod}${toneLabel}`;
 };
 
 const formatForecastConfidence = (
@@ -80,7 +81,7 @@ export const AnalyticsKpiGrid: React.FC<AnalyticsKpiGridProps> = ({ summary, bas
       label: labels.savingsRate,
       value: summary.totals.current.savingsRate === null
         ? '--'
-        : `${summary.totals.current.savingsRate.toFixed(1)}%`,
+        : formatPercent(summary.totals.current.savingsRate, 1),
       caption: formatDelta('savingsRate', summary.deltas.savingsRate, labels),
     },
     {

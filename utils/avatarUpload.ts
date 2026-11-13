@@ -1,5 +1,3 @@
-import { AVATAR_MAX_DIMENSION, WEBP_QUALITY, dataUrlToBlob, processImage } from './imageResize';
-
 type AvatarUploader = { uploadAvatar: (file: File, personId: string) => Promise<string> };
 
 /** True for avatars still held inline as a data: URL (not yet in Supabase Storage). */
@@ -22,6 +20,8 @@ export async function uploadInlineAvatar(
   }
 
   try {
+    // Loaded on demand so image resizing stays out of the startup bundle.
+    const { AVATAR_MAX_DIMENSION, WEBP_QUALITY, dataUrlToBlob, processImage } = await import('./imageResize');
     const { file } = await processImage(dataUrlToBlob(avatar), {
       maxDimension: AVATAR_MAX_DIMENSION,
       quality: WEBP_QUALITY,

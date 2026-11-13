@@ -3,7 +3,7 @@ import { Transaction, Currency, ExchangeRates } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { m } from 'motion/react';
-import { formatMoney } from '../../utils/locale';
+import { formatMoney, formatPercent } from '../../utils/locale';
 
 interface StatsSummaryProps {
   transactions: Transaction[];
@@ -60,7 +60,7 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({
           </div>
           {totalExpense > 0 && (
             <p className="text-sm text-on-surface-variant mt-2">
-              ({((totalFees / totalExpense) * 100).toFixed(2)}% {t.ofTotalExpenses})
+              ({formatPercent((totalFees / totalExpense) * 100, 2)} {t.ofTotalExpenses})
             </p>
           )}
         </div>

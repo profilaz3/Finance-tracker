@@ -116,7 +116,7 @@ describe('analytics studio source contracts', () => {
     expect(categoryPanel).toContain('formatCategoryDelta(selected, labels)');
     expect(categoryPanel).toContain('selected.delta.percentage');
     expect(categoryPanel).toContain('selected.transactionCount');
-    expect(categoryPanel).toContain('selected.shareOfExpense.toFixed(1)');
+    expect(categoryPanel).toContain('formatPercent(selected.shareOfExpense, 1)');
     expect(overview).toContain('periodSpend: localLabels.periodSpend');
     expect(overview).toContain('previousPeriod: localLabels.previousPeriod');
   });
