@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Camera, Upload, Loader2, AlertCircle, Check, Image, Pencil, Trash2, Plus } from 'lucide-react';
 import { Category, Account, Currency, Transaction } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -10,7 +10,9 @@ import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
 import { isSupportedReceiptImageType, RECEIPT_IMAGE_ACCEPT } from '../utils/receiptImage';
+import { processImage } from '../utils/imageResize';
 
 interface ReceiptScanModalProps {
   isOpen: boolean;
@@ -67,6 +69,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     resetState();
     onClose();
   };
+  const { dialogProps, titleId } = useDialog(isOpen, handleClose);
 
   // Handle image result from picker
   const handleImageResult = useCallback((result: ImageResult | null) => {
@@ -135,20 +138,25 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
   }, [handleFileInputChange, handleImageResult, language, unsupportedFileMessage]);
 
-  // Legacy file select for drag and drop
-  const handleFileSelect = (file: File) => {
+  // Drag and drop: downscale to WebP like the picker paths before preview/scan.
+  const handleFileSelect = async (file: File) => {
     if (!isSupportedReceiptImageType(file.type)) {
       setError(unsupportedFileMessage);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-      setError(null);
+    setIsProcessingImage(true);
+    setError(null);
+    try {
+      const processed = await processImage(file, { fileName: 'receipt' });
+      setImagePreview(processed.dataUrl);
       setParsedReceipt(null);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Drop image error:', err);
+      setError(t.imageLoadFailed);
+    } finally {
+      setIsProcessingImage(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -241,8 +249,9 @@ const handleScan = async () => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4" onClick={handleClose}>
-      <motion.div
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm modal-safe-area" onClick={handleClose}>
+      <m.div
+        {...dialogProps}
         onClick={(e) => e.stopPropagation()}
         initial={MOTION.modal.initial}
         animate={MOTION.modal.animate}
@@ -252,15 +261,17 @@ const handleScan = async () => {
       >
         {/* Header */}
         <div className="p-6 flex justify-between items-center border-b border-outline-variant">
-          <h3 className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
-            <Camera size={20} className="text-primary" />
+          <h3 id={titleId} className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
+            <Camera size={20} className="text-primary" aria-hidden="true" />
             {t.scanReceipt}
           </h3>
           <button
+            type="button"
             onClick={handleClose}
+            aria-label={t.close}
             className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"
           >
-            <X size={20} />
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
 
@@ -512,7 +523,7 @@ const handleScan = async () => {
                               };
                             });
                           }}
-                          className="p-1 text-error/60 hover:text-error hover:bg-error/10 rounded opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                          className="p-1 text-error/60 hover:text-error hover:bg-error/10 rounded opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-all"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -546,7 +557,7 @@ const handleScan = async () => {
             </div>
           )}
         </div>
-      </motion.div>
+      </m.div>
 
       {/* Image Picker Bottom Sheet */}
       <ImagePickerSheet

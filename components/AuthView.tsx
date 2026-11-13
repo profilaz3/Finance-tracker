@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { getSupabaseService } from '../services/runtimeServices';
 import { LogIn, UserPlus, AlertCircle, MailCheck, KeyRound, ArrowLeft } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { TRANSLATIONS } from '../constants';
 import type { AppLanguage } from '../utils/locale';
 import { getAuthErrorKey, PASSWORD_ISSUE_KEYS, PASSWORD_MIN_LENGTH, validatePassword } from '../utils/authValidation';
@@ -37,13 +37,13 @@ const ErrorBanner: React.FC<{ message: string }> = ({ message }) => (
 
 const AuthCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <div className="min-h-screen flex items-center justify-center bg-surface p-4">
-        <motion.div
+        <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-surface-container-low p-8 rounded-2xl shadow-elevation-3 w-full max-w-md border border-outline-variant/20"
         >
             {children}
-        </motion.div>
+        </m.div>
     </div>
 );
 

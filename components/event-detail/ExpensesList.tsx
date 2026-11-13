@@ -1,12 +1,13 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { Edit, Trash2, Receipt, Plus } from 'lucide-react';
+import { m } from 'motion/react';
+import { Edit, Trash2, Receipt, Plus, MoreVertical } from 'lucide-react';
 import { EmptyState } from '../EmptyState';
 import { TransactionItem } from '../TransactionItem';
 import { AppState, SharedExpense, Transaction, Person } from '../../types';
 import { formatCurrency } from '../../utils/currencyUtils';
 import { UnifiedExpense } from './types';
 import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
+import { useEscapeKey } from '../../hooks/useFocusTrap';
 import { TRANSLATIONS } from '../../constants';
 import { formatShortDate, getIntlLocale } from '../../utils/locale';
 
@@ -42,8 +43,10 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
         const template = category === 'one' ? t.peopleCountOne : category === 'few' ? t.peopleCountFew : t.peopleCountOther;
         return template.replace('{count}', String(count));
     };
+    useEscapeKey(() => setOpenMenuId(null), openMenuId !== null);
+
     return (
-        <motion.div
+        <m.div
             key="shared"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -108,7 +111,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                 return (
                                     <div key={expense.id} className="relative">
                                         <div
-                                            className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors cursor-pointer border-b border-outline/5 last:border-b-0"
+                                            className="group flex items-center justify-between p-4 hover:bg-surface-container transition-colors cursor-pointer border-b border-outline/5 last:border-b-0"
                                             onMouseDown={handlePressStart}
                                             onMouseUp={handlePressEnd}
                                             onMouseLeave={handlePressEnd}
@@ -138,13 +141,29 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col items-end">
-                                                <span className="font-semibold text-on-surface">
-                                                    {formatCurrency(expense.amount, expense.currency)}
-                                                </span>
-                                                <span className="text-xs text-on-surface-variant">
-                                                    {formatShortDate(expense.date, state.language)}
-                                                </span>
+                                            <div className="flex items-center gap-1">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="font-semibold text-on-surface">
+                                                        {formatCurrency(expense.amount, expense.currency)}
+                                                    </span>
+                                                    <span className="text-xs text-on-surface-variant">
+                                                        {formatShortDate(expense.date, state.language)}
+                                                    </span>
+                                                </div>
+                                                {/* Visible alternative to long-press */}
+                                                <button
+                                                    type="button"
+                                                    aria-label={t.moreActions}
+                                                    aria-haspopup="menu"
+                                                    aria-expanded={showMenu}
+                                                    title={t.moreActions}
+                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                    onTouchStart={(e) => e.stopPropagation()}
+                                                    onClick={() => setOpenMenuId(showMenu ? null : expense.id)}
+                                                    className="-mr-2 p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-opacity opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                                                >
+                                                    <MoreVertical size={18} aria-hidden="true" />
+                                                </button>
                                             </div>
                                         </div>
 
@@ -154,32 +173,38 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                     className="fixed inset-0 z-40"
                                                     onClick={() => setOpenMenuId(null)}
                                                 />
-                                                <motion.div
+                                                <m.div
+                                                    role="menu"
+                                                    aria-label={t.moreActions}
                                                     initial={{ opacity: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     className="absolute right-0 top-full mt-2 z-50 bg-surface rounded-xl shadow-2xl border border-outline/10 overflow-hidden min-w-[150px]"
                                                 >
                                                     <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        autoFocus
                                                         onClick={() => {
                                                             setOpenMenuId(null);
                                                             onEditSharedExpense(expense);
                                                         }}
                                                         className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
                                                     >
-                                                        <Edit size={16} /> {t.edit}
+                                                        <Edit size={16} aria-hidden="true" /> {t.edit}
                                                     </button>
                                                     <button
+                                                        type="button"
+                                                        role="menuitem"
                                                         onClick={() => {
                                                             setOpenMenuId(null);
-                                                            if (window.confirm(t.deleteNamedConfirm.replace('{name}', expense.name))) {
-                                                                onDeleteSharedExpense(expense.id);
-                                                            }
+                                                            // Single-item delete: the handler offers Undo.
+                                                            onDeleteSharedExpense(expense.id);
                                                         }}
                                                         className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
                                                     >
-                                                        <Trash2 size={16} /> {t.delete}
+                                                        <Trash2 size={16} aria-hidden="true" /> {t.delete}
                                                     </button>
-                                                </motion.div>
+                                                </m.div>
                                             </>
                                         )}
                                     </div>
@@ -190,7 +215,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 )}
             </div>
 
-        </motion.div>
+        </m.div>
     );
 };
 
@@ -199,7 +224,7 @@ export const ExpensesFab: React.FC<{ onClick: () => void }> = ({ onClick }) => {
         /* Floating Action Button - Outside motion.div to prevent "teleporting" glitch */
         <button
             onClick={onClick}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 hover:shadow-2xl hover:shadow-primary/20"
+            className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-[calc(1rem+env(safe-area-inset-right))] md:right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 hover:shadow-2xl hover:shadow-primary/20"
         >
             <Plus size={28} />
         </button>

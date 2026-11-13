@@ -75,7 +75,7 @@ Large views are split into subdirectories with `index.ts` re-exports:
 - `components/split-expense/` - Split expense modal parts
 - `components/event-detail/` - Event detail view parts
 
-Old monolith files (for example `Stats.tsx`, `SettingsView.tsx`) are kept as re-exports for backward compatibility. Import from the subdirectory `index.ts` instead.
+`Stats.tsx` remains as a thin lazy-load shell; the other old monolith re-export files were removed. Import from the subdirectory `index.ts`.
 
 All views are lazy-loaded via `React.lazy` + `Suspense` with skeleton fallbacks. Heavy markdown, charting, and PDF export code is deferred into separate chunks so it stays out of the initial bundle.
 

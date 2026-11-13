@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { AppState, SharedExpense, Person, Currency } from '../../types';
 import { PersonStatsRing } from '../PersonStatsRing';
 import { PersonStatCard } from '../PersonStatCard';
@@ -34,7 +34,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
     });
 
     return (
-        <motion.div
+        <m.div
             key="summary"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -150,6 +150,6 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                     </div>
                 </div>
             </div>
-        </motion.div>
+        </m.div>
     );
 };

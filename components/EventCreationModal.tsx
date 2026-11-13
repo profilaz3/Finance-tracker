@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Upload, Image as ImageIcon, Check, Loader2, Users, Type, Palette, Camera } from 'lucide-react';
 import { Person, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,7 @@ import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { useImagePicker, base64ToFile, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
 import { getSupabaseService } from '../services/runtimeServices';
 import { getTranslations } from '../utils/i18n';
 
@@ -139,11 +140,14 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
         );
     };
 
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm">
-            <motion.div
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm">
+            <m.div
+                {...dialogProps}
                 initial={MOTION.modal.initial}
                 animate={MOTION.modal.animate}
                 exit={MOTION.modal.exit}
@@ -151,9 +155,9 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 className="bg-surface w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">{t.createEvent}</h2>
-                    <button onClick={onClose} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" />
+                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">{t.createEvent}</h2>
+                    <button type="button" onClick={onClose} aria-label={t.close} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors">
+                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -163,6 +167,15 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                         <label className="block text-sm font-medium text-on-surface-variant">{t.eventPhoto}</label>
                         <div
                             onClick={openPicker}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openPicker();
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t.eventPhoto}
                             className={clsx(
                                 "relative w-full h-48 rounded-xl border-2 border-dashed border-outline/20 flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden group",
                                 !previewUrl && "hover:bg-surface-container hover:border-primary/50"
@@ -171,7 +184,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                             {previewUrl ? (
                                 <>
                                     <img src={previewUrl} alt={t.imagePreview} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-scrim/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-scrim/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
                                         <div className="bg-surface/20 backdrop-blur-md p-3 rounded-full text-white">
                                             <Camera size={24} />
                                         </div>
@@ -319,7 +332,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 {isUploading ? t.uploading : t.createEvent}
             </button>
         </div>
-    </motion.div>
+    </m.div>
 
     <ImagePickerSheet
         isOpen={isPickerOpen}

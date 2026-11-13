@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Calendar, Users, ArrowRight, MapPin, CheckCircle2, Archive, PlayCircle } from 'lucide-react';
 import { Event, Person, Currency } from '../types';
 import { formatCurrency } from '../utils/currencyUtils';
@@ -51,8 +51,7 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
     };
 
     return (
-        <motion.div
-            layout
+        <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -131,7 +130,7 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
                     </div>
                 </div>
             </div>
-        </motion.div>
+        </m.div>
     );
 });
 

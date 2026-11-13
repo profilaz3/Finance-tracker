@@ -12,6 +12,17 @@ describe('build contracts', () => {
     expect(viteConfig).not.toContain("return 'react-vendor'");
   });
 
+  it('keeps react in its own vendor chunk and domMax motion features out of the shared motion chunk', () => {
+    const viteConfig = readFileSync('vite.config.ts', 'utf8');
+    const accountSettings = readFileSync('components/settings/AccountSettings.tsx', 'utf8');
+
+    expect(viteConfig).toContain("name: 'react'");
+    expect(viteConfig).toContain("isPackagePath(id, 'scheduler')");
+    expect(viteConfig).toContain('isMotionPackage(id) && !isMotionMaxOnlyModule(id)');
+    expect(accountSettings).toContain("import { Reorder } from 'motion/react-m';");
+    expect(accountSettings).toContain('<LazyMotion features={loadMotionMaxFeatures}>');
+  });
+
   it('does not force chart libraries into a manual chunk that can create circular vendor imports', () => {
     const viteConfig = readFileSync('vite.config.ts', 'utf8');
 
@@ -85,13 +96,17 @@ describe('build contracts', () => {
     expect(runtimeServices).toContain("import('./supabaseService')");
   });
 
-  it('keeps the root app shell free of framer-motion and uuid so startup does not preload that runtime slab', () => {
+  it('keeps the root app shell on LazyMotion (domAnimation only) and free of uuid', () => {
     const app = readFileSync('App.tsx', 'utf8');
     const toast = readFileSync('components/Toast.tsx', 'utf8');
     const syncStatus = readFileSync('components/SyncStatus.tsx', 'utf8');
     const errorBoundary = readFileSync('components/ErrorBoundary.tsx', 'utf8');
 
-    expect(app).not.toContain("from 'motion/react'");
+    // The shell only provides LazyMotion + MotionConfig; views render `m.*` components so
+    // drag/layout/projection (domMax) stays out of the shared motion chunk.
+    expect(app).toContain("import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';");
+    expect(app).toContain('<LazyMotion features={domAnimation}>');
+    expect(app).not.toMatch(/<motion\./);
     expect(app).not.toContain('AnimatePresence');
     expect(app).not.toContain("from 'uuid'");
     expect(app).toContain('crypto.randomUUID()');
@@ -106,9 +121,9 @@ describe('build contracts', () => {
   it('lazy-loads heavy stats sections instead of bundling chart components into the stats shell', () => {
     const statsIndex = readFileSync('components/stats/index.tsx', 'utf8');
 
-    expect(statsIndex).toContain("const ExpenseChartSection = React.lazy");
-    expect(statsIndex).toContain("const IncomeChartSection = React.lazy");
-    expect(statsIndex).toContain("const CategoryBreakdownSection = React.lazy");
+    expect(statsIndex).toContain("const ExpenseChartSection = lazyWithReload");
+    expect(statsIndex).toContain("const IncomeChartSection = lazyWithReload");
+    expect(statsIndex).toContain("const CategoryBreakdownSection = lazyWithReload");
     expect(statsIndex).toContain('const DeferredStatsSection: React.FC');
     expect(statsIndex).toContain('new IntersectionObserver');
     expect(statsIndex).toContain("import('./ExpenseChart')");
@@ -224,8 +239,9 @@ describe('build contracts', () => {
     expect(packageJson).toContain('"bundle:budget": "node scripts/bundle-budget.mjs"');
     expect(script).toContain("console.error('Bundle budget failed')");
     expect(script).toContain("console.log('Bundle budget passed')");
-    expect(script).toContain("{ label: 'entry-chunk', prefix: 'index-', maxBytes: 330 * 1024, aggregate: false }");
-    expect(script).toContain("{ label: 'startup-js', prefix: null, maxBytes: 380 * 1024, aggregate: false }");
+    expect(script).toContain("{ label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false }");
+    expect(script).toContain("{ label: 'startup-js', prefix: null, maxBytes: 360 * 1024, aggregate: false }");
+    expect(script).toContain("{ label: 'react', prefix: 'react-', maxBytes: 224 * 1024, aggregate: false }");
     expect(script).toContain("const startupAssetNames = [");
     expect(script).toContain("indexHtml.matchAll(/<script[^>]+type=\"module\"");
     expect(script).toContain("indexHtml.matchAll(/<link[^>]+rel=\"modulepreload\"");
@@ -237,7 +253,7 @@ describe('build contracts', () => {
   it('lazy-loads the export modal instead of keeping it in the transactions route chunk', () => {
     const transactionsView = readFileSync('components/TransactionsView.tsx', 'utf8');
 
-    expect(transactionsView).toContain("const ExportModal = React.lazy");
+    expect(transactionsView).toContain("const ExportModal = lazyWithReload");
     expect(transactionsView).toContain("import('./ExportModal')");
     expect(transactionsView).not.toContain("import { ExportModal } from './ExportModal'");
   });

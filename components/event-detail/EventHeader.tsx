@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState } from 'react';
+import { m, AnimatePresence } from 'motion/react';
 import {
     ArrowLeft, Play, CheckCircle2,
     Trash2, MapPin, Share2, Clock, Camera, MoreVertical, Loader2
@@ -9,6 +9,7 @@ import clsx from 'clsx';
 import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
 import { getTranslations } from '../../utils/i18n';
 import { formatDate as formatLocaleDate } from '../../utils/locale';
+import { ConfirmDialog } from '../ConfirmDialog';
 
 interface EventHeaderProps {
     event: Event;
@@ -27,6 +28,7 @@ interface EventHeaderProps {
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     openPicker: () => void;
     handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    language?: 'en' | 'sr';
 }
 
 const formatDate = (dateString?: string) => {
@@ -53,8 +55,10 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
     fileInputRef,
     openPicker,
     handleFileChange,
+    language = 'en',
 }) => {
     const t = getTranslations();
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const handleStartEvent = () => {
         onUpdateEvent(event.id, {
             startDate: new Date().toISOString(),
@@ -107,7 +111,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
             {/* Menu Button */}
             <div className={clsx(
                 "absolute top-4 right-4 z-20 transition-opacity duration-200",
-                isMenuOpen ? "opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+                isMenuOpen ? "opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
             )}>
                 <div className="relative">
                     <button
@@ -129,7 +133,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                     />
                     <AnimatePresence>
                         {isMenuOpen && (
-                            <motion.div
+                            <m.div
                                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -179,11 +183,8 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                 {event.status === 'completed' && (
                                     <button
                                         onClick={() => {
-                                            if (window.confirm(t.deleteEventConfirm.replace('{name}', event.name))) {
-                                                onDeleteEvent(event.id);
-                                                onBack();
-                                            }
                                             setIsMenuOpen(false);
+                                            setIsConfirmingDelete(true);
                                         }}
                                         className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
                                     >
@@ -192,7 +193,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                 )}
 
 
-                            </motion.div>
+                            </m.div>
                         )}
                     </AnimatePresence>
                 </div>
@@ -262,6 +263,21 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                     </div>
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={isConfirmingDelete}
+                type="danger"
+                title={t.deleteEventTitle}
+                message={t.deleteEventMessage}
+                confirmLabel={t.delete}
+                cancelLabel={t.cancel}
+                onCancel={() => setIsConfirmingDelete(false)}
+                onConfirm={() => {
+                    setIsConfirmingDelete(false);
+                    onDeleteEvent(event.id);
+                    onBack();
+                }}
+            />
         </div >
     );
 };

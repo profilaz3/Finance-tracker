@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, FileSpreadsheet, FileJson, Calendar, Download, CheckCircle2 } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState } from '../types';
 import { exportWithOptions, ExportOptions } from '../services/storageService';
 import { TRANSLATIONS } from '../constants';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -84,6 +85,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setDateTo(to.toISOString().split('T')[0]);
   };
 
+  const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
   if (!isOpen) {
     return null;
   }
@@ -106,14 +109,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   return (
     <AnimatePresence>
-      <motion.div
+      <m.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
         onClick={onClose}
       >
-        <motion.div
+        <m.div
+          {...dialogProps}
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
@@ -121,13 +125,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           className="bg-surface-container w-full max-w-md rounded-2xl shadow-elevation-3 overflow-hidden"
         >
           <div className="flex items-center justify-between p-4 border-b border-outline-variant/20">
-            <h2 className="text-xl font-display font-medium text-on-surface">{labels.title}</h2>
+            <h2 id={titleId} className="text-xl font-display font-medium text-on-surface">{labels.title}</h2>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 hover:bg-surface-container-high rounded-full transition-colors"
               aria-label={labels.cancel}
             >
-              <X size={20} className="text-on-surface-variant" />
+              <X size={20} className="text-on-surface-variant" aria-hidden="true" />
             </button>
           </div>
 
@@ -251,8 +256,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               {labels.export}
             </button>
           </div>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     </AnimatePresence>
   );
 };

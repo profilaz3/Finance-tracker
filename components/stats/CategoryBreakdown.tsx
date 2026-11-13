@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { Category, Currency, ExchangeRates, Transaction } from '../../types';
@@ -59,7 +59,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
     return Object.entries(totals)
       .map(([id, value]) => ({
         id,
-        name: categories.find((category) => category.id === id)?.name || 'Unknown',
+        name: categories.find((category) => category.id === id)?.name || t.unknown,
         value,
         color: categories.find((category) => category.id === id)?.color || 'rgb(var(--md-sys-color-on-surface-variant) / 0.6)',
       }))
@@ -113,7 +113,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
 
         return {
           id,
-          name: category?.name || 'Unknown',
+          name: category?.name || t.unknown,
           value: stdDev,
           color: category?.color || chartColors.axisSoft,
         };
@@ -124,7 +124,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
 
   return (
     <>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
@@ -188,9 +188,9 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
             </div>
           </div>
         </div>
-      </motion.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
@@ -212,7 +212,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         ) : (
           <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
         )}
-      </motion.div>
+      </m.div>
     </>
   );
 };
@@ -265,7 +265,7 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
     const data = Object.entries(totals)
       .map(([id, value]) => ({
         id,
-        name: categories.find((category) => category.id === id)?.name || 'Unknown',
+        name: categories.find((category) => category.id === id)?.name || t.unknown,
         value,
         color: categories.find((category) => category.id === id)?.color || 'rgb(var(--md-sys-color-on-surface-variant) / 0.6)',
       }))
@@ -279,7 +279,7 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
   }
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4 }}
@@ -318,7 +318,7 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
                 <span className="font-mono font-medium text-on-surface-variant">{formatCurrency(item.value, baseCurrency)}</span>
               </div>
               <div className="h-2 bg-surface-container rounded-full overflow-hidden">
-                <motion.div
+                <m.div
                   initial={{ width: 0 }}
                   animate={{ width: `${percentage}%` }}
                   transition={{ duration: 0.5, delay: index * 0.05 }}
@@ -330,6 +330,6 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
           );
         })}
       </div>
-    </motion.div>
+    </m.div>
   );
 };

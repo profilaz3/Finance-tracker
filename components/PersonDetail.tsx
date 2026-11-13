@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { Person, Transaction, Currency, Category, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { X, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, Wallet, Calendar, Sparkles } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { formatCurrency, getShortDate } from '../utils/formatters';
 import { convertAmount } from '../services/currencyService';
 import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
+import { useDialog } from '../hooks/useFocusTrap';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface PersonDetailProps {
     person: Person;
@@ -37,6 +39,8 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 }) => {
     const t = TRANSLATIONS[language];
     const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const { dialogProps, titleId } = useDialog(true, onClose);
 
     // Filter transactions related to this person
     const personTransactions = useMemo(() => {
@@ -53,14 +57,29 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
     }, [person.balances, baseCurrency, rates]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-md" onClick={onClose}>
-            <motion.div
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-md" onClick={onClose}>
+            <m.div
+                {...dialogProps}
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 className="bg-surface-container w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-outline-variant/10"
             >
+                {/* Deleting a person drops their balances: confirm first. */}
+                <ConfirmDialog
+                    isOpen={isConfirmingDelete}
+                    type="danger"
+                    title={t.deletePersonTitle}
+                    message={t.deletePersonMessage}
+                    confirmLabel={t.delete}
+                    cancelLabel={t.cancel}
+                    onCancel={() => setIsConfirmingDelete(false)}
+                    onConfirm={() => {
+                        setIsConfirmingDelete(false);
+                        onDelete(person.id);
+                    }}
+                />
                 {/* Avant-Garde Header */}
                 <div className="relative p-8 pb-0">
                     <div className="absolute top-4 right-4 flex gap-2">
@@ -68,18 +87,21 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                             onClick={() => onEdit(person)}
                             className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
                             title={t.edit}
+                            aria-label={t.edit}
                         >
-                            <Edit2 size={20} className="opacity-75" />
+                            <Edit2 size={20} className="opacity-75" aria-hidden="true" />
                         </button>
                         <button
-                            onClick={() => onDelete(person.id)}
+                            type="button"
+                            onClick={() => setIsConfirmingDelete(true)}
                             className="p-2 hover:bg-error-container/20 hover:text-error rounded-full text-on-surface-variant transition-colors"
                             title={t.delete}
+                            aria-label={t.delete}
                         >
-                            <Trash2 size={20} className="opacity-75" />
+                            <Trash2 size={20} className="opacity-75" aria-hidden="true" />
                         </button>
-                        <button onClick={onClose} className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors">
-                            <X size={20} className="opacity-75" />
+                        <button type="button" onClick={onClose} aria-label={t.close} title={t.close} className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors">
+                            <X size={20} className="opacity-75" aria-hidden="true" />
                         </button>
                     </div>
 
@@ -104,7 +126,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                             )}
                         </div>
 
-                        <h2 className="text-3xl font-display font-medium text-on-surface text-center mb-1">{person.name}</h2>
+                        <h2 id={titleId} className="text-3xl font-display font-medium text-on-surface text-center mb-1">{person.name}</h2>
 
                         {totalBalanceInBase !== 0 && (
                             <p className={clsx(
@@ -173,7 +195,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 
                                     {/* Settle Action */}
                                     {!isEditing && amount !== 0 && (
-                                        <div className="absolute top-4 right-4 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute top-4 right-4 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -235,7 +257,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                         </div>
                     </div>
                 </div>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

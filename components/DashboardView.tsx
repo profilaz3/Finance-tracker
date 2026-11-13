@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { motion, Variants, AnimatePresence } from 'motion/react';
+import { m, Variants, AnimatePresence } from 'motion/react';
 import { Banknote, CreditCard, Globe, User, Sparkles, Loader2, Camera, Split, X, Plus, MapPin, ExternalLink, ToggleLeft, ToggleRight, Bookmark, Trash2 } from 'lucide-react';
 import { ICONS, IconName } from './IconPicker';
 import { EmptyState } from './EmptyState';
@@ -176,7 +176,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   return (
-    <motion.div
+    <m.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -186,7 +186,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     >
       {/* Active Event Banner */}
       {activeEvent && (
-        <motion.div
+        <m.div
           variants={itemVariants}
           className={clsx(
             "rounded-xl p-4 border transition-all",
@@ -241,12 +241,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </div>
           </div>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Smart Transaction Input */}
       {aiAvailable && onParsedTransaction && (
-        <motion.div
+        <m.div
           variants={itemVariants}
           className="bg-surface-container-low rounded-xl p-4 shadow-elevation-1"
         >
@@ -288,10 +288,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {parseError && (
             <p className="text-xs text-error mt-2">{parseError}</p>
           )}
-        </motion.div>
+        </m.div>
       )}
 
-      <motion.div variants={itemVariants} className="space-y-3">
+      <m.div variants={itemVariants} className="space-y-3">
         <DashboardQuickActions
           language={state.language}
           aiAvailable={aiAvailable}
@@ -308,10 +308,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onUseTemplate={onUseTemplate}
           onRepeatTransaction={onRepeatTransaction}
         />
-      </motion.div>
+      </m.div>
 
       {/* Net Worth Card (Standalone with rounded corners and glow) */}
-      <motion.div
+      <m.div
         variants={itemVariants}
         className="relative p-8 md:p-10 overflow-hidden bg-surface-container rounded-3xl"
         style={{
@@ -411,10 +411,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
-      </motion.div>
+      </m.div>
 
       {/* Tabs & Wallets/People Section */}
-      <motion.div variants={itemVariants} className="bg-surface-container-low rounded-2xl p-4 md:p-6 shadow-elevation-1 border border-outline-variant/10">
+      <m.div variants={itemVariants} className="bg-surface-container-low rounded-2xl p-4 md:p-6 shadow-elevation-1 border border-outline-variant/10">
         <div className="flex gap-2 mb-6 bg-surface-container rounded-full p-1 w-fit overflow-x-auto max-w-full mx-auto justify-center">
           {(['wallets', 'people'] as Array<'wallets' | 'people'>).map((tab) => (
             <button
@@ -482,7 +482,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {dashboardTab === 'people' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {activePeople.map(person => (
-                <motion.div
+                <m.div
                   key={person.id}
                   variants={itemVariants}
                   onClick={() => setSelectedPerson(person)}
@@ -512,7 +512,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       ))}
                     </div>
                   </div>
-                </motion.div>
+                </m.div>
               ))}
               {activePeople.length === 0 && (
                 <div className="col-span-full">
@@ -526,23 +526,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           )}
         </div>
-      </motion.div>
+      </m.div>
 
       {/* Floating Action Button with Menu */}
       <AnimatePresence>
         {isFabVisible && (
-          <motion.div
+          <m.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50"
+            className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-[calc(1rem+env(safe-area-inset-right))] md:right-6 z-50"
           >
             <AnimatePresence>
               {isFabOpen && (
                 <>
                   {/* Backdrop */}
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -550,7 +550,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     onClick={() => setIsFabOpen(false)}
                   />
                   {/* Menu Items */}
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0, y: 20, scale: 0.8 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 20, scale: 0.8 }}
@@ -577,12 +577,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <Banknote size={20} />
                       </div>
                     </button>
-                  </motion.div>
+                  </m.div>
                 </>
               )}
             </AnimatePresence>
             {/* Main FAB */}
-            <motion.button
+            <m.button
               onClick={() => setIsFabOpen(!isFabOpen)}
               whileTap={{ scale: 0.9 }}
               className={clsx(
@@ -591,10 +591,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             >
               <Plus size={28} />
-            </motion.button>
-          </motion.div>
+            </m.button>
+          </m.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 };

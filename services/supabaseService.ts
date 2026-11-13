@@ -500,17 +500,17 @@ export class SupabaseService {
     }
 
     // Storage
-    async uploadAvatar(file: File): Promise<string> {
+    async uploadAvatar(file: File, personId: string): Promise<string> {
         const user = await this.getUser();
         if (!user) throw new Error('User not authenticated');
 
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}/${Math.random()}.${fileExt}`;
-        const filePath = `${fileName}`;
+        // Avatars are downscaled to 256px WebP before upload; the folder is the owner's id for RLS.
+        const fileExt = file.name.includes('.') ? file.name.split('.').pop() : 'webp';
+        const filePath = `${user.id}/${personId}-${Date.now()}.${fileExt}`;
 
         const { error: uploadError } = await this.client.storage
             .from('avatars')
-            .upload(filePath, file);
+            .upload(filePath, file, { contentType: file.type || 'image/webp', cacheControl: '31536000', upsert: false });
 
         if (uploadError) throw uploadError;
 

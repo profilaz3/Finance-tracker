@@ -8,6 +8,12 @@ const config: CapacitorConfig = {
     androidScheme: 'https'
   },
   plugins: {
+    // Android 15+ forces edge-to-edge. Let the WebView draw behind the system bars and
+    // expose the bar sizes as env(safe-area-inset-*) so the layout pads itself (M32).
+    SystemBars: {
+      insetsHandling: 'css',
+      initialViewportFitValueHint: 'cover',
+    },
     Camera: {
       permissions: ['camera', 'photos']
     }

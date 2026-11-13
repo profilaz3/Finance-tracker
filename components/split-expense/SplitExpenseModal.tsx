@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { X } from 'lucide-react';
 import { Currency, Transaction, SplitMode, SplitMethod, SplitShare } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,7 @@ import { vibrate, HAPTIC_PATTERNS } from '../../utils/haptics';
 import { SplitExpenseModalProps, Recipient } from './types';
 import { ModeToggle } from './ModeToggle';
 import { MOTION } from '../../config';
+import { useDialog } from '../../hooks/useFocusTrap';
 import { CommonFields } from './CommonFields';
 import { IPaidSection } from './IPaidSection';
 import { TheyPaidSection } from './TheyPaidSection';
@@ -263,6 +264,8 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
 
     const { availableRecipients, includedRecipients, recipientTotal } = deriveTheyPaidRecipients(recipients, payerId);
 
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
     if (!isOpen) return null;
 
     const remainingAmount = getRemainingAmount();
@@ -279,8 +282,9 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
         : remainingAmount;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-sm" onClick={onClose}>
-            <motion.div
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-sm" onClick={onClose}>
+            <m.div
+                {...dialogProps}
                 onClick={(e) => e.stopPropagation()}
                 initial={MOTION.modal.initial}
                 animate={MOTION.modal.animate}
@@ -290,9 +294,9 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
             >
                 {/* Header */}
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">{t.splitTransaction}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" />
+                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">{t.splitTransaction}</h2>
+                    <button type="button" onClick={onClose} aria-label={t.close} className="p-2 hover:bg-surface-container rounded-full transition-colors">
+                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -375,7 +379,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                         }
                     </button>
                 </form>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { User, Edit2 } from 'lucide-react';
 import { Person } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -22,7 +22,7 @@ export const MyProfileSection: React.FC<MyProfileSectionProps> = ({
     if (!userProfile) {
         // Empty state: "Create My Profile" card
         return (
-            <motion.section
+            <m.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-4 mb-8"
@@ -44,7 +44,7 @@ export const MyProfileSection: React.FC<MyProfileSectionProps> = ({
                         {t.createMyProfile}
                     </button>
                 </div>
-            </motion.section>
+            </m.section>
         );
     }
 
@@ -52,7 +52,7 @@ export const MyProfileSection: React.FC<MyProfileSectionProps> = ({
     const isImageAvatar = userProfile.avatar?.startsWith('data:') || userProfile.avatar?.startsWith('http');
 
     return (
-        <motion.section
+        <m.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4 mb-8"
@@ -84,6 +84,6 @@ export const MyProfileSection: React.FC<MyProfileSectionProps> = ({
                     </button>
                 </div>
             </div>
-        </motion.section>
+        </m.section>
     );
 };

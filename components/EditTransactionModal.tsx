@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import clsx from 'clsx';
 import { ArrowDownLeft, ArrowUpRight, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -118,18 +118,18 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     };
 
     return (
-        <motion.div
+        <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-md p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-md modal-safe-area"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-transaction-title"
         >
-            <motion.div
+            <m.div
                 ref={focusTrapRef}
                 onClick={e => e.stopPropagation()}
                 initial={MOTION.modal.initial}
@@ -195,7 +195,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 <div className="p-5 pt-3 border-t border-outline-variant flex flex-col gap-3">
                     <AnimatePresence>
                         {showDeleteConfirm && (
-                            <motion.div
+                            <m.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
@@ -219,7 +219,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                                         </button>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </m.div>
                         )}
                     </AnimatePresence>
 
@@ -262,7 +262,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                         </div>
                     </div>
                 </div>
-            </motion.div>
-        </motion.div>
+            </m.div>
+        </m.div>
     );
 };

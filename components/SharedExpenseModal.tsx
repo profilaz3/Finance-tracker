@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { X, Check, Users, DollarSign, Calendar, Divide, Calculator } from 'lucide-react';
 import { Person, SharedExpense, Currency } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,6 +9,7 @@ import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_COLORS } from '../constants/expens
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { getTranslations } from '../utils/i18n';
 import { formatNumber } from '../utils/locale';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface SharedExpenseModalProps {
     isOpen: boolean;
@@ -212,14 +213,17 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
         });
     };
 
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
     if (!isOpen) return null;
 
     const remainingAmount = getRemainingAmount();
     const isExactSplitValid = Math.abs(remainingAmount) < 0.01;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-sm">
-            <motion.div
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-sm">
+            <m.div
+                {...dialogProps}
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
@@ -227,9 +231,9 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                 className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">{expense ? t.editExpense : t.addSharedExpense}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" />
+                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">{expense ? t.editExpense : t.addSharedExpense}</h2>
+                    <button type="button" onClick={onClose} aria-label={t.close} className="p-2 hover:bg-surface-container rounded-full transition-colors">
+                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -492,7 +496,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                         {expense ? t.saveChanges : t.addExpense}
                     </button>
                 </form>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

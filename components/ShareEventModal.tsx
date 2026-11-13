@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Mail, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { MOTION } from '../config';
 import { getTranslations } from '../utils/i18n';
+import { useDialog } from '../hooks/useFocusTrap';
 
 // Known share errors raised by the service layer, mapped to translation keys.
 const SHARE_ERROR_KEYS = {
@@ -59,6 +60,9 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
         }
     };
 
+    const { dialogProps, titleId } = useDialog(isOpen, () => handleClose());
+    const emailId = `${titleId}-email`;
+
     const handleClose = () => {
         setEmail('');
         setError(null);
@@ -71,7 +75,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
             {isOpen && (
                 <>
                     {/* Backdrop */}
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -80,8 +84,9 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
                     />
 
                     {/* Modal */}
-                    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-                        <motion.div
+                    <div className="fixed inset-0 flex items-center justify-center z-50 modal-safe-area pointer-events-none">
+                        <m.div
+                            {...dialogProps}
                             initial={MOTION.modal.initial}
                             animate={MOTION.modal.animate}
                             exit={MOTION.modal.exit}
@@ -92,18 +97,20 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
                             <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                        <UserPlus size={20} className="text-primary" />
+                                        <UserPlus size={20} className="text-primary" aria-hidden="true" />
                                     </div>
                                     <div>
-                                        <h2 className="text-xl font-bold text-on-surface">{t.shareEvent}</h2>
+                                        <h2 id={titleId} className="text-xl font-bold text-on-surface">{t.shareEvent}</h2>
                                         <p className="text-sm text-on-surface-variant">{eventName}</p>
                                     </div>
                                 </div>
                                 <button
+                                    type="button"
                                     onClick={handleClose}
+                                    aria-label={t.close}
                                     className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors"
                                 >
-                                    <X size={20} className="text-on-surface-variant" />
+                                    <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                                 </button>
                             </div>
 
@@ -129,12 +136,13 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-on-surface-variant mb-2">
+                                        <label htmlFor={emailId} className="block text-sm font-medium text-on-surface-variant mb-2">
                                             {t.emailAddress}
                                         </label>
                                         <div className="relative">
-                                            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+                                            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" aria-hidden="true" />
                                             <input
+                                                id={emailId}
                                                 type="email"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
@@ -180,7 +188,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
                                     </div>
                                 </form>
                             </div>
-                        </motion.div>
+                        </m.div>
                     </div>
                 </>
             )}

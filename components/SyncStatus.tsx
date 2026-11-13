@@ -1,24 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import type { QueuedOperation } from '../services/offlineQueue';
 import { getOfflineQueue } from '../services/runtimeServices';
 import clsx from 'clsx';
+import { useEscapeKey } from '../hooks/useFocusTrap';
 import { AlertCircleIcon, CheckIcon, CloudIcon, RefreshIcon, WifiOffIcon } from './icons/UiIcons';
 import { getTranslations } from '../utils/i18n';
 
 interface SyncStatusProps {
     className?: string;
     showDetails?: boolean;
+    /** Where the details popup opens relative to the button. */
+    placement?: 'below' | 'above';
+    /** Extra classes for the text label shown with showDetails (e.g. responsive visibility). */
+    labelClassName?: string;
 }
 
 type SyncState = 'synced' | 'syncing' | 'pending' | 'offline' | 'error';
 type OfflineQueueInstance = Awaited<ReturnType<typeof getOfflineQueue>>;
 
-export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails = false }) => {
+export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails = false, placement = 'below', labelClassName }) => {
     const t = getTranslations();
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [offlineQueue, setOfflineQueue] = useState<OfflineQueueInstance | null>(null);
     const [queue, setQueue] = useState<QueuedOperation[]>([]);
     const [showPopup, setShowPopup] = useState(false);
+    const popupId = useId();
 
     useEffect(() => {
         let unsubscribe = () => {};
@@ -58,6 +64,10 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
     };
 
     const state = getSyncState();
+    const hasDetails = pendingCount > 0 || !isOnline;
+    const isPopupOpen = showPopup && hasDetails;
+
+    useEscapeKey(() => setShowPopup(false), isPopupOpen);
 
     const getIcon = () => {
         switch (state) {
@@ -115,11 +125,16 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
     return (
         <div className={clsx('relative', className)}>
             <button
-                onClick={() => (pendingCount > 0 || !isOnline) && setShowPopup(!showPopup)}
+                type="button"
+                onClick={() => hasDetails && setShowPopup(!showPopup)}
+                aria-label={getLabel()}
+                aria-expanded={hasDetails ? isPopupOpen : undefined}
+                aria-controls={isPopupOpen ? popupId : undefined}
+                title={getLabel()}
                 className={clsx(
                     'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all relative',
                     getColor(),
-                    (pendingCount > 0 || !isOnline) && 'cursor-pointer hover:opacity-80',
+                    hasDetails && 'cursor-pointer hover:opacity-80',
                     state === 'offline' && 'animate-pulse'
                 )}
             >
@@ -130,27 +145,34 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
                         aria-hidden="true"
                     />
                 )}
-                <span className="relative z-10 flex items-center gap-1.5">
+                <span className="relative z-10 flex items-center gap-1.5" aria-hidden="true">
                     {getIcon()}
-                    {showDetails && <span>{getLabel()}</span>}
+                    {showDetails && <span className={labelClassName}>{getLabel()}</span>}
                 </span>
                 {/* Badge for pending count */}
                 {pendingCount > 0 && !showDetails && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-primary text-on-primary text-[10px] font-bold rounded-full flex items-center justify-center">
+                    <span aria-hidden="true" className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-primary text-on-primary text-[10px] font-bold rounded-full flex items-center justify-center">
                         {pendingCount > 99 ? '99+' : pendingCount}
                     </span>
                 )}
             </button>
 
             {/* Popup with queue details */}
-            {showPopup && (pendingCount > 0 || !isOnline) && (
+            {isPopupOpen && (
                 <>
                     {/* Backdrop */}
                     <div
                         className="fixed inset-0 z-40"
                         onClick={() => setShowPopup(false)}
+                        aria-hidden="true"
                     />
-                    <div className="app-view-enter absolute top-full right-0 mt-2 w-80 bg-surface-container-high rounded-xl shadow-elevation-3 border border-outline-variant/20 overflow-hidden z-50">
+                    <div
+                        id={popupId}
+                        className={clsx(
+                            'app-view-enter absolute w-80 max-w-[calc(100vw-2rem)] bg-surface-container-high rounded-xl shadow-elevation-3 border border-outline-variant/20 overflow-hidden z-50',
+                            placement === 'above' ? 'bottom-full left-0 mb-2' : 'top-full right-0 mt-2'
+                        )}
+                    >
                             {/* Offline banner */}
                             {!isOnline && (
                                 <div className="bg-error/20 p-3 flex items-center gap-2 border-b border-error/20">

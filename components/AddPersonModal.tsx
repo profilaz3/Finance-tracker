@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Check, User, AlertCircle, Palette, Coins, Camera } from 'lucide-react';
 import { Currency, Person } from '../types';
 import { TRANSLATIONS, CHART_COLORS, CURRENCIES } from '../constants';
@@ -8,6 +8,8 @@ import clsx from 'clsx';
 import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
+import { AVATAR_MAX_DIMENSION } from '../utils/imageResize';
 
 interface AddPersonModalProps {
     isOpen: boolean;
@@ -25,6 +27,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
     const [avatar, setAvatar] = useState<string | undefined>(undefined);
     const [touched, setTouched] = useState(false);
     const t = TRANSLATIONS[language];
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
 
     const {
         openPicker,
@@ -34,7 +37,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
         pickFromGallery,
         fileInputRef,
         handleFileInputChange,
-    } = useImagePicker({ quality: 70 });
+    } = useImagePicker({ quality: 80, maxDimension: AVATAR_MAX_DIMENSION });
 
     const nameError = touched && !name.trim() ? t.fieldRequired : null;
 
@@ -103,8 +106,9 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-md" onClick={onClose}>
-                    <motion.div
+                <div className="fixed inset-0 z-[100] flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-md" onClick={onClose}>
+                    <m.div
+                        {...dialogProps}
                         onClick={(e) => e.stopPropagation()}
                         initial={MOTION.modal.initial}
                         animate={MOTION.modal.animate}
@@ -115,13 +119,15 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                         <div className="relative p-8">
                             {/* Close Button */}
                             <button
+                                type="button"
                                 onClick={onClose}
+                                aria-label={t.close}
                                 className="absolute top-4 right-4 p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
                             >
-                                <X size={20} className="opacity-75" />
+                                <X size={20} className="opacity-75" aria-hidden="true" />
                             </button>
 
-                            <h2 className="text-2xl font-display font-medium text-center mb-8 text-on-surface">
+                            <h2 id={titleId} className="text-2xl font-display font-medium text-center mb-8 text-on-surface">
                                 {initialData ? t.editPerson : t.addPerson}
                             </h2>
 
@@ -129,8 +135,17 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                 {/* Avatar & Color Section */}
                                 <div className="flex flex-col items-center gap-4">
                                     <div
-                                        className="relative group cursor-pointer w-28 h-28"
+                                        className="relative group cursor-pointer w-28 h-28 rounded-full"
                                         onClick={openPicker}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={t.changePhoto}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                openPicker();
+                                            }
+                                        }}
                                     >
                                         <div
                                             className="w-full h-full rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-xl transition-all duration-300 group-hover:scale-105"
@@ -142,7 +157,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                                 name.charAt(0).toUpperCase() || <User size={40} />
                                             )}
                                         </div>
-                                        <div className="absolute inset-0 bg-scrim/40 rounded-full flex items-center justify-center opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute inset-0 bg-scrim/40 rounded-full flex items-center justify-center opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
                                             <span className="text-white text-xs font-medium tracking-wider uppercase">{t.change}</span>
                                         </div>
 
@@ -251,7 +266,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                 </button>
                             </form>
                         </div>
-                    </motion.div>
+                    </m.div>
 
                     <ImagePickerSheet
                         isOpen={isPickerOpen}

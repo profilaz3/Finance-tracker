@@ -7,7 +7,7 @@ describe('analytics studio source contracts', () => {
   it('passes recurring transactions into the lazy analytics route', () => {
     const router = readSource('components/app/AppViewRouter.tsx');
 
-    expect(router).toContain("const Stats = lazy(() => import('../Stats')");
+    expect(router).toContain("const Stats = lazyWithReload(() => import('../Stats')");
     expect(router).toContain("currentView === 'analytics'");
     expect(router).toContain('recurringTransactions={state.recurringTransactions}');
   });

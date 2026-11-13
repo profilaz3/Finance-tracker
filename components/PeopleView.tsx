@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Person, Currency, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { Plus, User, ArrowUpDown, ArrowDownLeft, ArrowUpRight, Search, Handshake, Check, Wallet, Banknote } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { EmptyState } from './EmptyState';
 import { formatCurrency } from '../utils/formatters';
 import { calculateDashboardDebtSummary, getActiveDashboardPeople } from '../utils/dashboardSummarySelectors';
@@ -134,7 +134,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
             {/* Balance Summary Section */}
                     {(totalOwedToMe > 0 || totalIOwe > 0) && (
                 <div className="grid grid-cols-2 gap-4">
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10 shadow-elevation-1"
@@ -145,9 +145,9 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         <p className="text-xl md:text-2xl font-display font-medium text-tertiary">
                             {formatCurrency(totalOwedToMe, baseCurrency)}
                         </p>
-                    </motion.div>
+                    </m.div>
 
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.05 }}
@@ -159,7 +159,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         <p className="text-xl md:text-2xl font-display font-medium text-error">
                             {formatCurrency(totalIOwe, baseCurrency)}
                         </p>
-                    </motion.div>
+                    </m.div>
                 </div>
             )}
 
@@ -183,14 +183,23 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         const isImageAvatar = person.avatar?.startsWith('data:') || person.avatar?.startsWith('http');
 
                         return (
-                            <motion.div
+                            <m.div
                                 key={person.id}
-                                layout
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => onSelectPerson(person)}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={person.name}
+                                onKeyDown={(e) => {
+                                    if (e.target !== e.currentTarget) return;
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        onSelectPerson(person);
+                                    }
+                                }}
                                 className="bg-surface-container-low p-5 rounded-2xl shadow-elevation-1 cursor-pointer hover:shadow-elevation-2 transition-all relative overflow-hidden group"
                             >
                                 <div className="flex items-center gap-4 mb-4">
@@ -222,14 +231,16 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                                     </span>
                                                     {onSettleUp && amount !== 0 && (
                                                         <button
+                                                            type="button"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 onSettleUp(person.id, currency as Currency);
                                                             }}
-                                                            className="p-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+                                                            className="p-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
                                                             title={t.settleUp}
+                                                            aria-label={`${t.settleUp}: ${person.name} ${currency}`}
                                                         >
-                                                            <Handshake size={14} />
+                                                            <Handshake size={14} aria-hidden="true" />
                                                         </button>
                                                     )}
                                                 </div>
@@ -243,7 +254,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                         </div>
                                     )}
                                 </div>
-                            </motion.div>
+                            </m.div>
                         );
                     })
                 )}

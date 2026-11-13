@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react';
 import { Transaction, Category, Person, View, TransactionType, Event } from './types';
 
 import { getSupabaseService } from './services/runtimeServices';
@@ -7,12 +7,19 @@ import { subscribeAiErrors } from './services/aiErrors';
 import { CONFIG } from './config';
 import { TRANSLATIONS } from './constants';
 import { getIntlLocale, setAppLanguage } from './utils/locale';
-import { ToastContainer, Toast } from './components/Toast';
+import { ToastContainer } from './components/Toast';
+import { useToasts } from './hooks/useToasts';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
+import { shouldIgnoreSwipeStart } from './utils/swipeGuard';
 import clsx from 'clsx';
+import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
 import { createTransactionDraft } from './domain/transactions';
-const AuthView = lazy(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
-const SetNewPasswordView = lazy(() => import('./components/AuthView').then(m => ({ default: m.SetNewPasswordView })));
+import { installPreloadErrorReload, lazyWithReload } from './utils/lazyWithReload';
+
+installPreloadErrorReload();
+
+const AuthView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
+const SetNewPasswordView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.SetNewPasswordView })));
 import type { ParsedTransaction } from './services/aiService';
 import { DashboardSkeleton, TransactionsListSkeleton, CalendarSkeleton, GenericViewSkeleton } from './components/Skeleton';
 import { ErrorBoundary, ViewErrorBoundary } from './components/ErrorBoundary';
@@ -26,6 +33,7 @@ import { usePasswordRecovery } from './hooks/usePasswordRecovery';
 import { useAppState } from './hooks/useAppState';
 import { useModals } from './hooks/useModals';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useBackNavigation, type BackLayer } from './hooks/useBackNavigation';
 import { useExchangeRates } from './hooks/useExchangeRates';
 import { useEventHandlers } from './hooks/useEventHandlers';
 import { usePeopleHandlers } from './hooks/usePeopleHandlers';
@@ -70,8 +78,8 @@ const App: React.FC = () => {
   // Split context
   const [splitTransactionContext, setSplitTransactionContext] = useState<Transaction | undefined>(undefined);
 
-  // Toast system
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  // Toast system (stable addToast, uuid ids)
+  const { toasts, addToast, dismissToast } = useToasts();
 
   // Scroll restoration
   const scrollRestore = useScrollRestore();
@@ -153,19 +161,6 @@ const App: React.FC = () => {
     }
   }, [currentView, state.events, selectedEvent]);
 
-  // Toast Management
-  const addToast = (message: string, type: Toast['type'], action?: Toast['action']) => {
-    const id = `toast-${Date.now()}`;
-    const toast: Toast = { id, message, type, action, duration: action ? 10000 : 1500 };
-    setToasts(prev => [...prev, toast]);
-
-    if (!action) {
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== id));
-      }, toast.duration);
-    }
-  };
-
   // Local storage full: tell the user instead of silently losing data.
   const storageWarningLanguageRef = useRef(state.language);
   storageWarningLanguageRef.current = state.language;
@@ -175,26 +170,18 @@ const App: React.FC = () => {
       const now = Date.now();
       if (now - lastShownAt < CONFIG.STORAGE_WARNING_THROTTLE_MS) return;
       lastShownAt = now;
-      const id = `toast-storage-${now}`;
       const message = TRANSLATIONS[storageWarningLanguageRef.current].storageFull;
-      setToasts(prev => [...prev, { id, message, type: 'error', duration: 6000 }]);
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
+      addToast(message, 'error', undefined, { id: 'toast-storage-full', duration: 6000 });
     });
-  }, []);
+  }, [addToast]);
 
   // AI limits and outages: say why the AI feature returned nothing.
   useEffect(() => subscribeAiErrors(({ kind }) => {
     if (kind !== 'quota' && kind !== 'unavailable') return;
     const strings = TRANSLATIONS[storageWarningLanguageRef.current];
-    const id = `toast-ai-${kind}`;
     const message = kind === 'quota' ? strings.aiDailyLimitReached : strings.aiServiceUnavailable;
-    setToasts(prev => [...prev.filter(t => t.id !== id), { id, message, type: 'warning', duration: 6000 }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
-  }), []);
-
-  const dismissToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
+    addToast(message, 'warning', undefined, { id: `toast-ai-${kind}`, duration: 6000 });
+  }), [addToast]);
 
   const {
     addTransaction,
@@ -358,13 +345,6 @@ const App: React.FC = () => {
     modals.setIsEditModalOpen(true);
   }, [defaultAccountId, modals.setIsEditModalOpen, state.baseCurrency]);
 
-  const shortcutHandlers = useMemo(() => ({
-    onNewTransaction: () => handleOpenAddTransaction(),
-    onEscape: () => modals.closeAllModals(),
-  }), [handleOpenAddTransaction, modals.closeAllModals]);
-
-  useKeyboardShortcuts(shortcutHandlers);
-
   useRecurringProcessor({
     isAuthenticated,
     isHydrated: areSlicesHydrated('transactions', 'recurringTransactions'),
@@ -375,6 +355,12 @@ const App: React.FC = () => {
   const onTouchStart = (e: React.TouchEvent) => {
     touchEndXRef.current = null;
     touchEndYRef.current = null;
+    // Leave horizontal gestures to scrollable rows, inputs, sliders and charts.
+    if (e.targetTouches.length !== 1 || shouldIgnoreSwipeStart(e.target, mainRef.current)) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
     touchStartXRef.current = e.targetTouches[0].clientX;
     touchStartYRef.current = e.targetTouches[0].clientY;
   };
@@ -385,8 +371,8 @@ const App: React.FC = () => {
   };
 
   const onTouchEnd = () => {
-    if (!touchStartXRef.current || !touchEndXRef.current) return;
-    if (!touchStartYRef.current || !touchEndYRef.current) return;
+    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
+    if (touchStartYRef.current === null || touchEndYRef.current === null) return;
 
     const distanceX = touchStartXRef.current - touchEndXRef.current;
     const distanceY = Math.abs(touchStartYRef.current - touchEndYRef.current);
@@ -465,6 +451,50 @@ const App: React.FC = () => {
     vibrate(HAPTIC_PATTERNS.light);
   }, [handleViewChange]);
 
+  // --- Back navigation (browser history + Android back button) ---
+  // Order matters only as a tie-break when several overlays open in the same render;
+  // otherwise the most recently opened overlay is closed first.
+  const backLayers = useMemo<BackLayer[]>(() => [
+    { id: 'event-detail', isOpen: currentView === 'events' && !!selectedEvent, close: () => setSelectedEvent(null) },
+    { id: 'person-detail', isOpen: !!selectedPerson, close: () => setSelectedPerson(null) },
+    { id: 'user-profile', isOpen: modals.isUserProfileModalOpen, close: () => modals.setIsUserProfileModalOpen(false) },
+    {
+      id: 'add-person',
+      isOpen: modals.isAddPersonModalOpen,
+      close: () => {
+        modals.setIsAddPersonModalOpen(false);
+        setPersonToEdit(null);
+      },
+    },
+    { id: 'event-creation', isOpen: modals.isEventCreationModalOpen, close: () => modals.setIsEventCreationModalOpen(false) },
+    { id: 'receipt-scan', isOpen: modals.isReceiptScanModalOpen, close: () => modals.setIsReceiptScanModalOpen(false) },
+    { id: 'edit-transaction', isOpen: modals.isEditModalOpen, close: () => modals.setIsEditModalOpen(false) },
+    { id: 'receipt', isOpen: modals.isReceiptModalOpen, close: () => modals.setIsReceiptModalOpen(false) },
+    { id: 'split', isOpen: modals.isSplitModalOpen, close: () => modals.setIsSplitModalOpen(false) },
+    {
+      id: 'split-expense',
+      isOpen: modals.isSplitExpenseModalOpen,
+      close: () => {
+        modals.setIsSplitExpenseModalOpen(false);
+        setSplitTransactionContext(undefined);
+      },
+    },
+  ], [currentView, selectedEvent, selectedPerson, modals]);
+
+  const { closeTopLayer } = useBackNavigation({
+    currentView,
+    setView: handleViewChange,
+    layers: backLayers,
+  });
+
+  const shortcutHandlers = useMemo(() => ({
+    onNewTransaction: () => handleOpenAddTransaction(),
+    // Escape closes only the top-most overlay (and consumes its history entry).
+    onEscape: () => closeTopLayer(),
+  }), [handleOpenAddTransaction, closeTopLayer]);
+
+  useKeyboardShortcuts(shortcutHandlers);
+
   // --- Render ---
   if (isLoadingAuth) {
     return (
@@ -524,6 +554,12 @@ const App: React.FC = () => {
         }}
       />
 
+      {/* Edge-to-edge (Android 15+): keep scrolled content from showing through the status bar. */}
+      <div
+        className="fixed top-0 inset-x-0 z-40 h-[env(safe-area-inset-top)] bg-surface pointer-events-none md:hidden"
+        aria-hidden="true"
+      />
+
       <a href="#main-content" className="skip-link">
         {t.skipToMainContent}
       </a>
@@ -538,7 +574,7 @@ const App: React.FC = () => {
         role="main"
         aria-label={t.mainContent}
       >
-        <div className="max-w-5xl mx-auto px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] md:p-4 md:pb-8 lg:p-8">
+        <div className="max-w-5xl mx-auto pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] md:p-4 md:pb-8 lg:p-8">
           <ViewErrorBoundary>
             <Suspense fallback={viewSkeleton[currentView] || <DashboardSkeleton />}>
               <AppViewRouter
@@ -638,9 +674,16 @@ const App: React.FC = () => {
 };
 
 // Wrap App with top-level ErrorBoundary
+
+// LazyMotion + `m` components keep drag/layout/projection code out of the shared
+// motion chunk; only the Settings account reorder list pulls in the domMax features.
 const AppWithErrorBoundary: React.FC = () => (
   <ErrorBoundary>
-    <App />
+    <LazyMotion features={domAnimation}>
+      <MotionConfig reducedMotion="user">
+        <App />
+      </MotionConfig>
+    </LazyMotion>
   </ErrorBoundary>
 );
 

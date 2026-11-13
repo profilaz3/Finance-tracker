@@ -1,5 +1,6 @@
 import React, { Suspense, useState } from 'react';
-import { motion, Variants } from 'motion/react';
+import { lazyWithReload } from '../utils/lazyWithReload';
+import { m, Variants } from 'motion/react';
 import { Sparkles, RefreshCw, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { Transaction, Category, Currency } from '../types';
@@ -7,7 +8,7 @@ import { TRANSLATIONS } from '../constants';
 import { formatDate } from '../utils/locale';
 import { generateInsights, isAIAvailable } from '../services/aiService';
 
-const MarkdownRenderer = React.lazy(() => import('react-markdown'));
+const MarkdownRenderer = lazyWithReload(() => import('react-markdown'));
 
 interface InsightsViewProps {
     transactions: Transaction[];
@@ -95,7 +96,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
     const aiAvailable = isAIAvailable();
 
     return (
-        <motion.div
+        <m.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
@@ -103,7 +104,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
             className="max-w-3xl mx-auto space-y-6 pb-20"
         >
             {/* Header */}
-            <motion.div variants={itemVariants} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <m.div variants={itemVariants} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-display font-medium text-on-surface flex items-center gap-2">
                         <Sparkles className="text-primary" size={24} />
@@ -137,11 +138,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                         {t.monthly}
                     </button>
                 </div>
-            </motion.div>
+            </m.div>
 
             {/* AI Backend Warning */}
             {!aiAvailable && (
-                <motion.div
+                <m.div
                     variants={itemVariants}
                     className="bg-error-container/20 border border-error/30 rounded-xl p-4 flex items-start gap-3"
                 >
@@ -152,11 +153,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                             {t.aiConfigureHint}
                         </p>
                     </div>
-                </motion.div>
+                </m.div>
             )}
 
             {/* Main Content */}
-            <motion.div
+            <m.div
                 variants={itemVariants}
                 className="bg-surface-container-low rounded-xl shadow-elevation-1 overflow-hidden"
             >
@@ -251,7 +252,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                         </button>
                     </div>
                 )}
-            </motion.div>
-        </motion.div>
+            </m.div>
+        </m.div>
     );
 };

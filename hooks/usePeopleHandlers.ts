@@ -16,6 +16,7 @@ import { LEGACY_USER_PROFILE_ID, normalizeUserProfileId } from '../utils/remoteP
 import { calculateBalanceOffset, getEffectivePersonBalances } from '../domain/balances';
 import { TRANSLATIONS } from '../constants';
 import { getTranslations } from '../utils/i18n';
+import { isInlineAvatar, uploadInlineAvatar } from '../utils/avatarUpload';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -41,18 +42,47 @@ export function usePeopleHandlers({
   addTransaction,
   createId,
 }: UsePeopleHandlersOptions) {
+  /**
+   * Upload a freshly picked inline avatar to Storage and swap the data URL for the public
+   * URL in state, unless the avatar was changed again meanwhile. Returns the URL, or null
+   * when the inline image is kept (offline / upload failed).
+   */
+  const promoteInlineAvatar = useCallback(async (
+    ownerId: string,
+    avatar: string | undefined,
+    target: 'person' | 'profile',
+  ): Promise<string | null> => {
+    if (!isInlineAvatar(avatar)) {
+      return null;
+    }
+    const url = await uploadInlineAvatar(avatar, ownerId, getSupabaseService);
+    if (!url) {
+      return null;
+    }
+    const swap = <T extends Person>(entry: T): T =>
+      entry.id === ownerId && entry.avatar === avatar ? { ...entry, avatar: url } : entry;
+    setState(prev => target === 'profile'
+      ? { ...prev, userProfile: prev.userProfile ? swap(prev.userProfile) : prev.userProfile }
+      : { ...prev, people: prev.people.map(swap) });
+    if (target === 'person') {
+      setSelectedPerson(prev => prev ? swap(prev) : prev);
+    }
+    return url;
+  }, [setSelectedPerson, setState]);
+
   const addPerson = useCallback(async (name: string, defaultCurrency: Currency, color: string, avatar?: string) => {
     const newPerson = buildPerson({ createId, name, defaultCurrency, color, avatar });
     setState(prev => ({ ...prev, people: [...prev.people, newPerson] }));
 
     try {
+      const avatarUrl = await promoteInlineAvatar(newPerson.id, newPerson.avatar, 'person');
       const syncManager = await getSyncManager();
-      await syncManager.syncPerson(newPerson);
+      await syncManager.syncPerson(avatarUrl ? { ...newPerson, avatar: avatarUrl } : newPerson);
     } catch (error) {
       console.error('Failed to sync person:', error);
       addToast(getTranslations().personSavedSyncFailed, 'error');
     }
-  }, [addToast, createId, setState]);
+  }, [addToast, createId, promoteInlineAvatar, setState]);
 
   const updatePerson = useCallback(async (id: string, rawUpdates: Partial<Person>) => {
     // Balances are derived (domain/balances.ts); profile edits must not overwrite
@@ -75,13 +105,14 @@ export function usePeopleHandlers({
     }
 
     try {
+      const avatarUrl = await promoteInlineAvatar(id, updates.avatar, 'person');
       const syncManager = await getSyncManager();
-      await syncManager.syncPerson(updatedPerson);
+      await syncManager.syncPerson(avatarUrl ? { ...updatedPerson, avatar: avatarUrl } : updatedPerson);
     } catch (error) {
       console.error('Failed to sync person update:', error);
       addToast(getTranslations().personUpdatedSyncFailed, 'error');
     }
-  }, [addToast, selectedPerson?.id, setSelectedPerson, setState, state.people]);
+  }, [addToast, promoteInlineAvatar, selectedPerson?.id, setSelectedPerson, setState, state.people]);
 
   const createUserProfile = useCallback(async (name: string, defaultCurrency: Currency, color: string, avatar?: string) => {
     const supabaseService = await getSupabaseService();
@@ -92,7 +123,9 @@ export function usePeopleHandlers({
     setState(prev => ({ ...prev, userProfile: newProfile }));
     addToast(TRANSLATIONS[state.language].profileCreated, 'success');
     closeUserProfileModal();
-  }, [addToast, closeUserProfileModal, setState, state.language]);
+    // Settings sync (useSync) picks up the swapped Storage URL.
+    await promoteInlineAvatar(newProfile.id, newProfile.avatar, 'profile');
+  }, [addToast, closeUserProfileModal, promoteInlineAvatar, setState, state.language]);
 
   const updateUserProfile = useCallback(async (_id: string, updates: Partial<Person>) => {
     if (!state.userProfile) {
@@ -103,7 +136,8 @@ export function usePeopleHandlers({
     setState(prev => ({ ...prev, userProfile: updatedProfile }));
     addToast(TRANSLATIONS[state.language].profileUpdated, 'success');
     closeUserProfileModal();
-  }, [addToast, closeUserProfileModal, setState, state.language, state.userProfile]);
+    await promoteInlineAvatar(updatedProfile.id, updates.avatar, 'profile');
+  }, [addToast, closeUserProfileModal, promoteInlineAvatar, setState, state.language, state.userProfile]);
 
   const handleUpdatePersonBalance = useCallback(async (personId: string, currency: Currency, newBalance: number) => {
     const person = state.people.find(entry => entry.id === personId);
@@ -168,10 +202,7 @@ export function usePeopleHandlers({
       return;
     }
 
-    if (!window.confirm(getTranslations().deleteWalletAccountConfirm)) {
-      return;
-    }
-
+    // The wallet row asks for confirmation (ConfirmDialog) before calling this.
     setState(prev => ({ ...prev, accounts: removeAccountFromCollection(prev.accounts, id) }));
 
     try {
@@ -245,7 +276,11 @@ export function usePeopleHandlers({
     }
   }, [setState]);
 
+  // Single-item delete: no confirm, an Undo toast puts the category back where it was.
   const handleDeleteCategory = useCallback(async (id: string) => {
+    const index = state.categories.findIndex(category => category.id === id);
+    const deleted = index === -1 ? undefined : state.categories[index];
+
     setState(prev => ({ ...prev, categories: prev.categories.filter(category => category.id !== id) }));
     try {
       const syncManager = await getSyncManager();
@@ -253,7 +288,24 @@ export function usePeopleHandlers({
     } catch (error) {
       console.error(error);
     }
-  }, [setState]);
+
+    if (!deleted) return;
+    const t = TRANSLATIONS[state.language];
+    addToast(t.categoryDeleted, 'info', {
+      label: t.undo,
+      onClick: () => {
+        setState(prev => {
+          if (prev.categories.some(category => category.id === deleted.id)) return prev;
+          const categories = [...prev.categories];
+          categories.splice(Math.min(index, categories.length), 0, deleted);
+          return { ...prev, categories };
+        });
+        void getSyncManager()
+          .then(syncManager => syncManager.syncCategory(deleted))
+          .catch(error => console.error('Failed to sync restored category:', error));
+      },
+    });
+  }, [addToast, setState, state.categories, state.language]);
 
   return {
     addPerson,

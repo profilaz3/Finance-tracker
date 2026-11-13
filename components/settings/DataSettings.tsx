@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { User, Plus, Trash2, RefreshCw, Play, Pause, Calendar, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState, Person, TransactionType, Currency, Category, RecurringTransaction, RecurrenceFrequency } from '../../types';
@@ -107,7 +107,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
 
                     <AnimatePresence>
                         {isAddingRecurring && (
-                            <motion.div
+                            <m.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
@@ -197,7 +197,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                         </button>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </m.div>
                         )}
                     </AnimatePresence>
 
@@ -214,9 +214,8 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                 const recurringStatus = getRecurringStatus(recurring, state.language);
 
                                 return (
-                                    <motion.div
+                                    <m.div
                                         key={recurring.id}
-                                        layout
                                         className={clsx(
                                             "bg-surface-container-low p-4 rounded-xl flex items-center gap-4",
                                             !recurring.isActive && "opacity-50"
@@ -279,7 +278,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                                 </button>
                                             )}
                                         </div>
-                                    </motion.div>
+                                    </m.div>
                                 );
                             })
                         )}

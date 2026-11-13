@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Padding for full-screen modal overlays: at least 1rem, but never under the
+   status bar, gesture bar or display cutout when Android draws edge-to-edge. */
+@utility modal-safe-area {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+
 @theme inline {
   /* Primary */
   --color-primary: rgb(var(--md-sys-color-primary));
@@ -94,7 +103,7 @@
   --md-sys-color-surface: 10 10 10;
   --md-sys-color-on-surface: 229 229 229;
   --md-sys-color-on-surface-variant: 163 163 163;
-  --md-sys-color-outline: 64 64 64;
+  --md-sys-color-outline: 102 102 102;
   --md-sys-color-outline-variant: 38 38 38;
 
   --md-sys-color-warning: 245 158 11;
@@ -138,7 +147,7 @@
   --md-sys-color-surface: 18 18 18;
   --md-sys-color-on-surface: 240 240 240;
   --md-sys-color-on-surface-variant: 180 180 180;
-  --md-sys-color-outline: 80 80 80;
+  --md-sys-color-outline: 99 99 99;
   --md-sys-color-outline-variant: 40 40 40;
 
   --md-sys-color-warning: 250 204 21;
@@ -166,7 +175,7 @@
 
   --md-sys-color-tertiary: 50 255 100;
   --md-sys-color-on-tertiary: 10 60 25;
-  --md-sys-color-tertiary-container: 20 140 55;
+  --md-sys-color-tertiary-container: 18 124 49;
   --md-sys-color-on-tertiary-container: 200 255 220;
 
   --md-sys-color-error: 255 60 60;
@@ -180,7 +189,7 @@
   --md-sys-color-surface: 5 12 5;
   --md-sys-color-on-surface: 210 255 210;
   --md-sys-color-on-surface-variant: 130 180 130;
-  --md-sys-color-outline: 50 80 50;
+  --md-sys-color-outline: 67 107 67;
   --md-sys-color-outline-variant: 25 40 25;
 
   --md-sys-color-warning: 245 158 11;
@@ -204,12 +213,12 @@
   --md-sys-color-secondary: 250 204 21;
   --md-sys-color-on-secondary: 51 29 0;
   --md-sys-color-secondary-container: 161 98 7;
-  --md-sys-color-on-secondary-container: 255 243 199;
+  --md-sys-color-on-secondary-container: 255 247 217;
 
   --md-sys-color-tertiary: 190 242 100;
   --md-sys-color-on-tertiary: 31 45 10;
   --md-sys-color-tertiary-container: 101 163 13;
-  --md-sys-color-on-tertiary-container: 236 252 203;
+  --md-sys-color-on-tertiary-container: 27 39 2;
 
   --md-sys-color-error: 248 113 113;
   --md-sys-color-on-error: 69 10 10;
@@ -222,7 +231,7 @@
   --md-sys-color-surface: 14 15 18;
   --md-sys-color-on-surface: 232 234 237;
   --md-sys-color-on-surface-variant: 149 157 166;
-  --md-sys-color-outline: 82 90 102;
+  --md-sys-color-outline: 90 99 112;
   --md-sys-color-outline-variant: 42 48 56;
 
   --md-sys-color-warning: 245 158 11;
@@ -264,7 +273,7 @@
   --md-sys-color-surface: 16 22 34;
   --md-sys-color-on-surface: 226 232 240;
   --md-sys-color-on-surface-variant: 148 163 184;
-  --md-sys-color-outline: 71 85 105;
+  --md-sys-color-outline: 85 102 126;
   --md-sys-color-outline-variant: 30 41 59;
 
   --md-sys-color-warning: 245 158 11;
@@ -306,7 +315,7 @@
   --md-sys-color-surface: 30 18 14;
   --md-sys-color-on-surface: 251 236 228;
   --md-sys-color-on-surface-variant: 200 175 160;
-  --md-sys-color-outline: 120 90 75;
+  --md-sys-color-outline: 125 94 78;
   --md-sys-color-outline-variant: 60 45 36;
 
   --md-sys-color-warning: 245 158 11;
@@ -351,7 +360,7 @@
   --md-sys-color-surface: 20 5 25;
   --md-sys-color-on-surface: 255 230 250;
   --md-sys-color-on-surface-variant: 220 180 220;
-  --md-sys-color-outline: 120 60 130;
+  --md-sys-color-outline: 136 68 147;
   --md-sys-color-outline-variant: 50 20 60;
 
   --md-sys-color-warning: 250 176 5;
@@ -377,13 +386,13 @@
   --md-sys-color-secondary-container: 60 40 35;
   --md-sys-color-on-secondary-container: 215 204 200;
 
-  --md-sys-color-tertiary: 191 54 12;
+  --md-sys-color-tertiary: 229 65 14;
   --md-sys-color-on-tertiary: 255 255 255;
   --md-sys-color-tertiary-container: 255 112 67;
   --md-sys-color-on-tertiary-container: 62 39 35;
 
-  --md-sys-color-error: 183 28 28;
-  --md-sys-color-on-error: 255 255 255;
+  --md-sys-color-error: 226 64 64;
+  --md-sys-color-on-error: 15 15 15;
   --md-sys-color-error-container: 255 205 210;
   --md-sys-color-on-error-container: 65 0 2;
 
@@ -393,7 +402,7 @@
   --md-sys-color-surface: 12 10 8;
   --md-sys-color-on-surface: 236 224 220;
   --md-sys-color-on-surface-variant: 161 136 127;
-  --md-sys-color-outline: 90 65 55;
+  --md-sys-color-outline: 123 89 75;
   --md-sys-color-outline-variant: 45 30 25;
 
   --md-sys-color-warning: 245 158 11;
@@ -412,7 +421,7 @@
   --md-sys-color-primary: 250 204 21;
   --md-sys-color-on-primary: 41 28 0;
   --md-sys-color-primary-container: 161 98 7;
-  --md-sys-color-on-primary-container: 255 244 214;
+  --md-sys-color-on-primary-container: 255 247 224;
 
   --md-sys-color-secondary: 20 184 166;
   --md-sys-color-on-secondary: 0 45 44;
@@ -480,7 +489,7 @@
   --md-sys-color-surface: 25 10 10;
   --md-sys-color-on-surface: 255 240 240;
   --md-sys-color-on-surface-variant: 200 150 150;
-  --md-sys-color-outline: 120 70 70;
+  --md-sys-color-outline: 139 81 81;
   --md-sys-color-outline-variant: 70 35 35;
 
   --md-sys-color-warning: 245 158 11;
@@ -550,7 +559,7 @@
   --md-sys-color-secondary: 251 191 36;
   --md-sys-color-on-secondary: 49 26 0;
   --md-sys-color-secondary-container: 180 83 9;
-  --md-sys-color-on-secondary-container: 255 237 213;
+  --md-sys-color-on-secondary-container: 255 244 228;
 
   --md-sys-color-tertiary: 56 189 248;
   --md-sys-color-on-tertiary: 0 43 64;
@@ -568,7 +577,7 @@
   --md-sys-color-surface: 12 18 32;
   --md-sys-color-on-surface: 224 242 254;
   --md-sys-color-on-surface-variant: 148 163 184;
-  --md-sys-color-outline: 71 85 105;
+  --md-sys-color-outline: 85 102 126;
   --md-sys-color-outline-variant: 30 41 59;
 
   --md-sys-color-warning: 245 158 11;
@@ -584,17 +593,17 @@
 
 .theme-galaxy {
   /* Theme: Midnight Galaxy (Cosmic purple/blue space) */
-  --md-sys-color-primary: 139 92 246;
+  --md-sys-color-primary: 153 111 247;
   /* Violet */
-  --md-sys-color-on-primary: 250 245 255;
+  --md-sys-color-on-primary: 25 0 51;
   --md-sys-color-primary-container: 167 139 250;
   --md-sys-color-on-primary-container: 46 16 101;
 
   --md-sys-color-secondary: 217 70 239;
   /* Fuchsia */
-  --md-sys-color-on-secondary: 253 244 255;
+  --md-sys-color-on-secondary: 42 0 51;
   --md-sys-color-secondary-container: 232 121 249;
-  --md-sys-color-on-secondary-container: 112 26 117;
+  --md-sys-color-on-secondary-container: 98 23 102;
 
   --md-sys-color-tertiary: 34 211 238;
   /* Cyan */
@@ -614,7 +623,7 @@
   --md-sys-color-surface: 17 17 40;
   --md-sys-color-on-surface: 245 243 255;
   --md-sys-color-on-surface-variant: 196 181 253;
-  --md-sys-color-outline: 88 70 150;
+  --md-sys-color-outline: 107 87 177;
   --md-sys-color-outline-variant: 35 30 65;
 
   --md-sys-color-warning: 245 158 11;
@@ -672,7 +681,7 @@
 
 .theme-light {
   /* Theme: Light Mode (Clean/Modern) */
-  --md-sys-color-primary: 37 99 235;
+  --md-sys-color-primary: 23 89 234;
   /* Blue 600 */
   --md-sys-color-on-primary: 255 255 255;
   --md-sys-color-primary-container: 219 234 254;
@@ -684,13 +693,13 @@
   --md-sys-color-secondary-container: 224 231 255;
   --md-sys-color-on-secondary-container: 55 48 163;
 
-  --md-sys-color-tertiary: 22 163 74;
+  --md-sys-color-tertiary: 17 127 58;
   /* Green 600 */
   --md-sys-color-on-tertiary: 255 255 255;
   --md-sys-color-tertiary-container: 220 252 231;
   --md-sys-color-on-tertiary-container: 21 128 61;
 
-  --md-sys-color-error: 220 38 38;
+  --md-sys-color-error: 216 35 35;
   /* Red 600 */
   --md-sys-color-on-error: 255 255 255;
   --md-sys-color-error-container: 254 226 226;
@@ -705,12 +714,12 @@
   /* Slate 900 */
   --md-sys-color-on-surface-variant: 71 85 105;
   /* Slate 600 */
-  --md-sys-color-outline: 148 163 184;
+  --md-sys-color-outline: 122 141 167;
   /* Slate 400 */
   --md-sys-color-outline-variant: 226 232 240;
   /* Slate 200 */
 
-  --md-sys-color-warning: 217 119 6;
+  --md-sys-color-warning: 170 93 5;
   --md-sys-color-on-warning: 255 255 255;
   --md-sys-color-scrim: 0 0 0;
 
@@ -732,17 +741,17 @@
   --md-sys-color-primary-container: 204 251 241;
   --md-sys-color-on-primary-container: 19 78 74;
 
-  --md-sys-color-secondary: 217 119 6;
+  --md-sys-color-secondary: 165 90 5;
   --md-sys-color-on-secondary: 255 255 255;
   --md-sys-color-secondary-container: 254 215 170;
   --md-sys-color-on-secondary-container: 120 53 15;
 
-  --md-sys-color-tertiary: 34 197 94;
+  --md-sys-color-tertiary: 21 121 58;
   --md-sys-color-on-tertiary: 12 40 24;
   --md-sys-color-tertiary-container: 220 252 231;
   --md-sys-color-on-tertiary-container: 21 128 61;
 
-  --md-sys-color-error: 220 38 38;
+  --md-sys-color-error: 207 33 33;
   --md-sys-color-on-error: 255 255 255;
   --md-sys-color-error-container: 254 226 226;
   --md-sys-color-on-error-container: 153 27 27;
@@ -752,11 +761,11 @@
 
   --md-sys-color-surface: 248 243 235;
   --md-sys-color-on-surface: 43 39 35;
-  --md-sys-color-on-surface-variant: 109 101 92;
-  --md-sys-color-outline: 182 168 153;
+  --md-sys-color-on-surface-variant: 102 95 86;
+  --md-sys-color-outline: 151 131 110;
   --md-sys-color-outline-variant: 230 219 206;
 
-  --md-sys-color-warning: 217 119 6;
+  --md-sys-color-warning: 165 90 5;
   --md-sys-color-on-warning: 255 255 255;
   --md-sys-color-scrim: 0 0 0;
 
@@ -769,22 +778,22 @@
 
 .theme-mist {
   /* Theme: Mist (Cool light with teal/blue accents) */
-  --md-sys-color-primary: 14 116 144;
+  --md-sys-color-primary: 14 112 139;
   --md-sys-color-on-primary: 240 253 250;
   --md-sys-color-primary-container: 153 246 228;
   --md-sys-color-on-primary-container: 19 78 74;
 
-  --md-sys-color-secondary: 59 130 246;
+  --md-sys-color-secondary: 11 99 243;
   --md-sys-color-on-secondary: 255 255 255;
   --md-sys-color-secondary-container: 219 234 254;
   --md-sys-color-on-secondary-container: 30 64 175;
 
-  --md-sys-color-tertiary: 16 185 129;
+  --md-sys-color-tertiary: 11 124 86;
   --md-sys-color-on-tertiary: 5 46 38;
   --md-sys-color-tertiary-container: 209 250 229;
   --md-sys-color-on-tertiary-container: 6 78 59;
 
-  --md-sys-color-error: 220 38 38;
+  --md-sys-color-error: 213 34 34;
   --md-sys-color-on-error: 255 255 255;
   --md-sys-color-error-container: 254 226 226;
   --md-sys-color-on-error-container: 153 27 27;
@@ -795,10 +804,10 @@
   --md-sys-color-surface: 238 244 250;
   --md-sys-color-on-surface: 15 23 42;
   --md-sys-color-on-surface-variant: 71 85 105;
-  --md-sys-color-outline: 148 163 184;
+  --md-sys-color-outline: 120 139 166;
   --md-sys-color-outline-variant: 226 232 240;
 
-  --md-sys-color-warning: 217 119 6;
+  --md-sys-color-warning: 165 90 5;
   --md-sys-color-on-warning: 255 255 255;
   --md-sys-color-scrim: 0 0 0;
 
@@ -874,26 +883,44 @@ button:active::after {
   background: rgb(var(--md-sys-color-outline));
 }
 
-/* Focus styles - hide outline for mouse/touch, show for keyboard */
-*:focus {
+/* Focus styles (H12).
+   Mouse/touch focus gets no outline; keyboard focus always gets a visible ring.
+   These rules are deliberately unlayered so they win over `focus:outline-none`
+   utilities. Do not add `box-shadow: none` / `outline: none` for form fields here:
+   that used to wipe out every `focus:ring-*` utility and left inputs with no
+   focus indicator at all. */
+:focus:not(:focus-visible) {
   outline: none;
 }
 
-*:focus-visible {
+:focus-visible {
   outline: 2px solid rgb(var(--md-sys-color-primary));
   outline-offset: 2px;
+}
+
+/* Text fields show :focus-visible for pointer focus too; keep their ring snug. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline-offset: 0;
+}
+
+/* Dialog panels take programmatic focus on open (useDialog); they are not controls. */
+[role="dialog"][tabindex="-1"]:focus,
+[role="alertdialog"][tabindex="-1"]:focus {
+  outline: none;
+}
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
 }
 
 /* Remove tap highlight on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none;
-  box-shadow: none;
 }
 
 /* Accessibility utilities */
@@ -985,4 +1012,28 @@ select:focus {
 
 .toast-enter {
   animation: toast-enter 180ms ease-out;
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Duration is set inline per toast. scaleX keeps the countdown on the compositor. */
+.toast-progress {
+  transform-origin: left center;
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-progress {
+    visibility: hidden;
+  }
 }

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
-import { Split, Pencil, Trash2, Receipt, User, MapPin, Users, Check, Copy, Bookmark } from 'lucide-react';
+import { m, AnimatePresence } from 'motion/react';
+import { Split, Pencil, Trash2, Receipt, User, MapPin, Users, Check, Copy, Bookmark, MoreVertical } from 'lucide-react';
 import clsx from 'clsx';
 import { Transaction, Category, Account, Person, AppState, Event } from '../types';
 import { formatCurrency, getShortDate } from '../utils/formatters';
@@ -9,6 +9,7 @@ import { getIconByName } from '../utils/categoryIcons';
 import { convertAmount } from '../services/currencyService';
 import { TRANSLATIONS } from '../constants';
 import { hexToRgb, getLuminance } from '../utils/colorUtils';
+import { useEscapeKey, useFocusTrap } from '../hooks/useFocusTrap';
 
 interface TransactionItemProps {
     transaction: Transaction;
@@ -120,15 +121,29 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
         };
     }, []);
 
+    const openMenuAt = (rect: DOMRect) => {
+        const x = Math.max(8, Math.min(rect.right - 160, window.innerWidth - 180));
+        const y = Math.max(8, Math.min(rect.top + 40, window.innerHeight - 250));
+        setMenuPosition({ x, y });
+        setIsMenuOpen(true);
+    };
+
+    const closeMenu = () => {
+        setIsMenuOpen(false);
+        setMenuPosition(null);
+    };
+
+    // Keyboard and screen-reader users reach the long-press actions through the
+    // "more actions" button; Escape closes the menu and focus returns to the button.
+    const menuRef = useFocusTrap(isMenuOpen);
+    useEscapeKey(closeMenu, isMenuOpen);
+
     const handleStart = (e: React.PointerEvent) => {
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         isLongPress.current = false;
         timerRef.current = setTimeout(() => {
             isLongPress.current = true;
-            const x = Math.min(rect.right - 160, window.innerWidth - 180);
-            const y = Math.min(rect.top + 40, window.innerHeight - 250);
-            setMenuPosition({ x, y });
-            setIsMenuOpen(true);
+            openMenuAt(rect);
             if (navigator.vibrate) navigator.vibrate(50);
         }, 500);
     };
@@ -153,13 +168,14 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
     };
 
     return (
-        <motion.div
+        <m.div
             onPointerDown={handleStart}
             onPointerUp={handleEnd}
             onPointerLeave={handleEnd}
             onPointerCancel={handleEnd}
             onClick={handleClick}
             onContextMenu={(e) => e.preventDefault()}
+            data-transaction-row
             whileTap={{ scale: 0.98 }}
             className={clsx(
                 "group relative select-none transition-colors duration-100",
@@ -229,23 +245,41 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         {getShortDate(transaction.date)}
                     </div>
                 </div>
+
+                {/* Visible alternative to long-press */}
+                <button
+                    type="button"
+                    aria-label={t.moreActions}
+                    aria-haspopup="menu"
+                    aria-expanded={isMenuOpen}
+                    title={t.moreActions}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        const row = (e.currentTarget.closest('[data-transaction-row]') ?? e.currentTarget) as HTMLElement;
+                        openMenuAt(row.getBoundingClientRect());
+                    }}
+                    className="-mr-1 p-1.5 shrink-0 rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-opacity opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                    <MoreVertical size={18} aria-hidden="true" />
+                </button>
             </div>
 
             {/* Long Press Context Menu */}
             {isMenuOpen && menuPosition && createPortal(
                 <AnimatePresence>
-                    <motion.div
+                    <m.div
                         key="menu-backdrop"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[9998] bg-scrim/20"
                         style={{ touchAction: 'none' }}
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsMenuOpen(false); setMenuPosition(null); }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); }}
                         onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                         onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     />
-                    <motion.div
+                    <m.div
                         key="menu-content"
                         initial={{ opacity: 0, scale: 0.9, y: -4 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -257,56 +291,68 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                             top: menuPosition.y,
                             touchAction: 'none',
                         }}
+                        ref={menuRef}
+                        role="menu"
+                        aria-label={t.moreActions}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
                         className="z-[9999] min-w-[170px] bg-surface-container-high rounded-2xl shadow-elevation-4 border border-outline-variant/15 overflow-hidden py-1"
                     >
                         {!transaction.personId && (
                             <button
-                                onClick={() => { onSplit(); setIsMenuOpen(false); setMenuPosition(null); }}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => { onSplit(); closeMenu(); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                             >
-                                <Split size={16} className="text-on-surface-variant" /> {t.split}
+                                <Split size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.split}
                             </button>
                         )}
                         <button
+                            type="button"
+                            role="menuitem"
                             onClick={() => {
                                 if (hasSplit && onEditSplit) {
                                     onEditSplit();
                                 } else {
                                     onEdit();
                                 }
-                                setIsMenuOpen(false);
-                                setMenuPosition(null);
+                                closeMenu();
                             }}
                             className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                         >
-                            <Pencil size={16} className="text-on-surface-variant" /> {t.edit}
+                            <Pencil size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.edit}
                         </button>
                         {onDuplicate && (
                             <button
-                                onClick={() => { onDuplicate(); setIsMenuOpen(false); setMenuPosition(null); }}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => { onDuplicate(); closeMenu(); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                             >
-                                <Copy size={16} className="text-on-surface-variant" /> {t.duplicate}
+                                <Copy size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.duplicate}
                             </button>
                         )}
                         {onSaveAsTemplate && (
                             <button
-                                onClick={() => { onSaveAsTemplate(); setIsMenuOpen(false); setMenuPosition(null); }}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => { onSaveAsTemplate(); closeMenu(); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                             >
-                                <Bookmark size={16} className="text-on-surface-variant" /> {t.saveAsTemplate}
+                                <Bookmark size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.saveAsTemplate}
                             </button>
                         )}
-                        <div className="h-px bg-outline-variant/15 mx-3 my-1" />
+                        <div role="separator" className="h-px bg-outline-variant/15 mx-3 my-1" />
                         <button
-                            onClick={() => { onDelete(); setIsMenuOpen(false); setMenuPosition(null); }}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { onDelete(); closeMenu(); }}
                             className="w-full text-left px-4 py-2.5 hover:bg-error/10 text-error flex items-center gap-3 text-sm transition-colors active:bg-error/20"
                         >
-                            <Trash2 size={16} /> {t.delete}
+                            <Trash2 size={16} aria-hidden="true" /> {t.delete}
                         </button>
-                    </motion.div>
+                    </m.div>
                 </AnimatePresence>,
                 document.body
             )}
@@ -314,7 +360,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
             {/* Expandable detail — gets a subtle inset bg */}
             <AnimatePresence>
                 {isExpanded && (
-                    <motion.div
+                    <m.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -338,7 +384,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                             <SplitRow
                                                 key={share.personId}
                                                 avatar={sharePerson?.avatar}
-                                                name={sharePerson?.name || 'Unknown'}
+                                                name={sharePerson?.name || t.unknown}
                                                 color={sharePerson?.color || '#808080'}
                                                 amount={formatCurrency(share.amount, transaction.currency)}
                                                 isPaid={share.isPaid}
@@ -420,10 +466,10 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 </>
                             )}
                         </div>
-                    </motion.div>
+                    </m.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </m.div>
     );
 });
 

@@ -109,7 +109,7 @@ const ChartSurface: React.FC<{
   const ticks = buildLinearTicks(min, max, 4);
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full" data-no-swipe>
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" role="img" aria-hidden="true">
         <g transform={`translate(${plot.left}, ${plot.top})`}>
           {ticks.map((tick) => {
@@ -407,7 +407,7 @@ export const DonutChart: React.FC<{
   let angle = -90;
 
   return (
-    <div className="relative h-[260px] w-full">
+    <div className="relative h-[260px] w-full" data-no-swipe>
       <svg viewBox="0 0 240 240" className="h-full w-full" role="img" aria-hidden="true">
         <path
           d={describeDonutArc({

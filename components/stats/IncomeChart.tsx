@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { Account, Currency, ExchangeRates, Transaction } from '../../types';
@@ -107,7 +107,7 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
   }, [transactions, accounts, netWorthTimeFrame, baseCurrency, rates, language, now]);
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.35 }}
@@ -156,6 +156,6 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
           ]}
         />
       ) : null}
-    </motion.div>
+    </m.div>
   );
 };

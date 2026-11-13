@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import clsx from 'clsx';
 import { Banknote, Plus, Split } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
@@ -28,24 +28,24 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div
+        <m.div
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50"
+          className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-[calc(1rem+env(safe-area-inset-right))] md:right-6 z-50"
         >
           <AnimatePresence>
             {isOpen && (
               <>
-                <motion.div
+                <m.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="fixed inset-0 bg-scrim/20"
                   onClick={() => setIsOpen(false)}
                 />
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, y: 20, scale: 0.8 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 20, scale: 0.8 }}
@@ -80,11 +80,11 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
                       <Banknote size={20} />
                     </div>
                   </button>
-                </motion.div>
+                </m.div>
               </>
             )}
           </AnimatePresence>
-          <motion.button
+          <m.button
             onClick={() => setIsOpen(!isOpen)}
             whileTap={{ scale: 0.9 }}
             aria-label={TRANSLATIONS[language].openTransactionActions}
@@ -94,8 +94,8 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
             )}
           >
             <Plus size={28} />
-          </motion.button>
-        </motion.div>
+          </m.button>
+        </m.div>
       )}
     </AnimatePresence>
   );

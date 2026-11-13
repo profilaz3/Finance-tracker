@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { Calendar, CheckCircle2, CheckSquare, ChevronDown, Download, FileText, FileSpreadsheet, Loader2, Search, Sparkles, Square, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState, TransactionType } from '../../types';
@@ -106,7 +106,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
     <div className={clsx('flex-none transition-all duration-200', isScrolled ? 'pb-2' : 'pb-3')}>
       <AnimatePresence>
         {isSelectionMode && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -149,7 +149,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                 </button>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
@@ -316,7 +316,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
 
       <AnimatePresence>
         {showDateFilter && (
-          <motion.div
+          <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -349,7 +349,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                 </button>
               )}
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

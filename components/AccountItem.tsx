@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Account } from '../types';
-import { Reorder, useDragControls } from 'motion/react';
+import { useDragControls } from 'motion/react';
+import { Reorder } from 'motion/react-m';
 import { List, Banknote, CreditCard, Wallet, Edit2, Trash2 } from 'lucide-react';
 import { ICONS, IconName, IconPicker } from './IconPicker';
 import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
 import { formatCurrency } from '../utils/formatters';
 import { calculateAdjustedInitialBalance } from '../utils/balanceMutations';
+import { ConfirmDialog } from './ConfirmDialog';
 import { TRANSLATIONS } from '../constants';
 
 interface AccountItemProps {
@@ -28,6 +30,7 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
     const dragControls = useDragControls();
     const [isEditingIcon, setIsEditingIcon] = useState(false);
     const [isEditingBalance, setIsEditingBalance] = useState(false);
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
     // Determine icon
     const Icon = ICONS[account.icon as IconName] || (account.type === 'cash' ? Banknote : CreditCard);
@@ -121,15 +124,28 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
                     {/* Delete Action */}
                     {onDelete && (
                         <button
-                            onClick={() => {
-                                if (window.confirm(t.deleteWalletConfirm)) {
-                                    onDelete(account.id);
-                                }
-                            }}
+                            type="button"
+                            onClick={() => setIsConfirmingDelete(true)}
+                            aria-label={`${t.delete}: ${account.name}`}
                             className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error-container/20 rounded-lg transition-colors flex-shrink-0"
                         >
-                            <Trash2 size={18} className="opacity-70" />
+                            <Trash2 size={18} className="opacity-70" aria-hidden="true" />
                         </button>
+                    )}
+                    {onDelete && (
+                        <ConfirmDialog
+                            isOpen={isConfirmingDelete}
+                            type="danger"
+                            title={t.deleteWalletTitle}
+                            message={t.deleteWalletMessage}
+                            confirmLabel={t.delete}
+                            cancelLabel={t.cancel}
+                            onCancel={() => setIsConfirmingDelete(false)}
+                            onConfirm={() => {
+                                setIsConfirmingDelete(false);
+                                onDelete(account.id);
+                            }}
+                        />
                     )}
                 </div>
                 {/* Type badge - on separate row */}

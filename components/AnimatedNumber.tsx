@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { motion, useSpring, useTransform } from 'motion/react';
+import { m, useSpring, useTransform } from 'motion/react';
 import { formatNumber } from '../utils/locale';
 
 interface AnimatedNumberProps {
@@ -18,5 +18,5 @@ export const AnimatedNumber: React.FC<AnimatedNumberProps> = ({ value, className
         spring.set(value);
     }, [spring, value]);
 
-    return <motion.span className={className}>{display}</motion.span>;
+    return <m.span className={className}>{display}</m.span>;
 };

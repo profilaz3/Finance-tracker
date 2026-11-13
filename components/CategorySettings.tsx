@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Category, TransactionType } from '../types';
 import { TRANSLATIONS, INITIAL_CATEGORIES } from '../constants';
 import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Tag } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
 import { IconPicker, ICONS, IconName } from './IconPicker';
 import { v4 as uuidv4 } from 'uuid';
@@ -74,10 +74,9 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
         resetForm();
     };
 
+    // Single-item delete: the handler shows an Undo toast instead of asking first.
     const handleDelete = (id: string) => {
-        if (window.confirm(t.deleteCategoryConfirm)) {
-            onDeleteCategory(id);
-        }
+        onDeleteCategory(id);
     };
 
     const addSubcategory = () => {
@@ -110,7 +109,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
             <div className="bg-surface-container-low rounded-xl shadow-elevation-1 overflow-hidden">
                 <AnimatePresence>
                     {(isAdding || editingId) && (
-                        <motion.div
+                        <m.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
@@ -202,7 +201,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                     </button>
                                 </div>
                             </div>
-                        </motion.div>
+                        </m.div>
                     )}
                 </AnimatePresence>
 
@@ -248,7 +247,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                                 : <span className="italic opacity-50">{t.noSubcategories}</span>}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-1 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); startEditing(category); }}
                                             className="p-2 text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container rounded-full"
@@ -267,7 +266,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
 
                                 <AnimatePresence>
                                     {expandedId === category.id && (
-                                        <motion.div
+                                        <m.div
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
@@ -283,7 +282,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                                     <span className="text-xs text-on-surface-variant italic">{t.noSubcategoriesDefined}</span>
                                                 )}
                                             </div>
-                                        </motion.div>
+                                        </m.div>
                                     )}
                                 </AnimatePresence>
                             </div>

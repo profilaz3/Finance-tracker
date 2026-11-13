@@ -8,11 +8,13 @@ interface ShortcutHandlers {
 export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         handlers.onNewTransaction();
+        return;
       }
-      if (e.key === 'Escape') {
+      // Dialogs with their own Escape handling (useEscapeKey) mark the event as handled.
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         handlers.onEscape();
       }
     };
