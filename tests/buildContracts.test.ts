@@ -196,8 +196,8 @@ describe('build contracts', () => {
     expect(script).toContain('button[aria-label="Add a transaction"], button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]');
     expect(script).toContain("getByRole('heading', { name: /new transaction|add transaction|add a transaction|nova transakcija|dodaj transakciju/i })");
     expect(script).toContain('New transaction modal exposed delete action.');
-    expect(script).toContain("getByRole('button', { name: /^edit$|^izmeni$/i })");
-    expect(script).toContain("getByRole('button', { name: /^delete$|^obrisi$|^obriši$/i })");
+    expect(script).toContain("getByRole('menuitem', { name: /^edit$|^izmeni$/i })");
+    expect(script).toContain("getByRole('menuitem', { name: /^delete$|^obrisi$|^obriši$/i })");
     expect(fab).toContain('aria-label={TRANSLATIONS[language].openTransactionActions}');
     expect(fab).toContain('aria-label={TRANSLATIONS[language].addTransaction}');
     expect(TRANSLATIONS.en.openTransactionActions).toBe('Open transaction actions');

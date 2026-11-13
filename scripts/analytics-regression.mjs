@@ -46,6 +46,13 @@ const openAnalytics = async (page) => {
 
 const expectHeading = async (page, pattern) => {
   const locator = page.getByRole('heading', { name: pattern }).first();
+  // Lower charts mount only when scrolled near (DeferredStatsSection), so scroll the main pane until it appears.
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (await locator.isVisible().catch(() => false)) break;
+    await page.locator('main').first().evaluate((el) => el.scrollBy(0, 600)).catch(() => {});
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(250);
+  }
   await locator.waitFor({ timeout: 15000 });
 };
 
@@ -57,8 +64,8 @@ const verifyAnalytics = async (page) => {
   await page.mouse.wheel(0, 1800);
   await page.waitForTimeout(500);
 
-  await expectHeading(page, /category breakdown|pregled kategorija/i);
-  await expectHeading(page, /category volatility|varijacija kategorija/i);
+  await expectHeading(page, /category breakdown|raspodela po kategorijama/i);
+  await expectHeading(page, /category volatility|volatilnost kategorija/i);
   await expectHeading(page, /net worth trend|trend neto vrednosti/i);
 
   const svgCount = await page.locator('svg').count();

@@ -30,16 +30,16 @@ export const CashFlowForecastPanel: React.FC<CashFlowForecastPanelProps> = ({ fo
     <p className="text-xs text-on-surface-variant mt-1 break-words">
       {forecast.confidence === 'low' ? labels.lowConfidenceForecast : labels.normalConfidenceForecast}
     </p>
-    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2 gap-3">
       <div className="rounded-lg bg-surface-container p-3 min-w-0">
         <p className="text-xs text-on-surface-variant break-words">{labels.forecastEstimate}</p>
-        <p className="text-xl font-display font-medium text-on-surface break-words">
+        <p className="text-xl font-display font-medium text-on-surface tabular-nums break-words">
           {formatCurrency(forecast.projectedNet, baseCurrency)}
         </p>
       </div>
       <div className="rounded-lg bg-surface-container p-3 min-w-0">
         <p className="text-xs text-on-surface-variant break-words">{labels.recurringImpact}</p>
-        <p className="text-xl font-display font-medium text-on-surface break-words">
+        <p className="text-xl font-display font-medium text-on-surface tabular-nums break-words">
           {formatCurrency(forecast.recurringImpact, baseCurrency)}
         </p>
       </div>

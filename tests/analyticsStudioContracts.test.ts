@@ -35,7 +35,7 @@ describe('analytics studio source contracts', () => {
 
     expect(kpiGrid).toContain('grid-cols-1');
     expect(kpiGrid).toContain('sm:grid-cols-2');
-    expect(kpiGrid).toContain('xl:grid-cols-5');
+    expect(kpiGrid).toContain('2xl:grid-cols-5');
     expect(categoryPanel).toContain('min-h-[44px]');
     expect(categoryPanel).not.toContain('shrink-0');
     expect(anomalyPanel).toContain('min-w-0 flex-1');

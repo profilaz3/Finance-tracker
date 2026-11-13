@@ -23,7 +23,11 @@ begin
     on conflict do nothing;
   end loop;
 
-  update public.settings set base_currency = 'RSD', language = 'en' where user_id = v_owner;
+  -- The owner's own profile is the "Me" person, as in the real app, so event participant
+  -- logic does not mistake "Me" for an invited guest.
+  update public.settings set base_currency = 'RSD', language = 'en',
+    user_profile = '{"id":"ci-person-me","name":"Me","color":"#6366f1","defaultCurrency":"EUR","balances":{"EUR":0,"USD":0,"RSD":0}}'::jsonb
+  where user_id = v_owner;
 
   insert into public.accounts (id, user_id, name, type, currency, color, initial_balance, order_index) values
     ('ci-acc-cash', v_owner, 'Cash', 'cash', 'RSD', '#22c55e', 15000, 0),

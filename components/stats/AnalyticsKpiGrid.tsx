@@ -93,11 +93,11 @@ export const AnalyticsKpiGrid: React.FC<AnalyticsKpiGridProps> = ({ summary, bas
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3 sm:gap-4">
       {cards.map(card => (
         <div key={card.key} className="min-w-0 rounded-xl bg-surface-container-low border border-outline/10 p-4 shadow-elevation-1">
           <p className="text-xs font-medium text-on-surface-variant break-words">{card.label}</p>
-          <p className="text-xl font-display font-medium text-on-surface mt-2 break-words">{card.value}</p>
+          <p className="text-xl font-display font-medium text-on-surface mt-2 tabular-nums break-words">{card.value}</p>
           <p className="text-xs text-on-surface-variant mt-2 break-words">{card.caption}</p>
         </div>
       ))}

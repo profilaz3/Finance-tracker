@@ -58,7 +58,7 @@ const openAddTransactionModal = async (page) => {
   const addHeading = page.getByRole('heading', { name: /new transaction|add transaction|add a transaction|nova transakcija|dodaj transakciju/i }).first();
   await addHeading.waitFor({ timeout: 15000 });
 
-  const deleteButton = page.getByRole('button', { name: /^delete$|^obrisi$|^obriši$/i }).first();
+  const deleteButton = page.getByRole('menuitem', { name: /^delete$|^obrisi$|^obriši$/i }).first();
   if (await isVisible(deleteButton)) {
     throw new Error('New transaction modal exposed delete action.');
   }
@@ -118,7 +118,7 @@ const editTransaction = async (page) => {
   const row = getTransactionRow(page, transactionLabel);
   await page.waitForTimeout(1000);
   await longPress(page, row);
-  await page.getByRole('button', { name: /^edit$|^izmeni$/i }).click();
+  await page.getByRole('menuitem', { name: /^edit$|^izmeni$/i }).click();
   await page.getByRole('heading', { name: /edit transaction|izmeni transakciju/i }).first().waitFor({ timeout: 15000 });
   await fillTransactionForm(page, { amount: 222, note: updatedTransactionLabel });
   await saveTransaction(page);
@@ -130,7 +130,7 @@ const deleteTransaction = async (page) => {
   const row = getTransactionRow(page, updatedTransactionLabel);
   await page.waitForTimeout(1000);
   await longPress(page, row);
-  await page.getByRole('button', { name: /^delete$|^obrisi$|^obriši$/i }).click();
+  await page.getByRole('menuitem', { name: /^delete$|^obrisi$|^obriši$/i }).click();
   await page.getByText(/transaction deleted|transakcija obrisano|transakcija obrisana/i).waitFor({ timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -144,6 +144,13 @@ const browser = await chromium.launch({ headless: !TRANSACTION_REGRESSION_HEADED
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
 await guardBackend(context);
 const page = await context.newPage();
+
+// Name the URL behind HTTP errors so console failures are traceable.
+page.on('response', (response) => {
+  if (response.status() >= 400) {
+    console.error(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
+  }
+});
 
 page.on('console', (message) => {
   if (message.type() === 'error' || message.type() === 'warning') {
