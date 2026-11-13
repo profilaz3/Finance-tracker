@@ -9,6 +9,7 @@ import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
 import { useDialog } from '../hooks/useFocusTrap';
+import { AVATAR_MAX_DIMENSION } from '../utils/imageResize';
 
 interface AddPersonModalProps {
     isOpen: boolean;
@@ -36,7 +37,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
         pickFromGallery,
         fileInputRef,
         handleFileInputChange,
-    } = useImagePicker({ quality: 70 });
+    } = useImagePicker({ quality: 80, maxDimension: AVATAR_MAX_DIMENSION });
 
     const nameError = touched && !name.trim() ? (t.fieldRequired || 'Required') : null;
 

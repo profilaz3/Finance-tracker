@@ -53,6 +53,8 @@ async function invokeAiFunction<T>(
   }
 }
 
+export const toAiPerson = ({ id, name, defaultCurrency, balances }: Person) => ({ id, name, defaultCurrency, balances });
+
 export const isAIAvailable = (): boolean => Boolean(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
 
 export const parseTransaction = async (
@@ -63,7 +65,8 @@ export const parseTransaction = async (
 ): Promise<ParsedTransaction | null> =>
   invokeAiFunction(
     'parse-transaction',
-    { input, categories, accounts, people },
+    // Only what the parser needs: avatars (URLs or inline images) never leave the device.
+    { input, categories, accounts, people: people.map(toAiPerson) },
     validateParsedTransaction,
     'Transaction parsing failed',
   );

@@ -146,6 +146,24 @@ export async function processImage(
   return { blob, base64, dataUrl, file, width, height };
 }
 
+/** Decode a base64 data URL into a Blob without going through fetch(). */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
+  if (!match) {
+    throw new Error('Not a data URL');
+  }
+  const mime = match[1] || 'application/octet-stream';
+  if (!match[2]) {
+    return new Blob([decodeURIComponent(match[3])], { type: mime });
+  }
+  const binary = atob(match[3]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
 /** Fetch a Capacitor webPath (or any same-origin URL) as a Blob. */
 export async function fetchAsBlob(url: string): Promise<Blob> {
   const response = await fetch(url);

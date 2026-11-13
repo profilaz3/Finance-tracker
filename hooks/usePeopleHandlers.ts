@@ -14,6 +14,7 @@ import {
 } from '../domain/people';
 import { LEGACY_USER_PROFILE_ID, normalizeUserProfileId } from '../utils/remotePeople';
 import { TRANSLATIONS } from '../constants';
+import { isInlineAvatar, uploadInlineAvatar } from '../utils/avatarUpload';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -39,18 +40,47 @@ export function usePeopleHandlers({
   addTransaction,
   createId,
 }: UsePeopleHandlersOptions) {
+  /**
+   * Upload a freshly picked inline avatar to Storage and swap the data URL for the public
+   * URL in state, unless the avatar was changed again meanwhile. Returns the URL, or null
+   * when the inline image is kept (offline / upload failed).
+   */
+  const promoteInlineAvatar = useCallback(async (
+    ownerId: string,
+    avatar: string | undefined,
+    target: 'person' | 'profile',
+  ): Promise<string | null> => {
+    if (!isInlineAvatar(avatar)) {
+      return null;
+    }
+    const url = await uploadInlineAvatar(avatar, ownerId, getSupabaseService);
+    if (!url) {
+      return null;
+    }
+    const swap = <T extends Person>(entry: T): T =>
+      entry.id === ownerId && entry.avatar === avatar ? { ...entry, avatar: url } : entry;
+    setState(prev => target === 'profile'
+      ? { ...prev, userProfile: prev.userProfile ? swap(prev.userProfile) : prev.userProfile }
+      : { ...prev, people: prev.people.map(swap) });
+    if (target === 'person') {
+      setSelectedPerson(prev => prev ? swap(prev) : prev);
+    }
+    return url;
+  }, [setSelectedPerson, setState]);
+
   const addPerson = useCallback(async (name: string, defaultCurrency: Currency, color: string, avatar?: string) => {
     const newPerson = buildPerson({ createId, name, defaultCurrency, color, avatar });
     setState(prev => ({ ...prev, people: [...prev.people, newPerson] }));
 
     try {
+      const avatarUrl = await promoteInlineAvatar(newPerson.id, newPerson.avatar, 'person');
       const syncManager = await getSyncManager();
-      await syncManager.syncPerson(newPerson);
+      await syncManager.syncPerson(avatarUrl ? { ...newPerson, avatar: avatarUrl } : newPerson);
     } catch (error) {
       console.error('Failed to sync person:', error);
       addToast('Person saved locally, but sync failed', 'error');
     }
-  }, [addToast, createId, setState]);
+  }, [addToast, createId, promoteInlineAvatar, setState]);
 
   const updatePerson = useCallback(async (id: string, updates: Partial<Person>) => {
     const updatedPeople = updatePersonInCollection(state.people, id, updates);
@@ -70,13 +100,14 @@ export function usePeopleHandlers({
     }
 
     try {
+      const avatarUrl = await promoteInlineAvatar(id, updates.avatar, 'person');
       const syncManager = await getSyncManager();
-      await syncManager.syncPerson(updatedPerson);
+      await syncManager.syncPerson(avatarUrl ? { ...updatedPerson, avatar: avatarUrl } : updatedPerson);
     } catch (error) {
       console.error('Failed to sync person update:', error);
       addToast('Person updated locally, but sync failed', 'error');
     }
-  }, [addToast, selectedPerson?.id, setSelectedPerson, setState, state.people]);
+  }, [addToast, promoteInlineAvatar, selectedPerson?.id, setSelectedPerson, setState, state.people]);
 
   const createUserProfile = useCallback(async (name: string, defaultCurrency: Currency, color: string, avatar?: string) => {
     const supabaseService = await getSupabaseService();
@@ -87,7 +118,9 @@ export function usePeopleHandlers({
     setState(prev => ({ ...prev, userProfile: newProfile }));
     addToast(state.language === 'sr' ? 'Profil napravljen' : 'Profile created', 'success');
     closeUserProfileModal();
-  }, [addToast, closeUserProfileModal, setState, state.language]);
+    // Settings sync (useSync) picks up the swapped Storage URL.
+    await promoteInlineAvatar(newProfile.id, newProfile.avatar, 'profile');
+  }, [addToast, closeUserProfileModal, promoteInlineAvatar, setState, state.language]);
 
   const updateUserProfile = useCallback(async (_id: string, updates: Partial<Person>) => {
     if (!state.userProfile) {
@@ -98,7 +131,8 @@ export function usePeopleHandlers({
     setState(prev => ({ ...prev, userProfile: updatedProfile }));
     addToast(state.language === 'sr' ? 'Profil azuriran' : 'Profile updated', 'success');
     closeUserProfileModal();
-  }, [addToast, closeUserProfileModal, setState, state.language, state.userProfile]);
+    await promoteInlineAvatar(updatedProfile.id, updates.avatar, 'profile');
+  }, [addToast, closeUserProfileModal, promoteInlineAvatar, setState, state.language, state.userProfile]);
 
   const handleUpdatePersonBalance = useCallback(async (personId: string, currency: Currency, newBalance: number) => {
     const person = state.people.find(entry => entry.id === personId);
