@@ -6,6 +6,7 @@ import { TRANSLATIONS } from './constants';
 import { ToastContainer } from './components/Toast';
 import { useToasts } from './hooks/useToasts';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
+import { shouldIgnoreSwipeStart } from './utils/swipeGuard';
 import clsx from 'clsx';
 import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
 import { createTransactionDraft } from './domain/transactions';
@@ -316,6 +317,12 @@ const App: React.FC = () => {
   const onTouchStart = (e: React.TouchEvent) => {
     touchEndXRef.current = null;
     touchEndYRef.current = null;
+    // Leave horizontal gestures to scrollable rows, inputs, sliders and charts.
+    if (e.targetTouches.length !== 1 || shouldIgnoreSwipeStart(e.target, mainRef.current)) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
     touchStartXRef.current = e.targetTouches[0].clientX;
     touchStartYRef.current = e.targetTouches[0].clientY;
   };
@@ -326,8 +333,8 @@ const App: React.FC = () => {
   };
 
   const onTouchEnd = () => {
-    if (!touchStartXRef.current || !touchEndXRef.current) return;
-    if (!touchStartYRef.current || !touchEndYRef.current) return;
+    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
+    if (touchStartYRef.current === null || touchEndYRef.current === null) return;
 
     const distanceX = touchStartXRef.current - touchEndXRef.current;
     const distanceY = Math.abs(touchStartYRef.current - touchEndYRef.current);
