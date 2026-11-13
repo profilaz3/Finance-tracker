@@ -495,6 +495,12 @@ const App: React.FC = () => {
         }}
       />
 
+      {/* Edge-to-edge (Android 15+): keep scrolled content from showing through the status bar. */}
+      <div
+        className="fixed top-0 inset-x-0 z-40 h-[env(safe-area-inset-top)] bg-surface pointer-events-none md:hidden"
+        aria-hidden="true"
+      />
+
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
@@ -509,7 +515,7 @@ const App: React.FC = () => {
         role="main"
         aria-label="Main content"
       >
-        <div className="max-w-5xl mx-auto px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] md:p-4 md:pb-8 lg:p-8">
+        <div className="max-w-5xl mx-auto pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] md:p-4 md:pb-8 lg:p-8">
           <ViewErrorBoundary>
             <Suspense fallback={viewSkeleton[currentView] || <DashboardSkeleton />}>
               <AppViewRouter

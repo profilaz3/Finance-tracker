@@ -1,7 +1,7 @@
 import React from 'react';
 import clsx from 'clsx';
 import { View } from '../../types';
-import { SyncIndicator } from '../SyncStatus';
+import { SyncIndicator, SyncStatus } from '../SyncStatus';
 import {
   CalendarIcon,
   IconComponent,
@@ -47,9 +47,10 @@ const NavItem: React.FC<NavItemProps> = ({ view, icon: Icon, label, currentView,
         : 'text-on-surface-variant hover:bg-surface-container-highest'
     )}
     aria-label={label}
+    aria-current={currentView === view ? 'page' : undefined}
     title={label}
   >
-    <Icon size={24} className={currentView === view ? 'fill-current' : ''} />
+    <Icon size={24} className={currentView === view ? 'fill-current' : ''} aria-hidden="true" />
     <span className="hidden lg:inline">{label}</span>
   </button>
 );
@@ -103,10 +104,15 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
         <NavItem view="insights" icon={SparklesIcon} label={labels.insights} currentView={currentView} onNavigate={onNavigate} />
         <NavItem view="settings" icon={SettingsIcon} label={labels.settings} currentView={currentView} onNavigate={onNavigate} />
       </nav>
+
+      {/* Desktop has no bottom nav, so surface sync / offline state here (M33). */}
+      <div className="flex justify-center lg:justify-start lg:px-3 pt-4 border-t border-outline-variant/20">
+        <SyncStatus showDetails placement="above" labelClassName="hidden lg:inline" />
+      </div>
     </aside>
 
     <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
-      <nav className="bg-surface-container-high/95 backdrop-blur-2xl rounded-t-3xl border-t border-outline-variant/20 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] pb-[calc(env(safe-area-inset-bottom,20px)+12px)]">
+      <nav className="bg-surface-container-high/95 backdrop-blur-2xl rounded-t-3xl border-t border-outline-variant/20 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] pb-[calc(env(safe-area-inset-bottom)+12px)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <div className="flex items-center justify-evenly h-16 relative">
           <BottomNavItem view="dashboard" icon={LayoutDashboardIcon} label={labels.dashboard} currentView={currentView} onNavigate={onNavigate} />
           <BottomNavItem view="transactions" icon={ListIcon} label={labels.transactions} currentView={currentView} onNavigate={onNavigate} />

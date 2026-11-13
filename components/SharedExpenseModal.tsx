@@ -215,7 +215,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
     const isExactSplitValid = Math.abs(remainingAmount) < 0.01;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-sm">
             <m.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}

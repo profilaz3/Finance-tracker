@@ -85,7 +85,7 @@ ToastItem.displayName = 'ToastItem';
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
     return (
-        <div className="fixed top-4 right-4 z-[200] space-y-2 max-w-xs w-auto">
+        <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-[200] space-y-2 max-w-xs w-auto">
             {toasts.map(toast => (
                 <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
             ))}

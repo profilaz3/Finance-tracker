@@ -140,7 +140,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm">
             <m.div
                 initial={MOTION.modal.initial}
                 animate={MOTION.modal.animate}

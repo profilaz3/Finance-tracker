@@ -242,7 +242,7 @@ const handleScan = async () => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4" onClick={handleClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm modal-safe-area" onClick={handleClose}>
       <m.div
         onClick={(e) => e.stopPropagation()}
         initial={MOTION.modal.initial}

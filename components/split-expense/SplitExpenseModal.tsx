@@ -281,7 +281,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
         : remainingAmount;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-sm" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-sm" onClick={onClose}>
             <m.div
                 onClick={(e) => e.stopPropagation()}
                 initial={MOTION.modal.initial}

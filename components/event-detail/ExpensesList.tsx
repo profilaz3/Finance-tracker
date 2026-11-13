@@ -190,7 +190,7 @@ export const ExpensesFab: React.FC<{ onClick: () => void }> = ({ onClick }) => {
         /* Floating Action Button - Outside motion.div to prevent "teleporting" glitch */
         <button
             onClick={onClick}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 hover:shadow-2xl hover:shadow-primary/20"
+            className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-[calc(1rem+env(safe-area-inset-right))] md:right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 hover:shadow-2xl hover:shadow-primary/20"
         >
             <Plus size={28} />
         </button>

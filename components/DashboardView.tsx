@@ -535,7 +535,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50"
+            className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-[calc(1rem+env(safe-area-inset-right))] md:right-6 z-50"
           >
             <AnimatePresence>
               {isFabOpen && (

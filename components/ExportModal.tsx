@@ -125,7 +125,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
         onClick={onClose}
       >
         <m.div

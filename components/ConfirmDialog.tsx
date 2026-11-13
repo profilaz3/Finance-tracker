@@ -105,7 +105,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm"
+                        className="fixed inset-0 z-[200] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
                         onClick={handleCancel}
                     >
                     <m.div
@@ -199,7 +199,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm"
+                    className="fixed inset-0 z-[200] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
                     onClick={onCancel}
                 >
                     <m.div

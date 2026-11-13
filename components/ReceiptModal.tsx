@@ -29,7 +29,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     if (!isOpen || !edited || !edited.receiptData) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm modal-safe-area">
             <m.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}

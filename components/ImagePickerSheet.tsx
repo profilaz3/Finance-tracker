@@ -71,7 +71,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 400 }}
-            className="fixed bottom-0 left-0 right-0 z-[151] bg-surface-container-high rounded-t-3xl shadow-elevation-3 pb-[env(safe-area-inset-bottom,20px)]"
+            className="fixed bottom-0 left-0 right-0 z-[151] bg-surface-container-high rounded-t-3xl shadow-elevation-3 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle */}

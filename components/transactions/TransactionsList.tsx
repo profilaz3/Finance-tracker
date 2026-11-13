@@ -98,7 +98,7 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
         onScroll={handleScroll}
         groupCounts={groupCounts}
         groupContent={index => (
-          <div className="sticky top-0 z-10 px-1 py-2 bg-surface/95 backdrop-blur-sm">
+          <div className="sticky top-[env(safe-area-inset-top)] md:top-0 z-10 px-1 py-2 bg-surface/95 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-primary">{groupedData[index]?.label}</span>
               <div className="flex-1 h-px bg-gradient-to-r from-outline-variant/30 to-transparent" />

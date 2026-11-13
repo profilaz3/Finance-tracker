@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Padding for full-screen modal overlays: at least 1rem, but never under the
+   status bar, gesture bar or display cutout when Android draws edge-to-edge. */
+@utility modal-safe-area {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+
 @theme inline {
   /* Primary */
   --color-primary: rgb(var(--md-sys-color-primary));

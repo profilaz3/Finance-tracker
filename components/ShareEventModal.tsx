@@ -67,7 +67,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
                     />
 
                     {/* Modal */}
-                    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
+                    <div className="fixed inset-0 flex items-center justify-center z-50 modal-safe-area pointer-events-none">
                         <m.div
                             initial={MOTION.modal.initial}
                             animate={MOTION.modal.animate}
