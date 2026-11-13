@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazyWithReload } from '../../utils/lazyWithReload';
 import { TRANSLATIONS } from '../../constants';
 import {
   StatsProps,
@@ -11,22 +12,22 @@ import {
 } from './types';
 import { StatsSummary } from './StatsSummary';
 
-const AnalyticsStudioOverviewSection = React.lazy(async () => {
+const AnalyticsStudioOverviewSection = lazyWithReload(async () => {
   const module = await import('./AnalyticsStudioOverview');
   return { default: module.AnalyticsStudioOverview };
 });
 
-const ExpenseChartSection = React.lazy(async () => {
+const ExpenseChartSection = lazyWithReload(async () => {
   const module = await import('./ExpenseChart');
   return { default: module.ExpenseChart };
 });
 
-const IncomeChartSection = React.lazy(async () => {
+const IncomeChartSection = lazyWithReload(async () => {
   const module = await import('./IncomeChart');
   return { default: module.IncomeChart };
 });
 
-const CategoryBreakdownSection = React.lazy(async () => {
+const CategoryBreakdownSection = lazyWithReload(async () => {
   const module = await import('./CategoryBreakdown');
 
   const CombinedCategorySection: React.FC<{

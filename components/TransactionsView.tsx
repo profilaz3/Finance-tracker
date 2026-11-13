@@ -1,4 +1,5 @@
 import React, { Suspense, useState, useMemo, useRef, useCallback } from 'react';
+import { lazyWithReload } from '../utils/lazyWithReload';
 import { m, Variants } from 'motion/react';
 import { exportToCSV } from '../services/storageService';
 import { AppState, Transaction, TransactionType } from '../types';
@@ -18,7 +19,7 @@ import {
   UNCATEGORIZED_FILTER,
 } from '../utils/qolSuggestions';
 
-const ExportModal = React.lazy(() => import('./ExportModal').then(m => ({ default: m.ExportModal })));
+const ExportModal = lazyWithReload(() => import('./ExportModal').then(m => ({ default: m.ExportModal })));
 
 interface TransactionsViewProps {
   state: AppState;

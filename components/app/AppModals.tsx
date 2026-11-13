@@ -1,15 +1,16 @@
-import React, { lazy, Suspense } from 'react';
+import React, { Suspense } from 'react';
+import { lazyWithReload } from '../../utils/lazyWithReload';
 import { AppState, Currency, Event, Person, Transaction } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 
-const AddPersonModal = lazy(() => import('../AddPersonModal').then(m => ({ default: m.AddPersonModal })));
-const PersonDetail = lazy(() => import('../PersonDetail').then(m => ({ default: m.PersonDetail })));
-const EditTransactionModal = lazy(() => import('../EditTransactionModal').then(m => ({ default: m.EditTransactionModal })));
-const ReceiptModal = lazy(() => import('../ReceiptModal').then(m => ({ default: m.ReceiptModal })));
-const SplitModal = lazy(() => import('../SplitModal').then(m => ({ default: m.SplitModal })));
-const EventCreationModal = lazy(() => import('../EventCreationModal').then(m => ({ default: m.EventCreationModal })));
-const ReceiptScanModal = lazy(() => import('../ReceiptScanModal').then(m => ({ default: m.ReceiptScanModal })));
-const SplitExpenseModal = lazy(() => import('../split-expense').then(m => ({ default: m.SplitExpenseModal })));
+const AddPersonModal = lazyWithReload(() => import('../AddPersonModal').then(m => ({ default: m.AddPersonModal })));
+const PersonDetail = lazyWithReload(() => import('../PersonDetail').then(m => ({ default: m.PersonDetail })));
+const EditTransactionModal = lazyWithReload(() => import('../EditTransactionModal').then(m => ({ default: m.EditTransactionModal })));
+const ReceiptModal = lazyWithReload(() => import('../ReceiptModal').then(m => ({ default: m.ReceiptModal })));
+const SplitModal = lazyWithReload(() => import('../SplitModal').then(m => ({ default: m.SplitModal })));
+const EventCreationModal = lazyWithReload(() => import('../EventCreationModal').then(m => ({ default: m.EventCreationModal })));
+const ReceiptScanModal = lazyWithReload(() => import('../ReceiptScanModal').then(m => ({ default: m.ReceiptScanModal })));
+const SplitExpenseModal = lazyWithReload(() => import('../split-expense').then(m => ({ default: m.SplitExpenseModal })));
 
 interface AppModalsState {
   isEditModalOpen: boolean;

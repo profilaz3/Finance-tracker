@@ -1,4 +1,5 @@
 import React, { Suspense, useState } from 'react';
+import { lazyWithReload } from '../utils/lazyWithReload';
 import { m, Variants } from 'motion/react';
 import { Sparkles, RefreshCw, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
@@ -6,7 +7,7 @@ import { Transaction, Category, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { generateInsights, isAIAvailable } from '../services/aiService';
 
-const MarkdownRenderer = React.lazy(() => import('react-markdown'));
+const MarkdownRenderer = lazyWithReload(() => import('react-markdown'));
 
 interface InsightsViewProps {
     transactions: Transaction[];

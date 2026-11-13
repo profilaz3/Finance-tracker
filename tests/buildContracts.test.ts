@@ -120,9 +120,9 @@ describe('build contracts', () => {
   it('lazy-loads heavy stats sections instead of bundling chart components into the stats shell', () => {
     const statsIndex = readFileSync('components/stats/index.tsx', 'utf8');
 
-    expect(statsIndex).toContain("const ExpenseChartSection = React.lazy");
-    expect(statsIndex).toContain("const IncomeChartSection = React.lazy");
-    expect(statsIndex).toContain("const CategoryBreakdownSection = React.lazy");
+    expect(statsIndex).toContain("const ExpenseChartSection = lazyWithReload");
+    expect(statsIndex).toContain("const IncomeChartSection = lazyWithReload");
+    expect(statsIndex).toContain("const CategoryBreakdownSection = lazyWithReload");
     expect(statsIndex).toContain('const DeferredStatsSection: React.FC');
     expect(statsIndex).toContain('new IntersectionObserver');
     expect(statsIndex).toContain("import('./ExpenseChart')");
@@ -248,7 +248,7 @@ describe('build contracts', () => {
   it('lazy-loads the export modal instead of keeping it in the transactions route chunk', () => {
     const transactionsView = readFileSync('components/TransactionsView.tsx', 'utf8');
 
-    expect(transactionsView).toContain("const ExportModal = React.lazy");
+    expect(transactionsView).toContain("const ExportModal = lazyWithReload");
     expect(transactionsView).toContain("import('./ExportModal')");
     expect(transactionsView).not.toContain("import { ExportModal } from './ExportModal'");
   });

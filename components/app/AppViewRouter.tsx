@@ -1,16 +1,17 @@
-import React, { lazy } from 'react';
+import React from 'react';
+import { lazyWithReload } from '../../utils/lazyWithReload';
 import { AppState, Event, Person, Transaction, View } from '../../types';
 import type { ParsedTransaction } from '../../services/aiService';
 import { createLinkedExpenseDraft, createRepeatTransactionDraft, createTransactionDraft, duplicateTransactionDraft } from '../../domain/transactions';
 
-const Stats = lazy(() => import('../Stats').then(m => ({ default: m.Stats })));
-const DashboardView = lazy(() => import('../DashboardView').then(m => ({ default: m.DashboardView })));
-const TransactionsView = lazy(() => import('../TransactionsView').then(m => ({ default: m.TransactionsView })));
-const SettingsView = lazy(() => import('../settings').then(m => ({ default: m.SettingsView })));
-const CalendarView = lazy(() => import('../CalendarView').then(m => ({ default: m.CalendarView })));
-const EventsView = lazy(() => import('../EventsView').then(m => ({ default: m.EventsView })));
-const EventDetailView = lazy(() => import('../event-detail').then(m => ({ default: m.EventDetailView })));
-const InsightsView = lazy(() => import('../InsightsView').then(m => ({ default: m.InsightsView })));
+const Stats = lazyWithReload(() => import('../Stats').then(m => ({ default: m.Stats })));
+const DashboardView = lazyWithReload(() => import('../DashboardView').then(m => ({ default: m.DashboardView })));
+const TransactionsView = lazyWithReload(() => import('../TransactionsView').then(m => ({ default: m.TransactionsView })));
+const SettingsView = lazyWithReload(() => import('../settings').then(m => ({ default: m.SettingsView })));
+const CalendarView = lazyWithReload(() => import('../CalendarView').then(m => ({ default: m.CalendarView })));
+const EventsView = lazyWithReload(() => import('../EventsView').then(m => ({ default: m.EventsView })));
+const EventDetailView = lazyWithReload(() => import('../event-detail').then(m => ({ default: m.EventDetailView })));
+const InsightsView = lazyWithReload(() => import('../InsightsView').then(m => ({ default: m.InsightsView })));
 
 type DashboardTab = 'wallets' | 'debts' | 'loans' | 'people';
 

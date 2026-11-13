@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react';
 import { Transaction, Category, Person, View, TransactionType, Event } from './types';
 
 import { getSupabaseService } from './services/runtimeServices';
@@ -9,7 +9,11 @@ import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
 import clsx from 'clsx';
 import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
 import { createTransactionDraft } from './domain/transactions';
-const AuthView = lazy(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
+import { installPreloadErrorReload, lazyWithReload } from './utils/lazyWithReload';
+
+installPreloadErrorReload();
+
+const AuthView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
 import type { ParsedTransaction } from './services/aiService';
 import { DashboardSkeleton, TransactionsListSkeleton, CalendarSkeleton, GenericViewSkeleton } from './components/Skeleton';
 import { ErrorBoundary, ViewErrorBoundary } from './components/ErrorBoundary';
