@@ -36,7 +36,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
         handleFileInputChange,
     } = useImagePicker({ quality: 70 });
 
-    const nameError = touched && !name.trim() ? (t.fieldRequired || 'Required') : null;
+    const nameError = touched && !name.trim() ? t.fieldRequired : null;
 
     useEffect(() => {
         if (isOpen) {
@@ -122,7 +122,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                             </button>
 
                             <h2 className="text-2xl font-display font-medium text-center mb-8 text-on-surface">
-                                {initialData ? (t.editPerson || 'Edit Person') : (t.addPerson || 'Add Person')}
+                                {initialData ? t.editPerson : t.addPerson}
                             </h2>
 
                             <form onSubmit={handleSubmit} className="space-y-8">
@@ -137,7 +137,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                             style={{ backgroundColor: color }}
                                         >
                                             {avatar ? (
-                                                <img src={avatar} alt="Preview" className="w-full h-full object-cover rounded-full" />
+                                                <img src={avatar} alt={t.preview} className="w-full h-full object-cover rounded-full" />
                                             ) : (
                                                 name.charAt(0).toUpperCase() || <User size={40} />
                                             )}
@@ -194,11 +194,11 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                             onChange={(e) => setName(e.target.value)}
                                             onBlur={() => setTouched(true)}
                                             className="block w-full px-0 py-2 text-lg text-on-surface bg-transparent border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 transition-colors peer placeholder-transparent"
-                                            placeholder="Name"
+                                            placeholder={t.name}
                                             autoFocus
                                         />
                                         <label className="absolute left-0 -top-3.5 text-sm text-on-surface-variant transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-on-surface-variant/50 peer-placeholder-shown:top-2 peer-focus:-top-3.5 peer-focus:text-sm peer-focus:text-primary">
-                                            {t.name || 'Name'}
+                                            {t.name}
                                         </label>
                                         {nameError && (
                                             <span className="absolute right-0 top-3 text-xs text-error font-medium flex items-center gap-1">
@@ -209,7 +209,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
 
                                     <div>
                                         <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-2 block flex items-center gap-1">
-                                            <Coins size={12} /> {t.currency || 'Currency'}
+                                            <Coins size={12} /> {t.currency}
                                         </label>
                                         <div className="flex bg-surface-container-high rounded-xl p-1">
                                             {CURRENCIES.map((c) => (
@@ -240,12 +240,12 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                     {initialData ? (
                                         <>
                                             <Check size={20} />
-                                            {t.save || 'Save Changes'}
+                                            {t.save}
                                         </>
                                     ) : (
                                         <>
                                             <Check size={20} />
-                                            {t.add || 'Add Person'}
+                                            {t.add}
                                         </>
                                     )}
                                 </button>
@@ -259,7 +259,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                         onSelectCamera={handleCameraSelect}
                         onSelectGallery={handleGallerySelect}
                         language={language}
-                        title={language === 'sr' ? 'Izaberi Sliku' : 'Choose Avatar'}
+                        title={t.chooseAvatar}
                     />
                 </div>
             )}

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Person, SharedExpense, Currency, ExchangeRates } from '../types';
 import { formatCurrency, convertCurrency } from '../utils/currencyUtils';
+import { getTranslations } from '../utils/i18n';
 import { EXPENSE_CATEGORY_COLORS } from '../constants/expenseCategories';
 
 interface PersonCategoryBreakdownProps {
@@ -16,6 +17,7 @@ export const PersonCategoryBreakdown: React.FC<PersonCategoryBreakdownProps> = (
     currency,
     rates
 }) => {
+    const t = getTranslations();
     const categoryData = useMemo(() => {
         const categories: Record<string, number> = {};
         let totalSpent = 0;
@@ -76,7 +78,7 @@ export const PersonCategoryBreakdown: React.FC<PersonCategoryBreakdownProps> = (
                 <div className="flex-1">
                     <p className="font-semibold text-on-surface text-sm">{person.name}</p>
                     <p className="text-xs text-on-surface-variant">
-                        Total: {formatCurrency(categoryData.totalSpent, currency)}
+                        {t.total}: {formatCurrency(categoryData.totalSpent, currency)}
                     </p>
                 </div>
             </div>

@@ -4,6 +4,7 @@ import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { AppState, Currency, Transaction } from '../types';
 import { applyPersonBalanceUpdates } from '../utils/balanceMutations';
+import { getTranslations } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -152,7 +153,7 @@ export function useSplitHandlers({
       await syncPersonBalanceUpdates(balanceUpdates, state.people);
     } catch (error) {
       console.error('Failed to sync split transaction:', error);
-      addToast('Split saved locally, but sync failed', 'error');
+      addToast(getTranslations().splitSavedSyncFailed, 'error');
     }
 
     closeSplitModal();
@@ -187,7 +188,7 @@ export function useSplitHandlers({
     const wasEditing = result.transactions.some(transaction =>
       state.transactions.some(existing => existing.id === transaction.id)
     );
-    addToast(wasEditing ? 'Split expense updated' : 'Split expense added', 'success');
+    addToast(wasEditing ? getTranslations().splitExpenseUpdated : getTranslations().splitExpenseAdded, 'success');
     closeSplitExpenseModal();
     setSplitTransactionContext(undefined);
   }, [addToast, closeSplitExpenseModal, setSplitTransactionContext, setState, state.people, state.transactions, syncPersonBalanceUpdates]);

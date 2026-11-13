@@ -13,6 +13,7 @@ describe('browser shell hints', () => {
     const authView = readFileSync('components/AuthView.tsx', 'utf8');
 
     expect(authView).toContain('autoComplete="email"');
-    expect(authView).toContain('autoComplete={isLogin ? \'current-password\' : \'new-password\'}');
+    expect(authView).toContain('autoComplete={mode === \'signIn\' ? \'current-password\' : \'new-password\'}');
+    expect(authView).toContain('autoComplete="new-password"');
   });
 });

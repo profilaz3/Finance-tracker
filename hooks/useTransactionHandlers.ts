@@ -4,6 +4,7 @@ import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { AppState, Transaction } from '../types';
+import { getTranslations } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -59,11 +60,11 @@ export function useTransactionHandlers({
       await withSyncManager(syncManager => syncManager.syncTransaction(finalTransaction));
     } catch (error) {
       console.error('Failed to sync transaction:', error);
-      addToast('Transaction saved locally, but sync failed', 'error');
+      addToast(getTranslations().transactionSavedSyncFailed, 'error');
     }
 
     vibrate(HAPTIC_PATTERNS.success);
-    addToast('Transaction added successfully', 'success');
+    addToast(getTranslations().transactionAdded, 'success');
   }, [addToast, setState]);
 
   const undoDelete = useCallback(() => {
@@ -118,7 +119,7 @@ export function useTransactionHandlers({
     }
 
     setDeletedTransaction(null);
-    addToast('Transaction restored', 'success');
+    addToast(getTranslations().transactionRestored, 'success');
   }, [addToast, deletedTransaction, setState, state.people]);
 
   const deleteTransaction = useCallback(async (id: string) => {
@@ -176,12 +177,12 @@ export function useTransactionHandlers({
       await withSyncManager(syncManager => syncManager.deleteTransaction(id));
     } catch (error) {
       console.error('Failed to delete transaction from Supabase:', error);
-      addToast('Transaction deleted locally, but sync failed', 'error');
+      addToast(getTranslations().transactionDeletedSyncFailed, 'error');
     }
 
     vibrate(HAPTIC_PATTERNS.success);
-    addToast('Transaction deleted', 'info', {
-      label: 'Undo',
+    addToast(getTranslations().transactionDeleted, 'info', {
+      label: getTranslations().undo,
       onClick: undoDelete,
     });
   }, [addToast, setState, state.people, state.transactions, undoDelete]);
@@ -202,10 +203,10 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to sync batch restore:', error);
-      addToast('Transactions restored locally, but sync failed', 'error');
+      addToast(getTranslations().transactionsRestoredSyncFailed, 'error');
     }
 
-    addToast('Batch restored', 'success');
+    addToast(getTranslations().batchRestored, 'success');
   }, [addToast, setState]);
 
   const batchDeleteTransactions = useCallback(async (ids: string[]) => {
@@ -226,14 +227,14 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to sync batch deletion:', error);
-      addToast('Transactions deleted locally, but sync failed', 'error');
+      addToast(getTranslations().transactionsDeletedSyncFailed, 'error');
     }
 
     vibrate(HAPTIC_PATTERNS.success);
 
     if (canUndoBatchDelete) {
-      addToast(`${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`, 'info', {
-        label: state.language === 'sr' ? 'Vrati' : 'Undo',
+      addToast(getTranslations(state.language).transactionsDeletedCount.replace('{count}', String(ids.length)), 'info', {
+        label: getTranslations(state.language).undo,
         onClick: () => {
           void restoreBatchDeletedTransactions(deletedTransactions);
         },
@@ -241,7 +242,7 @@ export function useTransactionHandlers({
       return;
     }
 
-    addToast(`${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`, 'success');
+    addToast(getTranslations(state.language).transactionsDeletedCount.replace('{count}', String(ids.length)), 'success');
   }, [addToast, restoreBatchDeletedTransactions, setState, state.language, state.transactions]);
 
   const updateTransaction = useCallback(async (updated: Transaction, targetAccountId?: string) => {
@@ -349,7 +350,7 @@ export function useTransactionHandlers({
       await withSyncManager(syncManager => syncManager.syncTransaction(updated));
     } catch (error) {
       console.error('Failed to sync transaction update:', error);
-      addToast('Transaction updated locally, but sync failed', 'error');
+      addToast(getTranslations().transactionUpdatedSyncFailed, 'error');
     }
 
     if (isNewTransaction && targetAccountId && updated.categoryId === 'internal-transfer') {
@@ -393,7 +394,7 @@ export function useTransactionHandlers({
     closeEditModal();
     closeReceiptModal();
     setSelectedTransaction(null);
-    addToast('Transaction updated', 'success');
+    addToast(getTranslations().transactionUpdated, 'success');
   }, [addToast, addTransaction, closeEditModal, closeReceiptModal, createId, setSelectedTransaction, setState, state.accounts, state.rates, state.transactions]);
 
   return {

@@ -276,9 +276,9 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
         >
           <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-medium text-on-surface">{t.savingsRate || 'Savings Rate'}</h3>
+              <h3 className="text-lg font-medium text-on-surface">{t.savingsRate}</h3>
               <p className="text-sm text-on-surface-variant mt-1">
-                {t.savingsTarget || 'Target'}: {savingsTarget}%
+                {t.savingsTarget}: {savingsTarget}%
               </p>
             </div>
             <div className="bg-surface-container rounded-full p-1 flex gap-1 overflow-x-auto custom-scrollbar max-w-full">
@@ -305,7 +305,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
                 referenceLine={{ value: savingsTarget, color: chartColors.gridStrong, dashed: true }}
               />
             ) : (
-              <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
+              <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
             )}
           </div>
         </motion.div>
@@ -317,7 +317,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
           className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1 lg:col-span-2"
         >
           <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-            <h3 className="text-lg font-medium text-on-surface">{t.cashflowByAccount || 'Cashflow by Account'}</h3>
+            <h3 className="text-lg font-medium text-on-surface">{t.cashflowByAccount}</h3>
             <div className="bg-surface-container rounded-full p-1 flex gap-1 overflow-x-auto custom-scrollbar max-w-full">
               {(['monthly', 'quarterly', 'yearly'] as const).map((timeFrame) => (
                 <ToggleButton
@@ -352,7 +352,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
                 />
               </>
             ) : (
-              <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
+              <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
             )}
           </div>
         </motion.div>

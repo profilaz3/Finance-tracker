@@ -55,5 +55,19 @@ describe('recurring selectors', () => {
       isDueToday: false,
       countdownText: 'in 3 days',
     });
+
+    expect(getRecurringStatus(createRecurring({ nextDue: '2026-04-07' }), 'en', referenceDate).countdownText).toBe('in 1 day');
+  });
+
+  it('localizes recurring countdown text in Serbian with plural-aware day units', () => {
+    const referenceDate = new Date('2026-04-06T12:00:00.000Z');
+    const status = (nextDue: string) =>
+      getRecurringStatus(createRecurring({ nextDue }), 'sr', referenceDate).countdownText;
+
+    expect(status('2026-04-06')).toBe('Danas');
+    expect(status('2026-04-04')).toBe('Kasni 2 dana');
+    expect(status('2026-04-07')).toBe('za 1 dan');
+    expect(status('2026-04-27')).toBe('za 21 dan');
+    expect(status('2026-04-17')).toBe('za 11 dana');
   });
 });

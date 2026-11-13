@@ -1,4 +1,5 @@
 import type { Category, Transaction, TransactionTemplate, TransactionType } from '../types';
+import { getTranslations } from './i18n';
 
 export const UNCATEGORIZED_FILTER = '__uncategorized__';
 
@@ -99,19 +100,13 @@ export const getCommonTransactionFilters = (
   now = new Date(),
 ): CommonTransactionFilter[] => {
   const range = monthRange(now);
-  const labels = language === 'sr'
-    ? {
-        thisMonth: 'Ovaj mesec',
-        expenses: 'Rashodi',
-        income: 'Prihodi',
-        uncategorized: 'Bez kategorije',
-      }
-    : {
-        thisMonth: 'This month',
-        expenses: 'Expenses',
-        income: 'Income',
-        uncategorized: 'Uncategorized',
-      };
+  const t = getTranslations(language);
+  const labels = {
+    thisMonth: t.quickFilterThisMonth,
+    expenses: t.quickFilterExpenses,
+    income: t.quickFilterIncome,
+    uncategorized: t.quickFilterUncategorized,
+  };
 
   return [
     {

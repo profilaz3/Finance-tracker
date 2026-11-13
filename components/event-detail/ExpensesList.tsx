@@ -7,6 +7,8 @@ import { AppState, SharedExpense, Transaction, Person } from '../../types';
 import { formatCurrency } from '../../utils/currencyUtils';
 import { UnifiedExpense } from './types';
 import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
+import { TRANSLATIONS } from '../../constants';
+import { formatShortDate, getIntlLocale } from '../../utils/locale';
 
 interface ExpensesListProps {
     unifiedExpenses: UnifiedExpense[];
@@ -33,6 +35,13 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     onDeleteSharedExpense,
     onOpenSharedModal,
 }) => {
+    const t = TRANSLATIONS[state.language];
+    const pluralRules = new Intl.PluralRules(getIntlLocale(state.language));
+    const formatPeopleCount = (count: number) => {
+        const category = pluralRules.select(count);
+        const template = category === 'one' ? t.peopleCountOne : category === 'few' ? t.peopleCountFew : t.peopleCountOther;
+        return template.replace('{count}', String(count));
+    };
     return (
         <motion.div
             key="shared"
@@ -48,9 +57,9 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 {unifiedExpenses.length === 0 ? (
                     <EmptyState
                         icon={Receipt}
-                        title="No expenses yet"
-                        description="Add transactions from dashboard or use + button for shared expenses"
-                        action={{ label: 'Add Expense', onClick: onOpenSharedModal }}
+                        title={t.noExpensesYet}
+                        description={t.noEventExpensesDesc}
+                        action={{ label: t.addExpense, onClick: onOpenSharedModal }}
                     />
                 ) : (
                     <div className="bg-surface-container-low rounded-xl overflow-hidden border border-outline/10">
@@ -109,7 +118,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                             <div className="flex items-center gap-3">
                                                 <div
                                                     className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border-2"
-                                                    title={payer ? getParticipantTooltipLabel(payer) : 'Unknown payer'}
+                                                    title={payer ? getParticipantTooltipLabel(payer) : t.unknownPayer}
                                                     style={{
                                                         backgroundColor: payer?.color ? payer.color + '20' : '#888888' + '20',
                                                         color: payer?.color || '#888888',
@@ -125,7 +134,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                 <div>
                                                     <p className="font-medium text-on-surface">{expense.name}</p>
                                                     <p className="text-xs text-on-surface-variant">
-                                                        {payer?.name} paid • {expense.sharedWith.length} {expense.sharedWith.length === 1 ? 'person' : 'people'}
+                                                        {t.paidByName.replace('{name}', payer?.name ?? '')} • {formatPeopleCount(expense.sharedWith.length)}
                                                     </p>
                                                 </div>
                                             </div>
@@ -134,7 +143,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                     {formatCurrency(expense.amount, expense.currency)}
                                                 </span>
                                                 <span className="text-xs text-on-surface-variant">
-                                                    {new Date(expense.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                                    {formatShortDate(expense.date, state.language)}
                                                 </span>
                                             </div>
                                         </div>
@@ -157,18 +166,18 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                         }}
                                                         className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
                                                     >
-                                                        <Edit size={16} /> Edit
+                                                        <Edit size={16} /> {t.edit}
                                                     </button>
                                                     <button
                                                         onClick={() => {
                                                             setOpenMenuId(null);
-                                                            if (window.confirm(`Delete "${expense.name}"?`)) {
+                                                            if (window.confirm(t.deleteNamedConfirm.replace('{name}', expense.name))) {
                                                                 onDeleteSharedExpense(expense.id);
                                                             }
                                                         }}
                                                         className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
                                                     >
-                                                        <Trash2 size={16} /> Delete
+                                                        <Trash2 size={16} /> {t.delete}
                                                     </button>
                                                 </motion.div>
                                             </>

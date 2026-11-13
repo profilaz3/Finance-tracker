@@ -1,6 +1,7 @@
 import type { Category, Currency, ExchangeRates, RecurringTransaction, Transaction } from '../types';
 import { convertAmount } from '../services/currencyService';
 import { calculateNextDueDate } from './recurringUtils';
+import { formatDate } from './locale';
 
 export type AnalyticsPeriod = 'month' | 'quarter' | 'year';
 export type AnalyticsForecastConfidence = 'low' | 'normal';
@@ -563,11 +564,11 @@ const buildForecast = (
 
 const getPeriodLabel = (period: AnalyticsPeriodRange): string => {
   if (period.period === 'month') {
-    return new Intl.DateTimeFormat('en-US', {
+    return formatDate(period.currentStart, {
       month: 'long',
       year: 'numeric',
       timeZone: 'UTC',
-    }).format(period.currentStart);
+    });
   }
 
   return period.currentKey;

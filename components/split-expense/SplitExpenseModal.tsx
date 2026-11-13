@@ -143,7 +143,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
 
             // Initialize recipients for they_paid mode: 'self' + all people
             setRecipients([
-                { personId: 'self', name: language === 'sr' ? 'Ja' : 'Me', amount: 0, isIncluded: false },
+                { personId: 'self', name: t.me, amount: 0, isIncluded: false },
                 ...people.map(p => ({ personId: p.id, name: p.name, amount: 0, isIncluded: false }))
             ]);
         }
@@ -212,17 +212,17 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
             });
 
             if (result.error === 'no-participants') {
-                showError(language === 'sr' ? 'Izaberite bar jednu osobu za podelu' : 'Please select at least one person to split with');
+                showError(t.splitErrorNoParticipants);
                 return;
             }
 
             if (result.error === 'invalid-amount') {
-                showError(language === 'sr' ? 'Unesite ispravan iznos' : 'Please enter a valid amount');
+                showError(t.splitErrorInvalidAmount);
                 return;
             }
 
             if (result.error === 'exceeds-total') {
-                showError(language === 'sr' ? 'Iznosi podele prelaze ukupan. Molimo podesite.' : 'Split amounts exceed total. Please adjust.');
+                showError(t.splitErrorExceedsTotal);
                 return;
             }
 
@@ -237,14 +237,12 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
             });
 
             if (result.error === 'missing-payer') {
-                showError(language === 'sr' ? 'Izaberite ko je platio' : 'Please select who paid');
+                showError(t.splitErrorNoPayer);
                 return;
             }
 
             if (result.error === 'no-amounts') {
-                showError(language === 'sr'
-                    ? 'Izaberite bar jednu osobu i unesite iznos'
-                    : 'Please select at least one person and enter amounts');
+                showError(t.splitErrorNoAmounts);
                 return;
             }
 
@@ -372,8 +370,8 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                         className="w-full py-3 bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-2"
                     >
                         {mode === 'i_paid'
-                            ? (language === 'sr' ? 'Podeli trošak' : 'Split Expense')
-                            : (language === 'sr' ? 'Dodaj dug' : 'Add Debt')
+                            ? t.splitExpense
+                            : t.addDebt
                         }
                     </button>
                 </form>

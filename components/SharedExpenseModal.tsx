@@ -7,6 +7,8 @@ import clsx from 'clsx';
 import { CURRENCIES } from '../constants';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_COLORS } from '../constants/expenseCategories';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
+import { getTranslations } from '../utils/i18n';
+import { formatNumber } from '../utils/locale';
 
 interface SharedExpenseModalProps {
     isOpen: boolean;
@@ -29,6 +31,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
     expense, // expense to edit
     onShowToast
 }) => {
+    const t = getTranslations();
     // Helper for toast notification
     const showError = (message: string) => {
         if (onShowToast) {
@@ -148,7 +151,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim() || !amount || !paidBy || sharedWith.length === 0) {
-            showError('Please fill in all fields');
+            showError(t.fillAllFields);
             return;
         }
 
@@ -158,7 +161,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
         if (splitType === 'exact') {
             const remaining = getRemainingAmount();
             if (Math.abs(remaining) > 0.01) {
-                showError(`The split amounts don't match the total. Remaining: ${remaining.toFixed(2)}`);
+                showError(t.splitAmountsMismatch.replace('{amount}', formatNumber(remaining, { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
                 return;
             }
         }
@@ -189,7 +192,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
             onClose();
         } catch (error) {
             console.error('Failed to save expense:', error);
-            showError('Failed to save expense. Please try again.');
+            showError(t.saveExpenseFailed);
         }
     };
 
@@ -224,7 +227,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                 className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">{expense ? 'Edit Expense' : 'Add Shared Expense'}</h2>
+                    <h2 className="text-xl font-bold font-display text-on-surface">{expense ? t.editExpense : t.addSharedExpense}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-surface-container rounded-full transition-colors">
                         <X size={20} className="text-on-surface-variant" />
                     </button>
@@ -233,7 +236,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                 <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                     {/* Amount & Currency */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">Amount</label>
+                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.amount}</label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <input
@@ -260,19 +263,19 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
 
                     {/* Name */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">Description</label>
+                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.description}</label>
                         <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g., Dinner at Mario's"
+                            placeholder={t.sharedExpenseNamePlaceholder}
                             className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20"
                         />
                     </div>
 
                     {/* Category */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">Category</label>
+                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.category}</label>
                         <div className="flex flex-wrap gap-2">
                             {EXPENSE_CATEGORIES.map(cat => (
                                 <button
@@ -297,7 +300,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
 
                     {/* Date & Time */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">Date & Time</label>
+                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.dateTime}</label>
                         <input
                             type="datetime-local"
                             value={date}
@@ -309,10 +312,9 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                     {/* Show message if no people */}
                     {people.length === 0 && (
                         <div className="bg-error/10 border border-error/20 rounded-xl p-4 text-sm">
-                            <p className="text-error font-medium mb-1">No people in this event!</p>
+                            <p className="text-error font-medium mb-1">{t.noPeopleInEvent}</p>
                             <p className="text-on-surface-variant">
-                                You need to add people to the event before creating shared expenses.
-                                Go to Settings → People to add yourself and others.
+                                {t.noPeopleInEventDesc}
                             </p>
                         </div>
                     )}
@@ -320,7 +322,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                     {/* Paid By */}
                     {people.length > 0 && (
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-variant mb-2">Paid By</label>
+                            <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.paidBy}</label>
                             <div className="flex flex-wrap gap-2">
                                 {people.map(person => (
                                     <button
@@ -351,7 +353,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                     {/* Split Type Toggle */}
                     {people.length > 0 && (
                         <div>
-                            <label className="block text-sm font-medium text-on-surface-variant mb-2">Split Method</label>
+                            <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.splitMethod}</label>
                             <div className="flex bg-surface-container rounded-xl p-1">
                                 <button
                                     type="button"
@@ -363,7 +365,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                                             : "text-on-surface-variant hover:text-on-surface"
                                     )}
                                 >
-                                    <Divide size={16} /> Equal
+                                    <Divide size={16} /> {t.equalSplit}
                                 </button>
                                 <button
                                     type="button"
@@ -375,7 +377,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                                             : "text-on-surface-variant hover:text-on-surface"
                                     )}
                                 >
-                                    <Calculator size={16} /> Exact Amounts
+                                    <Calculator size={16} /> {t.exactAmounts}
                                 </button>
                             </div>
                         </div>
@@ -385,14 +387,14 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                     {people.length > 0 && (
                         <div>
                             <label className="flex items-center justify-between text-sm font-medium text-on-surface-variant mb-2">
-                                <span>Shared With</span>
+                                <span>{t.sharedWith}</span>
                                 {splitType === 'equal' && (
                                     <button
                                         type="button"
                                         onClick={() => setSharedWith(people.map(p => p.id))}
                                         className="text-primary text-xs hover:underline"
                                     >
-                                        Select All
+                                        {t.selectAll}
                                     </button>
                                 )}
                             </label>
@@ -451,7 +453,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                                                 type="button"
                                                 onClick={() => toggleSharedWith(person.id)}
                                                 className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant"
-                                                title="Remove"
+                                                title={t.remove}
                                             >
                                                 <X size={16} />
                                             </button>
@@ -461,7 +463,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                                     {/* Add people dropdown if not everyone is selected */}
                                     {sharedWith.length < people.length && (
                                         <div className="mt-2">
-                                            <p className="text-xs text-on-surface-variant mb-2">Add person to split:</p>
+                                            <p className="text-xs text-on-surface-variant mb-2">{t.addPersonToSplit}</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {people.filter(p => !sharedWith.includes(p.id)).map(person => (
                                                     <button
@@ -487,7 +489,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                         disabled={!name.trim() || !amount || !paidBy || sharedWith.length === 0 || people.length === 0 || (splitType === 'exact' && !isExactSplitValid)}
                         className="w-full py-3 bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-4"
                     >
-                        {expense ? 'Save Changes' : 'Add Expense'}
+                        {expense ? t.saveChanges : t.addExpense}
                     </button>
                 </form>
             </motion.div>

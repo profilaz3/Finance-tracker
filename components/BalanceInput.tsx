@@ -70,7 +70,7 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
             <button
                 onClick={handleSave}
                 className="p-2 bg-primary text-on-primary rounded-full hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95"
-                title={t.save || 'Save'}
+                title={t.save}
             >
                 <Check size={16} />
             </button>

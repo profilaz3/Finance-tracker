@@ -2,8 +2,10 @@ import React from 'react';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import clsx from 'clsx';
 import { ModeToggleProps } from './types';
+import { TRANSLATIONS } from '../../constants';
 
 export const ModeToggle: React.FC<ModeToggleProps> = ({ mode, setMode, language }) => {
+    const t = TRANSLATIONS[language];
     return (
         <div className="px-6 pt-4">
             <div className="flex bg-surface-container rounded-xl p-1">
@@ -18,7 +20,7 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({ mode, setMode, language 
                     )}
                 >
                     <ArrowUpRight size={16} />
-                    {language === 'sr' ? 'Ja sam platio' : 'I paid'}
+                    {t.iPaid}
                 </button>
                 <button
                     type="button"
@@ -31,7 +33,7 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({ mode, setMode, language 
                     )}
                 >
                     <ArrowDownLeft size={16} />
-                    {language === 'sr' ? 'Neko platio za mene' : 'Someone paid for me'}
+                    {t.theyPaid}
                 </button>
             </div>
         </div>

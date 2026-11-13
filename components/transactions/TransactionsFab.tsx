@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import clsx from 'clsx';
 import { Banknote, Plus, Split } from 'lucide-react';
+import { TRANSLATIONS } from '../../constants';
 
 interface TransactionsFabProps {
   isVisible: boolean;
@@ -57,10 +58,10 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
                         onOpenSplit();
                         setIsOpen(false);
                       }}
-                      aria-label={language === 'sr' ? 'Otvori podelu troska' : 'Open split expense'}
+                      aria-label={TRANSLATIONS[language].openSplitExpense}
                       className="flex items-center gap-3 bg-surface-container-high text-on-surface pl-4 pr-3 py-2.5 rounded-full shadow-lg hover:bg-surface-container-highest transition-colors"
                     >
-                      <span className="text-sm font-medium whitespace-nowrap">{language === 'sr' ? 'Podeli' : 'Split'}</span>
+                      <span className="text-sm font-medium whitespace-nowrap">{TRANSLATIONS[language].split}</span>
                       <div className="w-10 h-10 bg-tertiary text-on-tertiary rounded-full flex items-center justify-center">
                         <Split size={20} />
                       </div>
@@ -71,10 +72,10 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
                       onAddTransaction();
                       setIsOpen(false);
                     }}
-                    aria-label={language === 'sr' ? 'Dodaj transakciju' : 'Add transaction'}
+                    aria-label={TRANSLATIONS[language].addTransaction}
                     className="flex items-center gap-3 bg-surface-container-high text-on-surface pl-4 pr-3 py-2.5 rounded-full shadow-lg hover:bg-surface-container-highest transition-colors"
                   >
-                    <span className="text-sm font-medium whitespace-nowrap">{language === 'sr' ? 'Transakcija' : 'Transaction'}</span>
+                    <span className="text-sm font-medium whitespace-nowrap">{TRANSLATIONS[language].transaction}</span>
                     <div className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center">
                       <Banknote size={20} />
                     </div>
@@ -86,7 +87,7 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
           <motion.button
             onClick={() => setIsOpen(!isOpen)}
             whileTap={{ scale: 0.9 }}
-            aria-label={language === 'sr' ? 'Otvori akcije transakcija' : 'Open transaction actions'}
+            aria-label={TRANSLATIONS[language].openTransactionActions}
             className={clsx(
               'w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center transition-all z-50 hover:shadow-2xl hover:shadow-primary/20',
               isOpen ? 'rotate-45' : 'hover:scale-105'

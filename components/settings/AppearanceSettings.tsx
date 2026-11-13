@@ -50,7 +50,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, s
                 {/* Quick Light/Dark Toggle */}
                 <div className="flex items-center justify-between bg-surface-container-low p-4 rounded-xl">
                     <span className="text-on-surface font-medium">
-                        {state.language === 'sr' ? 'Brzi prelaz' : 'Quick Toggle'}
+                        {t.quickToggle}
                     </span>
                     <div className="flex gap-2">
                         <button
@@ -61,10 +61,10 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, s
                                     ? "bg-primary text-on-primary"
                                     : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
                             )}
-                            aria-label="Light mode"
+                            aria-label={t.lightModeLabel}
                         >
                             <Sun size={18} />
-                            <span className="hidden sm:inline">{state.language === 'sr' ? 'Svetla' : 'Light'}</span>
+                            <span className="hidden sm:inline">{t.themeLight}</span>
                         </button>
                         <button
                             onClick={() => setState(prev => ({ ...prev, theme: 'galaxy' }))}
@@ -74,10 +74,10 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, s
                                     ? "bg-primary text-on-primary"
                                     : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
                             )}
-                            aria-label="Dark mode"
+                            aria-label={t.darkModeLabel}
                         >
                             <Moon size={18} />
-                            <span className="hidden sm:inline">{state.language === 'sr' ? 'Tamna' : 'Dark'}</span>
+                            <span className="hidden sm:inline">{t.themeDark}</span>
                         </button>
                     </div>
                 </div>
@@ -85,7 +85,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, s
                 {/* Theme Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
-                        { id: 'light', name: state.language === 'sr' ? 'Svetla' : 'Light', icon: Sun, colors: ['#3b82f6', '#8b5cf6', '#f8fafc'] },
+                        { id: 'light', name: t.themeLight, icon: Sun, colors: ['#3b82f6', '#8b5cf6', '#f8fafc'] },
                         { id: 'linen', name: 'Linen', icon: Palette, colors: ['#006d77', '#d97706', '#fcf8f2'] },
                         { id: 'mist', name: 'Mist', icon: Cloud, colors: ['#0e7490', '#3b82f6', '#f4f8fc'] },
                         { id: 'galaxy', name: 'Galaxy', icon: Star, colors: ['#8b5cf6', '#d946ef', '#0a0a1a'] },

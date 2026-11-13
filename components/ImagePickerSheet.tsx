@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Camera, Image, X } from 'lucide-react';
+import { TRANSLATIONS } from '../constants';
+import { getAppLanguage } from '../utils/locale';
 
 interface ImagePickerSheetProps {
   isOpen: boolean;
@@ -11,30 +13,15 @@ interface ImagePickerSheetProps {
   language?: 'en' | 'sr';
 }
 
-const translations = {
-  en: {
-    addPhoto: 'Add Photo',
-    takePhoto: 'Take Photo',
-    chooseFromGallery: 'Choose from Gallery',
-    cancel: 'Cancel',
-  },
-  sr: {
-    addPhoto: 'Dodaj Sliku',
-    takePhoto: 'Slikaj',
-    chooseFromGallery: 'Izaberi iz Galerije',
-    cancel: 'Otkaži',
-  },
-};
-
 export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
   isOpen,
   onClose,
   onSelectCamera,
   onSelectGallery,
   title,
-  language = 'en',
+  language,
 }) => {
-  const t = translations[language];
+  const t = TRANSLATIONS[language ?? getAppLanguage()];
 
   const handleCameraClick = (e: React.MouseEvent) => {
     e.stopPropagation();

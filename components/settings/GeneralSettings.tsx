@@ -16,7 +16,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
         <>
             {/* Base Currency Section */}
             <section className="space-y-4">
-                <h3 className="text-lg font-medium text-on-surface">Base Currency</h3>
+                <h3 className="text-lg font-medium text-on-surface">{t.baseCurrency}</h3>
                 <div className="flex gap-3">
                     {(['EUR', 'USD', 'RSD'] as Currency[]).map(currency => (
                         <button
@@ -39,13 +39,13 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
             <section className="space-y-4">
                 <h3 className="text-lg font-medium text-on-surface flex items-center gap-2">
                     <Keyboard size={20} />
-                    {state.language === 'sr' ? 'Prečice na tastaturi' : 'Keyboard Shortcuts'}
+                    {t.keyboardShortcuts}
                 </h3>
                 <div className="bg-surface-container-low p-4 rounded-xl shadow-elevation-1">
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-on-surface">
-                                {state.language === 'sr' ? 'Nova transakcija' : 'New Transaction'}
+                                {t.shortcutNewTransaction}
                             </span>
                             <div className="flex items-center gap-1">
                                 <kbd className="px-2 py-1 bg-surface-container rounded text-xs font-mono text-on-surface-variant border border-outline-variant/30">
@@ -59,7 +59,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-on-surface">
-                                {state.language === 'sr' ? 'Zatvori modal' : 'Close Modal'}
+                                {t.shortcutCloseModal}
                             </span>
                             <kbd className="px-2 py-1 bg-surface-container rounded text-xs font-mono text-on-surface-variant border border-outline-variant/30">
                                 Esc
@@ -67,10 +67,10 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-on-surface">
-                                {state.language === 'sr' ? 'Kontekst meni' : 'Context Menu'}
+                                {t.shortcutContextMenu}
                             </span>
                             <span className="text-xs text-on-surface-variant">
-                                {state.language === 'sr' ? 'Dugo drži stavku' : 'Long press item'}
+                                {t.shortcutLongPress}
                             </span>
                         </div>
                     </div>

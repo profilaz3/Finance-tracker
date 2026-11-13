@@ -6,6 +6,7 @@ import { CheckSquare, Receipt, SearchX, Square } from 'lucide-react';
 import { AppState, Transaction } from '../../types';
 import { EmptyState } from '../EmptyState';
 import { TransactionItem } from '../TransactionItem';
+import { TRANSLATIONS } from '../../constants';
 
 interface TransactionGroup {
   label: string;
@@ -66,28 +67,24 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
       hasAnyTransactions && hasSearchOrFilters ? (
         <EmptyState
           icon={SearchX}
-          title={state.language === 'sr' ? 'Nema rezultata' : 'No matches found'}
+          title={TRANSLATIONS[state.language].noMatchesFound}
           description={
             searchQuery
-              ? (state.language === 'sr'
-                ? `Nema transakcija koje odgovaraju "${searchQuery}"`
-                : `No transactions match "${searchQuery}"`)
-              : (state.language === 'sr'
-                ? 'Probajte sa drugim filterima'
-                : 'Try adjusting your filters')
+              ? TRANSLATIONS[state.language].noTransactionsMatch.replace('{query}', searchQuery)
+              : TRANSLATIONS[state.language].tryAdjustingFilters
           }
           action={{
-            label: state.language === 'sr' ? 'Obrisi filtere' : 'Clear all filters',
+            label: TRANSLATIONS[state.language].clearAllFilters,
             onClick: clearAllFilters,
           }}
         />
       ) : (
         <EmptyState
           icon={Receipt}
-          title={state.language === 'sr' ? 'Jos nema transakcija' : 'No transactions yet'}
-          description={state.language === 'sr' ? 'Dodajte prvu transakciju da biste poceli sa pracenjem' : 'Add your first transaction to start tracking'}
+          title={TRANSLATIONS[state.language].noTransactionsYet}
+          description={TRANSLATIONS[state.language].startTracking}
           action={onAddTransaction ? {
-            label: state.language === 'sr' ? 'Dodaj transakciju' : 'Add transaction',
+            label: TRANSLATIONS[state.language].addTransaction,
             onClick: onAddTransaction,
           } : undefined}
         />
@@ -104,8 +101,8 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
               <div className="flex-1 h-px bg-gradient-to-r from-outline-variant/30 to-transparent" />
               <span className="text-xs text-on-surface-variant/60 bg-surface-container px-2 py-0.5 rounded-full">
                 {groupedData[index]?.transactions.length} {groupedData[index]?.transactions.length === 1
-                  ? (state.language === 'sr' ? 'transakcija' : 'transaction')
-                  : (state.language === 'sr' ? 'transakcije' : 'transactions')}
+                  ? TRANSLATIONS[state.language].transactionSingular
+                  : TRANSLATIONS[state.language].transactionPlural}
               </span>
             </div>
           </div>

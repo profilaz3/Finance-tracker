@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { AppState, Transaction } from '../types';
+import { TRANSLATIONS } from '../constants';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -43,7 +44,7 @@ export function useTemplateHandlers({
       ...prev,
       templates: [...prev.templates, newTemplate],
     }));
-    addToast(state.language === 'sr' ? 'Sablon sacuvan' : 'Template saved', 'success');
+    addToast(TRANSLATIONS[state.language].templateSaved, 'success');
   }, [addToast, setState, state.categories, state.language]);
 
   const handleUseTemplate = useCallback((templateId: string) => {
@@ -80,7 +81,7 @@ export function useTemplateHandlers({
       ...prev,
       templates: prev.templates.filter(t => t.id !== templateId),
     }));
-    addToast(state.language === 'sr' ? 'Sablon obrisan' : 'Template deleted', 'success');
+    addToast(TRANSLATIONS[state.language].templateDeleted, 'success');
   }, [addToast, setState, state.language]);
 
   return {

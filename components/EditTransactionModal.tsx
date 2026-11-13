@@ -51,11 +51,11 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 
     const validationConfig: FieldValidation = useMemo(() => ({
         amount: [
-            validationRules.required(t.fieldRequired || 'This field is required'),
-            validationRules.positive(t.amountMustBePositive || 'Amount must be positive')
+            validationRules.required(t.fieldRequired),
+            validationRules.positive(t.amountMustBePositive)
         ],
         accountId: [
-            validationRules.required(t.fieldRequired || 'This field is required')
+            validationRules.required(t.fieldRequired)
         ]
     }), [t]);
     const { validateAll, validateOnBlur, getFieldState, clearErrors } = useFormValidation(validationConfig);
@@ -141,7 +141,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 <div className="p-5 pb-3 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <h3 id="edit-transaction-title" className="text-lg font-display font-medium text-on-surface">
-                            {isNewTransaction ? (t.addTransaction || 'New Transaction') : t.editTransaction}
+                            {isNewTransaction ? t.addTransaction : t.editTransaction}
                         </h3>
                         {selectedCategory && (
                             <span className={clsx(
@@ -151,14 +151,14 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                                 {edited.type === 'income'
                                     ? <ArrowDownLeft size={10} aria-hidden="true" />
                                     : <ArrowUpRight size={10} aria-hidden="true" />}
-                                {edited.type === 'income' ? 'Income' : 'Expense'}
+                                {edited.type === 'income' ? t.incomeType : t.expenseType}
                             </span>
                         )}
                     </div>
                     <button
                         onClick={onClose}
                         className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"
-                        aria-label={t.close || "Close dialog"}
+                        aria-label={t.close}
                     >
                         <X size={20} aria-hidden="true" />
                     </button>
@@ -203,19 +203,19 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                                 className="overflow-hidden"
                             >
                                 <div className="flex items-center justify-between bg-error-container/50 rounded-xl px-4 py-3 mb-1">
-                                    <span className="text-sm text-on-error-container font-medium">Delete this transaction?</span>
+                                    <span className="text-sm text-on-error-container font-medium">{t.deleteConfirm}</span>
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => setShowDeleteConfirm(false)}
                                             className="px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors"
                                         >
-                                            No
+                                            {t.no}
                                         </button>
                                         <button
                                             onClick={handleDelete}
                                             className="px-3 py-1.5 text-xs font-medium bg-error text-on-error rounded-lg hover:bg-error/80 transition-colors"
                                         >
-                                            Yes, delete
+                                            {t.yesDelete}
                                         </button>
                                     </div>
                                 </div>
@@ -234,7 +234,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                                         : "text-on-surface-variant hover:text-error hover:bg-error-container/30"
                                 )}
                             >
-                                Delete
+                                {t.delete}
                             </button>
                         ) : (
                             <div />

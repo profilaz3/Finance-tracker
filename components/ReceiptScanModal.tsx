@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Camera, Upload, Loader2, AlertCircle, Check, Image, Pencil, Trash2, Plus } from 'lucide-react';
 import { Category, Account, Currency, Transaction } from '../types';
 import { TRANSLATIONS } from '../constants';
+import { formatMoney } from '../utils/locale';
 import { scanReceipt, ParsedReceipt, isAIAvailable } from '../services/aiService';
 import { v4 as uuidv4 } from 'uuid';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
@@ -51,9 +52,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [parsedReceipt, setParsedReceipt] = useState<ParsedReceipt | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const unsupportedFileMessage = language === 'sr'
-    ? 'Koristite PNG, JPG ili WEBP sliku racuna.'
-    : 'Please use a PNG, JPG, or WEBP receipt image.';
+  const unsupportedFileMessage = t.receiptUnsupportedFile;
 
   const resetState = () => {
     setImagePreview(null);
@@ -93,7 +92,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       handleImageResult(result);
     } catch (err) {
       console.error('Camera error:', err);
-      setError(language === 'sr' ? 'Greska pri snimanju' : 'Failed to capture image');
+      setError(t.imageCaptureFailed);
     } finally {
       setIsProcessingImage(false);
     }
@@ -108,7 +107,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       handleImageResult(result);
     } catch (err) {
       console.error('Gallery error:', err);
-      setError(language === 'sr' ? 'Greska pri ucitavanju' : 'Failed to load image');
+      setError(t.imageLoadFailed);
     } finally {
       setIsProcessingImage(false);
     }
@@ -130,7 +129,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       handleImageResult(result);
     } catch (err) {
       console.error('File input error:', err);
-      setError(language === 'sr' ? 'Greska pri ucitavanju' : 'Failed to load image');
+      setError(t.imageLoadFailed);
     } finally {
       setIsProcessingImage(false);
     }
@@ -173,7 +172,7 @@ const handleScan = async () => {
     if (!imagePreview) return;
     
     if (!isAIAvailable()) {
-      setError(language === 'sr' ? 'AI nije dostupan. Proverite serversku AI konfiguraciju.' : 'AI not available. Please check the server AI configuration.');
+      setError(t.aiNotConfigured);
       return;
     }
 
@@ -187,20 +186,20 @@ const handleScan = async () => {
         setParsedReceipt(result);
         vibrate(HAPTIC_PATTERNS.success);
       } else {
-        setError(language === 'sr' ? 'Nije moguce procitati racun. Pokusajte ponovo.' : 'Could not read receipt. Please try again.');
+        setError(t.receiptReadFailed);
       }
     } catch (err: unknown) {
       console.error('Receipt scanning failed:', err);
       // Provide more specific error messages
       const errorMessage = err instanceof Error ? err.message : '';
       if (errorMessage.includes('OPENAI_API_KEY') || errorMessage.includes('API key')) {
-        setError(language === 'sr' ? 'Serverski AI kljuc nije ispravno podesen' : 'The server AI key is not configured correctly');
+        setError(t.aiKeyMisconfigured);
       } else if (errorMessage.includes('rate limit')) {
-        setError(language === 'sr' ? 'Previse zahteva. Sacekajte malo.' : 'Too many requests. Please wait.');
+        setError(t.tooManyRequests);
       } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        setError(language === 'sr' ? 'Greska u mrezi. Proverite internet.' : 'Network error. Check your connection.');
+        setError(t.networkErrorCheckConnection);
       } else {
-        setError(language === 'sr' ? 'Greska pri skeniranju. Pokusajte ponovo.' : 'Scan failed. Please try again.');
+        setError(t.receiptScanFailedRetry);
       }
     } finally {
       setIsScanning(false);
@@ -272,7 +271,7 @@ const handleScan = async () => {
             <div className="absolute inset-0 bg-surface-container-high/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
               <Loader2 size={40} className="text-primary animate-spin" />
               <p className="text-on-surface font-medium">
-                {language === 'sr' ? 'Ucitavanje slike...' : 'Loading image...'}
+                {t.loadingImage}
               </p>
             </div>
           )}
@@ -309,12 +308,12 @@ const handleScan = async () => {
               </div>
               <p className="text-on-surface font-medium mb-1">
                 {isProcessingImage 
-                  ? (language === 'sr' ? 'Ucitavanje...' : 'Loading...')
-                  : (language === 'sr' ? 'Dodaj sliku racuna' : 'Add receipt image')
+                  ? t.loading
+                  : t.addReceiptImage
                 }
               </p>
               <p className="text-sm text-on-surface-variant">
-                {language === 'sr' ? 'Slikaj ili izaberi iz galerije' : 'Take photo or choose from gallery'}
+                {t.takeOrChoosePhoto}
               </p>
             </div>
           )}
@@ -333,7 +332,7 @@ const handleScan = async () => {
               <div className="relative rounded-xl overflow-hidden bg-surface-container">
                 <img
                   src={imagePreview}
-                  alt="Receipt preview"
+                  alt={t.receiptPreviewAlt}
                   className="w-full max-h-64 object-contain"
                 />
                 <button
@@ -376,7 +375,7 @@ const handleScan = async () => {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-tertiary mb-4">
                 <Check size={20} />
-                <span className="font-medium">Receipt scanned successfully!</span>
+                <span className="font-medium">{t.receiptScanned}</span>
               </div>
 
               {/* Summary Card */}
@@ -388,7 +387,7 @@ const handleScan = async () => {
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant text-sm">{t.total}</span>
                   <span className="font-display font-bold text-xl text-on-surface">
-                    {parsedReceipt.receiptData?.total || parsedReceipt.amount} {parsedReceipt.currency}
+                    {formatMoney(parsedReceipt.receiptData?.total || parsedReceipt.amount, parsedReceipt.currency, language)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -398,7 +397,7 @@ const handleScan = async () => {
                 {parsedReceipt.fees && parsedReceipt.fees > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-on-surface-variant text-sm">{t.feesOptional}</span>
-                    <span className="font-medium text-on-surface">{parsedReceipt.fees} USD</span>
+                    <span className="font-medium text-on-surface">{formatMoney(parsedReceipt.fees, 'USD', language)}</span>
                   </div>
                 )}
               </div>
@@ -423,7 +422,7 @@ const handleScan = async () => {
                         });
                       }}
                       className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                      title={language === 'sr' ? 'Dodaj stavku' : 'Add item'}
+                      title={t.addItem}
                     >
                       <Plus size={16} />
                     </button>
@@ -522,7 +521,7 @@ const handleScan = async () => {
                   </div>
                   {parsedReceipt.receiptData.items.length === 0 && (
                     <p className="text-sm text-on-surface-variant/60 text-center py-2">
-                      {language === 'sr' ? 'Nema stavki' : 'No items'}
+                      {t.noItems}
                     </p>
                   )}
                 </div>
@@ -534,14 +533,14 @@ const handleScan = async () => {
                   onClick={() => { setParsedReceipt(null); setImagePreview(null); }}
                   className="flex-1 py-3 bg-surface-container text-on-surface rounded-lg font-medium hover:bg-surface-container-highest transition-colors"
                 >
-                  Scan Another
+                  {t.scanAnother}
                 </button>
                 <button
                   onClick={handleConfirm}
                   className="flex-1 py-3 bg-primary text-on-primary rounded-lg font-medium flex items-center justify-center gap-2 hover:shadow-elevation-1 transition-all"
                 >
                   <Check size={18} />
-                  Add Transaction
+                  {t.addTransactionAction}
                 </button>
               </div>
             </div>
@@ -556,7 +555,7 @@ const handleScan = async () => {
         onSelectCamera={handleCameraSelect}
         onSelectGallery={handleGallerySelect}
         language={language}
-        title={language === 'sr' ? 'Dodaj Sliku Racuna' : 'Add Receipt Image'}
+        title={t.addReceiptImageTitle}
       />
     </div>
   );

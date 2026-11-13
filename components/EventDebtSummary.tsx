@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ArrowRight, Wallet } from 'lucide-react';
 import { Person, SharedExpense, Currency, EventDebt } from '../types';
 import { formatCurrency } from '../utils/currencyUtils';
+import { getTranslations } from '../utils/i18n';
 
 interface EventDebtSummaryProps {
     expenses: SharedExpense[];
@@ -10,6 +11,7 @@ interface EventDebtSummaryProps {
 }
 
 export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({ expenses = [], people = [], baseCurrency }) => {
+    const t = getTranslations();
     const debts = useMemo(() => {
         if (!expenses || !people) return [];
         // 1. Calculate net balances per person per currency
@@ -102,14 +104,14 @@ export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({ expenses = [
         return (
             <div className="text-center py-8 text-on-surface-variant bg-surface-container/50 rounded-xl border border-dashed border-outline/20">
                 <Wallet size={24} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No debts to settle yet.</p>
+                <p className="text-sm">{t.noDebtsToSettle}</p>
             </div>
         );
     }
 
     return (
         <div className="space-y-3">
-            <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">Who Owes Who</h3>
+            <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">{t.whoOwesWho}</h3>
             <div className="grid gap-2">
                 {debts.map((debt, index) => {
                     const fromPerson = people.find(p => p.id === debt.from);

@@ -4,6 +4,7 @@ import { exportToCSV } from '../services/storageService';
 import { AppState, Transaction, TransactionType } from '../types';
 import { parseTransaction, isAIAvailable, ParsedTransaction } from '../services/aiService';
 import { ConfirmDialog } from './ConfirmDialog';
+import { TRANSLATIONS } from '../constants';
 import { TransactionsToolbar } from './transactions/TransactionsToolbar';
 import { TransactionsList } from './transactions/TransactionsList';
 import { TransactionsFab } from './transactions/TransactionsFab';
@@ -127,10 +128,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         onParsedTransaction(result);
         setSmartInput('');
       } else {
-        setParseError(state.language === 'sr' ? 'Nisam uspeo da protumacim unos.' : 'Could not parse that input.');
+        setParseError(TRANSLATIONS[state.language].couldNotParseInput);
       }
     } catch {
-      setParseError(state.language === 'sr' ? 'Nisam uspeo da protumacim unos.' : 'Could not parse that input.');
+      setParseError(TRANSLATIONS[state.language].couldNotParseInput);
     } finally {
       setIsParsing(false);
     }
@@ -369,16 +370,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         isOpen={isDeleteDialogOpen}
         onConfirm={confirmBatchDelete}
         onCancel={() => setIsDeleteDialogOpen(false)}
-        title={state.language === 'sr' ? 'Obrisi transakcije' : 'Delete Transactions'}
-        message={state.language === 'sr'
-          ? batchDeleteSafetySummary.unsafeCount > 0
-            ? `Obrisacete ${batchDeleteSafetySummary.count} transakcija. ${batchDeleteSafetySummary.unsafeCount} utice na dugove ili podele i ne moze se bezbedno vratiti.`
-            : `Obrisacete ${batchDeleteSafetySummary.count} transakcija. Mozete ih vratiti odmah nakon brisanja.`
-          : batchDeleteSafetySummary.unsafeCount > 0
-            ? `You are deleting ${batchDeleteSafetySummary.count} transactions. ${batchDeleteSafetySummary.unsafeCount} affect people or split balances and cannot be safely undone.`
-            : `You are deleting ${batchDeleteSafetySummary.count} transactions. You can undo this immediately after deletion.`}
-        confirmLabel={state.language === 'sr' ? 'Obrisi' : 'Delete'}
-        cancelLabel={state.language === 'sr' ? 'Otkazi' : 'Cancel'}
+        title={TRANSLATIONS[state.language].deleteTransactions}
+        message={batchDeleteSafetySummary.unsafeCount > 0
+          ? TRANSLATIONS[state.language].batchDeleteUnsafeMessage
+            .replace('{count}', String(batchDeleteSafetySummary.count))
+            .replace('{unsafeCount}', String(batchDeleteSafetySummary.unsafeCount))
+          : TRANSLATIONS[state.language].batchDeleteUndoableMessage
+            .replace('{count}', String(batchDeleteSafetySummary.count))}
+        confirmLabel={TRANSLATIONS[state.language].delete}
+        cancelLabel={TRANSLATIONS[state.language].cancel}
         type="danger"
       />
 

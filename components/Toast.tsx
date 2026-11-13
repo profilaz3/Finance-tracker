@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, CloseIcon, InfoIcon, XCircleIcon } from './icons/UiIcons';
+import { getTranslations } from '../utils/i18n';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -25,6 +26,7 @@ interface ToastItemProps {
 }
 
 const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
+    const t = getTranslations();
     const [progress, setProgress] = useState(100);
     const duration = toast.duration || 4000;
 
@@ -90,7 +92,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
                 </div>
                 <button
                     onClick={() => onDismiss(toast.id)}
-                    aria-label="Dismiss notification"
+                    aria-label={t.dismissNotification}
                     className="flex-shrink-0 hover:opacity-70 transition-opacity"
                 >
                     <CloseIcon size={14} aria-hidden="true" />

@@ -2,6 +2,7 @@ import React from 'react';
 import { Bookmark, RotateCcw } from 'lucide-react';
 import type { Account, Category, Transaction, TransactionTemplate } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { TRANSLATIONS } from '../../constants';
 
 interface DashboardTemplateShortcutsProps {
   language: 'en' | 'sr';
@@ -26,15 +27,11 @@ export const DashboardTemplateShortcuts: React.FC<DashboardTemplateShortcutsProp
     return null;
   }
 
-  const labels = language === 'sr'
-    ? {
-        repeat: 'Ponovi',
-        templates: 'Sabloni',
-      }
-    : {
-        repeat: 'Repeat',
-        templates: 'Templates',
-      };
+  const t = TRANSLATIONS[language];
+  const labels = {
+    repeat: t.repeat,
+    templates: t.templates,
+  };
 
   const categoryName = (categoryId: string) => categories.find(category => category.id === categoryId)?.name || '';
   const accountName = (accountId: string) => accounts.find(account => account.id === accountId)?.name || '';

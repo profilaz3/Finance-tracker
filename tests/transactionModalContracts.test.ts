@@ -20,7 +20,7 @@ describe('transaction modal contracts', () => {
     expect(editTransactionModal).toContain('isNewTransaction?: boolean;');
     expect(editTransactionModal).toContain('isNewTransaction = false,');
     expect(editTransactionModal).not.toContain('const isNewTransaction = !transaction;');
-    expect(editTransactionModal).toContain("{isNewTransaction ? (t.addTransaction || 'New Transaction') : t.editTransaction}");
+    expect(editTransactionModal).toContain('{isNewTransaction ? t.addTransaction : t.editTransaction}');
     expect(editTransactionModal).toContain('{!isNewTransaction ? (');
   });
 

@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { Person, SharedExpense, Currency, ExchangeRates } from '../types';
 import { formatCurrency, convertCurrency } from '../utils/currencyUtils';
+import { getTranslations } from '../utils/i18n';
+import { formatNumber } from '../utils/locale';
 
 interface PersonStatsRingProps {
     people: Person[];
@@ -16,6 +18,7 @@ interface PersonStat {
 }
 
 export const PersonStatsRing: React.FC<PersonStatsRingProps> = ({ people, expenses, baseCurrency, rates }) => {
+    const t = getTranslations();
     const stats = useMemo(() => {
         // Calculate total spent (share) by each person
         const personTotals: Record<string, number> = {};
@@ -60,7 +63,7 @@ export const PersonStatsRing: React.FC<PersonStatsRingProps> = ({ people, expens
     if (stats.grandTotal === 0 || stats.personStats.length === 0) {
         return (
             <div className="flex items-center justify-center p-8">
-                <p className="text-on-surface-variant text-sm">No expenses recorded yet</p>
+                <p className="text-on-surface-variant text-sm">{t.noExpensesRecorded}</p>
             </div>
         );
     }
@@ -125,9 +128,9 @@ export const PersonStatsRing: React.FC<PersonStatsRingProps> = ({ people, expens
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{stats.displayCurrency}</p>
                     <p className="text-4xl font-bold text-on-surface">
-                        {Math.round(stats.grandTotal).toLocaleString()}
+                        {formatNumber(Math.round(stats.grandTotal))}
                     </p>
-                    <p className="text-sm text-on-surface-variant uppercase tracking-wider">Total Spent</p>
+                    <p className="text-sm text-on-surface-variant uppercase tracking-wider">{t.totalSpent}</p>
                 </div>
             </div>
 
@@ -141,7 +144,7 @@ export const PersonStatsRing: React.FC<PersonStatsRingProps> = ({ people, expens
                                 style={{ backgroundColor: segment.person?.color || '#888888' }}
                             />
                             <span className="text-on-surface font-medium">
-                                {segment.person?.name || 'Unknown'}
+                                {segment.person?.name || t.unknown}
                             </span>
                         </div>
                         <div className="flex items-center gap-2">

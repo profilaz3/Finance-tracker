@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { MOTION } from '../config';
+import { getTranslations } from '../utils/i18n';
 
 type DialogType = 'danger' | 'warning' | 'info' | 'success';
 
@@ -64,6 +65,7 @@ const getTypeStyles = (type: DialogType) => {
 };
 
 export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const t = getTranslations();
     const [isOpen, setIsOpen] = useState(false);
     const [options, setOptions] = useState<ConfirmDialogOptions | null>(null);
     const [resolvePromise, setResolvePromise] = useState<((value: boolean) => void) | null>(null);
@@ -143,7 +145,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                                     onClick={handleCancel}
                                     className="flex-1 py-3 bg-surface-container-high text-on-surface rounded-xl font-medium hover:bg-surface-container-highest transition-colors"
                                 >
-                                    {options.cancelLabel || 'Cancel'}
+                                    {options.cancelLabel || t.cancel}
                                 </button>
                                 <button
                                     onClick={handleConfirm}
@@ -153,7 +155,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                                         typeStyles.buttonBg
                                     )}
                                 >
-                                    {options.confirmLabel || 'Confirm'}
+                                    {options.confirmLabel || t.confirm}
                                 </button>
                             </div>
                         </motion.div>

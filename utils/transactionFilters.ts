@@ -1,5 +1,7 @@
 import { Account, Category, Transaction, TransactionType } from '../types';
 import { UNCATEGORIZED_FILTER } from './qolSuggestions';
+import { TRANSLATIONS } from '../constants';
+import { formatDate } from './locale';
 
 const MS_PER_DAY = 86400000;
 
@@ -39,30 +41,26 @@ export const getDateGroupLabel = (
   const diffDays = Math.floor((getLocalCalendarDayTime(now) - getLocalCalendarDayTime(date)) / MS_PER_DAY);
 
   if (diffDays === 0) {
-    return language === 'sr' ? 'Danas' : 'Today';
+    return TRANSLATIONS[language].today;
   }
 
   if (diffDays === 1) {
-    return language === 'sr' ? 'Juce' : 'Yesterday';
+    return TRANSLATIONS[language].yesterday;
   }
 
   if (diffDays < 7) {
-    return language === 'sr' ? 'Ove nedelje' : 'This Week';
+    return TRANSLATIONS[language].thisWeek;
   }
 
   if (diffDays < 14) {
-    return language === 'sr' ? 'Prosle nedelje' : 'Last Week';
+    return TRANSLATIONS[language].lastWeek;
   }
 
-  const monthNames = language === 'sr'
-    ? ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar']
-    : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const label = date.getFullYear() === now.getFullYear()
+    ? formatDate(date, { month: 'long' }, language)
+    : formatDate(date, { month: 'long', year: 'numeric' }, language);
 
-  if (date.getFullYear() === now.getFullYear()) {
-    return monthNames[date.getMonth()];
-  }
-
-  return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+  return label.charAt(0).toLocaleUpperCase() + label.slice(1);
 };
 
 export const groupTransactionsByDate = (

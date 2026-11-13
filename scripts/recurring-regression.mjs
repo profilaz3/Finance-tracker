@@ -84,9 +84,9 @@ const signInIfNeeded = async page => {
 };
 
 const openRecurringSettings = async page => {
-  const settingsHeading = page.getByRole('heading', { name: /settings|podesavanja/i }).first();
+  const settingsHeading = page.getByRole('heading', { name: /settings|podešavanja|podesavanja/i }).first();
   if (!(await isVisible(settingsHeading))) {
-    await page.locator('aside button, nav button').filter({ hasText: /settings|podesavanja/i }).first().click();
+    await page.locator('aside button, nav button').filter({ hasText: /settings|podešavanja|podesavanja/i }).first().click();
     await settingsHeading.waitFor({ timeout: 15000 });
   }
 
@@ -101,7 +101,7 @@ const createRecurring = async page => {
     Array.from(document.querySelectorAll('p.font-medium')).filter(element => element.textContent?.includes(prefix)).length
   ), recurringPrefix);
 
-  await page.getByRole('button', { name: /add recurring transaction|dodaj ponavljajucu transakciju/i }).click();
+  await page.getByRole('button', { name: /add recurring transaction|dodaj ponavljajuću transakciju|dodaj ponavljajucu transakciju/i }).click();
   await page.getByPlaceholder(/name|ime/i).fill(recurringName);
   await page.getByPlaceholder(/amount|iznos/i).fill('19.5');
   await page.getByRole('button', { name: /^add$|^dodaj$/i }).click();
