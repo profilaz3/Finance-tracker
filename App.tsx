@@ -26,6 +26,7 @@ import { useAuth } from './hooks/useAuth';
 import { useAppState } from './hooks/useAppState';
 import { useModals } from './hooks/useModals';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useBackNavigation, type BackLayer } from './hooks/useBackNavigation';
 import { useExchangeRates } from './hooks/useExchangeRates';
 import { useEventHandlers } from './hooks/useEventHandlers';
 import { usePeopleHandlers } from './hooks/usePeopleHandlers';
@@ -306,13 +307,6 @@ const App: React.FC = () => {
     modals.setIsEditModalOpen(true);
   }, [defaultAccountId, modals.setIsEditModalOpen, state.baseCurrency]);
 
-  const shortcutHandlers = useMemo(() => ({
-    onNewTransaction: () => handleOpenAddTransaction(),
-    onEscape: () => modals.closeAllModals(),
-  }), [handleOpenAddTransaction, modals.closeAllModals]);
-
-  useKeyboardShortcuts(shortcutHandlers);
-
   useRecurringProcessor({
     isAuthenticated,
     recurringTransactions: state.recurringTransactions,
@@ -411,6 +405,50 @@ const App: React.FC = () => {
     handleViewChange(view);
     vibrate(HAPTIC_PATTERNS.light);
   }, [handleViewChange]);
+
+  // --- Back navigation (browser history + Android back button) ---
+  // Order matters only as a tie-break when several overlays open in the same render;
+  // otherwise the most recently opened overlay is closed first.
+  const backLayers = useMemo<BackLayer[]>(() => [
+    { id: 'event-detail', isOpen: currentView === 'events' && !!selectedEvent, close: () => setSelectedEvent(null) },
+    { id: 'person-detail', isOpen: !!selectedPerson, close: () => setSelectedPerson(null) },
+    { id: 'user-profile', isOpen: modals.isUserProfileModalOpen, close: () => modals.setIsUserProfileModalOpen(false) },
+    {
+      id: 'add-person',
+      isOpen: modals.isAddPersonModalOpen,
+      close: () => {
+        modals.setIsAddPersonModalOpen(false);
+        setPersonToEdit(null);
+      },
+    },
+    { id: 'event-creation', isOpen: modals.isEventCreationModalOpen, close: () => modals.setIsEventCreationModalOpen(false) },
+    { id: 'receipt-scan', isOpen: modals.isReceiptScanModalOpen, close: () => modals.setIsReceiptScanModalOpen(false) },
+    { id: 'edit-transaction', isOpen: modals.isEditModalOpen, close: () => modals.setIsEditModalOpen(false) },
+    { id: 'receipt', isOpen: modals.isReceiptModalOpen, close: () => modals.setIsReceiptModalOpen(false) },
+    { id: 'split', isOpen: modals.isSplitModalOpen, close: () => modals.setIsSplitModalOpen(false) },
+    {
+      id: 'split-expense',
+      isOpen: modals.isSplitExpenseModalOpen,
+      close: () => {
+        modals.setIsSplitExpenseModalOpen(false);
+        setSplitTransactionContext(undefined);
+      },
+    },
+  ], [currentView, selectedEvent, selectedPerson, modals]);
+
+  const { closeTopLayer } = useBackNavigation({
+    currentView,
+    setView: handleViewChange,
+    layers: backLayers,
+  });
+
+  const shortcutHandlers = useMemo(() => ({
+    onNewTransaction: () => handleOpenAddTransaction(),
+    // Escape closes only the top-most overlay (and consumes its history entry).
+    onEscape: () => closeTopLayer(),
+  }), [handleOpenAddTransaction, closeTopLayer]);
+
+  useKeyboardShortcuts(shortcutHandlers);
 
   // --- Render ---
   if (isLoadingAuth) {

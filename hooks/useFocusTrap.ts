@@ -90,22 +90,43 @@ export function useFocusTrap(
     return containerRef;
 }
 
+// Only the most recently activated Escape handler runs, so a confirm dialog opened on
+// top of a modal closes first instead of both closing together.
+const escapeHandlerStack: Array<{ current: () => void }> = [];
+
+const handleStackedEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    const top = escapeHandlerStack[escapeHandlerStack.length - 1];
+    if (!top) return;
+    // Mark as handled so the app-level Escape (back navigation) does not also fire.
+    event.preventDefault();
+    top.current();
+};
+
 /**
  * Hook to handle Escape key to close modals
  */
 export function useEscapeKey(onEscape: () => void, isActive: boolean = true) {
+    const handlerRef = useRef(onEscape);
+    handlerRef.current = onEscape;
+
     useEffect(() => {
         if (!isActive) return;
 
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                onEscape();
+        const entry = { current: () => handlerRef.current() };
+        escapeHandlerStack.push(entry);
+        if (escapeHandlerStack.length === 1) {
+            document.addEventListener('keydown', handleStackedEscape);
+        }
+
+        return () => {
+            const index = escapeHandlerStack.indexOf(entry);
+            if (index !== -1) escapeHandlerStack.splice(index, 1);
+            if (escapeHandlerStack.length === 0) {
+                document.removeEventListener('keydown', handleStackedEscape);
             }
         };
-
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [onEscape, isActive]);
+    }, [isActive]);
 }
 
 /**

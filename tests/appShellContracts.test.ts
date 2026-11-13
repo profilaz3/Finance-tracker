@@ -46,10 +46,41 @@ describe('app shell contracts', () => {
     expect(app).toContain('const handleOpenAddTransaction = useCallback(');
     expect(app).toContain('useKeyboardShortcuts(shortcutHandlers);');
     expect(shortcutHandlers.body).toMatch(/\bonNewTransaction\s*:\s*\(\)\s*=>\s*handleOpenAddTransaction\(\s*\)/);
-    expect(shortcutHandlers.body).toMatch(/\bonEscape\s*:\s*\(\)\s*=>\s*modals\.closeAllModals\(\s*\)/);
+    // Escape closes only the top-most overlay through back navigation (H10).
+    expect(shortcutHandlers.body).toMatch(/\bonEscape\s*:\s*\(\)\s*=>\s*closeTopLayer\(\s*\)/);
     expect(shortcutHandlers.dependencies).toEqual(
-      expect.arrayContaining(['handleOpenAddTransaction', 'modals.closeAllModals'])
+      expect.arrayContaining(['handleOpenAddTransaction', 'closeTopLayer'])
     );
+  });
+
+  it('wires every app modal into back navigation', () => {
+    const app = readSource('App.tsx');
+
+    expect(app).toContain('useBackNavigation({');
+    [
+      'modals.isEditModalOpen',
+      'modals.isReceiptModalOpen',
+      'modals.isSplitModalOpen',
+      'modals.isAddPersonModalOpen',
+      'modals.isEventCreationModalOpen',
+      'modals.isReceiptScanModalOpen',
+      'modals.isSplitExpenseModalOpen',
+      'modals.isUserProfileModalOpen',
+      '!!selectedPerson',
+      "currentView === 'events' && !!selectedEvent",
+    ].forEach(flag => {
+      expect(app).toContain(`isOpen: ${flag}`);
+    });
+  });
+
+  it('exits the Android app only from the root view with nothing open', () => {
+    const hook = readSource('hooks/useBackNavigation.ts');
+
+    expect(hook).toContain("import('@capacitor/app')");
+    expect(hook).toContain("App.addListener('backButton'");
+    expect(hook).toContain('if (!goBackRef.current()) {');
+    expect(hook).toContain('void App.exitApp();');
+    expect(hook).toContain("window.addEventListener('popstate', handlePopState);");
   });
 
   it('labels mobile app navigation controls for assistive tech and tooltips', () => {
