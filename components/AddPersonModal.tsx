@@ -134,8 +134,17 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                 {/* Avatar & Color Section */}
                                 <div className="flex flex-col items-center gap-4">
                                     <div
-                                        className="relative group cursor-pointer w-28 h-28"
+                                        className="relative group cursor-pointer w-28 h-28 rounded-full"
                                         onClick={openPicker}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={t.changePhoto}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                openPicker();
+                                            }
+                                        }}
                                     >
                                         <div
                                             className="w-full h-full rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-xl transition-all duration-300 group-hover:scale-105"
@@ -147,7 +156,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                                 name.charAt(0).toUpperCase() || <User size={40} />
                                             )}
                                         </div>
-                                        <div className="absolute inset-0 bg-scrim/40 rounded-full flex items-center justify-center opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute inset-0 bg-scrim/40 rounded-full flex items-center justify-center opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
                                             <span className="text-white text-xs font-medium tracking-wider uppercase">{t.change}</span>
                                         </div>
 

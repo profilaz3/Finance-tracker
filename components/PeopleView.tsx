@@ -190,6 +190,16 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => onSelectPerson(person)}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={person.name}
+                                onKeyDown={(e) => {
+                                    if (e.target !== e.currentTarget) return;
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        onSelectPerson(person);
+                                    }
+                                }}
                                 className="bg-surface-container-low p-5 rounded-2xl shadow-elevation-1 cursor-pointer hover:shadow-elevation-2 transition-all relative overflow-hidden group"
                             >
                                 <div className="flex items-center gap-4 mb-4">
@@ -221,14 +231,16 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                                     </span>
                                                     {onSettleUp && amount !== 0 && (
                                                         <button
+                                                            type="button"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 onSettleUp(person.id, currency as Currency);
                                                             }}
-                                                            className="p-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+                                                            className="p-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
                                                             title={language === 'sr' ? 'Izmiri dug' : 'Settle up'}
+                                                            aria-label={`${language === 'sr' ? 'Izmiri dug' : 'Settle up'}: ${person.name} ${currency}`}
                                                         >
-                                                            <Handshake size={14} />
+                                                            <Handshake size={14} aria-hidden="true" />
                                                         </button>
                                                     )}
                                                 </div>

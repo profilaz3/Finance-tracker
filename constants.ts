@@ -257,6 +257,7 @@ export const TRANSLATIONS = {
     eventTotal: 'Event Total',
     yourShare: 'Your Share',
     settledUp: 'Settled Up',
+    moreActions: 'More actions',
   },
   sr: {
     dashboard: 'Kontrolna Tabla',
@@ -468,5 +469,6 @@ export const TRANSLATIONS = {
     eventTotal: 'Ukupno za Događaj',
     yourShare: 'Tvoj Deo',
     settledUp: 'Izmireno',
+    moreActions: 'Više opcija',
   }
 };

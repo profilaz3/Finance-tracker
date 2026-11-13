@@ -182,7 +182,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                             {previewUrl ? (
                                 <>
                                     <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-scrim/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-scrim/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
                                         <div className="bg-surface/20 backdrop-blur-md p-3 rounded-full text-white">
                                             <Camera size={24} />
                                         </div>

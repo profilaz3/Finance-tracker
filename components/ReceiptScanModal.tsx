@@ -518,7 +518,7 @@ const handleScan = async () => {
                               };
                             });
                           }}
-                          className="p-1 text-error/60 hover:text-error hover:bg-error/10 rounded opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                          className="p-1 text-error/60 hover:text-error hover:bg-error/10 rounded opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-all"
                         >
                           <Trash2 size={14} />
                         </button>

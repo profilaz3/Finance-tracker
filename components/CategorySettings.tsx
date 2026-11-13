@@ -248,7 +248,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                                 : <span className="italic opacity-50">No subcategories</span>}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-1 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); startEditing(category); }}
                                             className="p-2 text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container rounded-full"

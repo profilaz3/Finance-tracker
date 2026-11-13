@@ -178,7 +178,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 
                                     {/* Settle Action */}
                                     {!isEditing && amount !== 0 && (
-                                        <div className="absolute top-4 right-4 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute top-4 right-4 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();

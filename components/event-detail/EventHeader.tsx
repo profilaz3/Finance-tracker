@@ -104,7 +104,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
             {/* Menu Button */}
             <div className={clsx(
                 "absolute top-4 right-4 z-20 transition-opacity duration-200",
-                isMenuOpen ? "opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+                isMenuOpen ? "opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
             )}>
                 <div className="relative">
                     <button
