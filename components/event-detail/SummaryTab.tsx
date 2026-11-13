@@ -118,7 +118,9 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 <EventDebtSummary
                     expenses={allExpensesForSummary}
                     people={eventPeople}
-                    baseCurrency={state.baseCurrency}
+                    baseCurrency={summaryCurrency}
+                    rates={state.rates}
+                    selfId={state.userProfile?.id || 'self'}
                 />
             </div>
 

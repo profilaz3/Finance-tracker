@@ -2,6 +2,7 @@ import type { Currency, Event, Person } from '../types';
 
 const PLACEHOLDER_COLOR = '#9E9E9E';
 const EMAIL_PLACEHOLDER_ID_PREFIX = 'shared-email:';
+const ORGANIZER_LABEL = 'Organizer';
 
 export const normalizeParticipantEmail = (email: string): string =>
   email.trim().toLowerCase();
@@ -109,9 +110,17 @@ export const resolveEventParticipants = ({
     personId !== userProfile?.id && !peopleById.has(personId)
   );
 
-  const placeholderParticipants = missingIds.map((personId, index) => ({
+  // In a collaborator's view the missing ids are the organizer and the
+  // organizer's local people, not the invited emails, so naming them by email
+  // position would mislabel them (e.g. the organizer shown as the viewer).
+  const isCollaboratorView = !!userProfile && !!event.userId && userProfile.id !== event.userId;
+  const guestIds = missingIds.filter(personId => personId !== event.userId);
+
+  const placeholderParticipants = missingIds.map(personId => ({
     id: personId,
-    name: buildPlaceholderName(index, sharedEmails, missingIds.length),
+    name: personId === event.userId
+      ? ORGANIZER_LABEL
+      : buildPlaceholderName(guestIds.indexOf(personId), isCollaboratorView ? undefined : sharedEmails, guestIds.length),
     color: PLACEHOLDER_COLOR,
     defaultCurrency: userProfile?.defaultCurrency ?? fallbackCurrency,
     balances: { EUR: 0, USD: 0, RSD: 0 },

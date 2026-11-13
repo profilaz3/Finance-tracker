@@ -27,7 +27,8 @@ const buildTransactionExpense = ({
   state: AppState;
 }): SharedExpense => {
   const category = state.categories.find(entry => entry.id === transaction.categoryId);
-  const userId = state.userProfile?.id || '';
+  // 'self' keeps the user's own share keyed when no profile is loaded yet.
+  const userId = state.userProfile?.id || 'self';
 
   if (transaction.splitDetails) {
     const otherPersonIds = transaction.splitDetails.shares?.map(share => share.personId) || [];
