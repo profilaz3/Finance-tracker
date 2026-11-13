@@ -3,6 +3,19 @@ export const CONFIG = {
   USER_CACHE_TTL_MS: 5 * 60 * 1000,
   RETRY_DELAYS: [1000, 5000, 15000] as const,
   MAX_RETRIES: 3,
+  /** Offline queue backoff: first retry delay, doubled per attempt up to the cap. Retries never give up on transient errors. */
+  QUEUE_RETRY_BASE_MS: 1000,
+  QUEUE_RETRY_MAX_MS: 60_000,
+  /** Permanently rejected operations (4xx / validation) are parked here per user instead of being dropped. */
+  OFFLINE_DEAD_LETTER_KEY: 'offline_operation_dead_letter',
+  /** Upper bound on how long sign-out waits for pending writes to reach the server. */
+  LOGOUT_FLUSH_TIMEOUT_MS: 3000,
+  /** Page size for paginated Supabase list fetches (PostgREST caps responses at 1000 rows by default). */
+  FETCH_PAGE_SIZE: 1000,
+  /** Web Locks name that serialises recurring-transaction generation across tabs. */
+  RECURRING_LOCK_NAME: 'finance-recurring-processor',
+  RECURRING_POLL_INTERVAL_MS: 60_000,
+  STORAGE_WARNING_THROTTLE_MS: 30_000,
   SAVE_DEBOUNCE_MS: 300,
   STORAGE_KEY: 'gemini_finance_data_v5',
   OFFLINE_QUEUE_KEY: 'offline_operation_queue',
