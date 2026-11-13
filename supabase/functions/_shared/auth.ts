@@ -47,7 +47,11 @@ export const consumeQuota = async (ctx: AuthedContext, fn: AiFunction): Promise<
   const configured = Number(Deno.env.get(envKey));
   const limit = Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_DAILY_LIMITS[fn];
 
-  const { data, error } = await ctx.client.rpc('consume_ai_quota', { p_fn: fn, p_daily_limit: limit });
+  const { data, error } = await adminClient().rpc('consume_ai_quota', {
+    p_user_id: ctx.user.id,
+    p_fn: fn,
+    p_daily_limit: limit,
+  });
   if (error) throw new Error(`quota check failed: ${error.message}`);
   if (data !== true) throw new HttpError(429, 'Daily AI limit reached. Try again tomorrow.');
 };
