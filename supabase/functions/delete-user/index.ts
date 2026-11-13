@@ -1,63 +1,39 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
+import { adminClient, requireUser } from '../_shared/auth.ts';
+import { jsonResponse, serveJson } from '../_shared/http.ts';
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const USER_BUCKETS = ['event-photos', 'avatars'] as const;
+const PAGE = 100;
 
-serve(async (req) => {
-    // Handle CORS preflight requests
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
-    }
+/** Removes every object under `<userId>/` in a bucket, page by page. */
+const purgeFolder = async (admin: SupabaseClient, bucket: string, userId: string): Promise<number> => {
+  let removed = 0;
+  for (;;) {
+    const { data, error } = await admin.storage.from(bucket).list(userId, { limit: PAGE });
+    if (error) throw new Error(`list ${bucket}: ${error.message}`);
+    const paths = (data ?? []).filter((entry) => entry.id).map((entry) => `${userId}/${entry.name}`);
+    if (paths.length === 0) return removed;
 
-    try {
-        // Create a Supabase client with the Auth context of the logged in user
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            {
-                global: {
-                    headers: { Authorization: req.headers.get('Authorization')! },
-                },
-            }
-        )
+    const { error: removeError } = await admin.storage.from(bucket).remove(paths);
+    if (removeError) throw new Error(`remove ${bucket}: ${removeError.message}`);
+    removed += paths.length;
+    if (paths.length < PAGE) return removed;
+  }
+};
 
-        // Get the logged in user
-        const {
-            data: { user },
-        } = await supabaseClient.auth.getUser()
+serveJson('delete-user', async (req) => {
+  const { user } = await requireUser(req);
+  const admin = adminClient();
 
-        if (!user) {
-            throw new Error('No user found')
-        }
+  // Storage first: once the auth user is gone the folder would be orphaned.
+  let removedObjects = 0;
+  for (const bucket of USER_BUCKETS) {
+    removedObjects += await purgeFolder(admin, bucket, user.id);
+  }
 
-        // Create admin client with service role key
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
+  // Table rows go with the auth user through ON DELETE CASCADE foreign keys.
+  const { error } = await admin.auth.admin.deleteUser(user.id);
+  if (error) throw new Error(`deleteUser: ${error.message}`);
 
-        // Delete the user (this will cascade delete all their data thanks to ON DELETE CASCADE)
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id)
-
-        if (error) throw error
-
-        return new Response(
-            JSON.stringify({ message: 'User deleted successfully' }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200,
-            }
-        )
-    } catch (error) {
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400,
-            }
-        )
-    }
-})
+  return jsonResponse(req, { message: 'User deleted', removedObjects });
+});
