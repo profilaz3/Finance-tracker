@@ -480,14 +480,14 @@ const countRecurringOccurrencesInRemainingPeriod = (
   const remainingStartDay = startOfUtcDay(remainingStart);
 
   while (due.getTime() < remainingStartDay.getTime()) {
-    nextDue = calculateNextDueDate(nextDue, recurring.frequency);
+    nextDue = calculateNextDueDate(nextDue, recurring.frequency, recurring.startDate);
     due = parseDateOnlyUtc(nextDue);
   }
 
   let occurrences = 0;
   while (due.getTime() <= occurrenceEnd.getTime()) {
     occurrences += 1;
-    nextDue = calculateNextDueDate(formatDateOnlyUtc(due), recurring.frequency);
+    nextDue = calculateNextDueDate(formatDateOnlyUtc(due), recurring.frequency, recurring.startDate);
     due = parseDateOnlyUtc(nextDue);
   }
 

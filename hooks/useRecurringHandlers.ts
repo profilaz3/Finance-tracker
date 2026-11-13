@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { AppState, RecurringTransaction, Transaction } from '../types';
 import { getSyncManager } from '../services/runtimeServices';
-import { isDue, calculateNextDueDate } from '../utils/recurringUtils';
+import { getDueOccurrences, getOccurrenceTimestamp, isDue } from '../utils/recurringUtils';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -94,32 +94,43 @@ export function useRecurringHandlers({
   const processRecurringTransactions = useCallback((dueRecurrings = state.recurringTransactions.filter(recurring => isDue(recurring))) => {
     if (dueRecurrings.length === 0) return;
 
+    const now = new Date();
+    let generatedCount = 0;
+
     dueRecurrings.forEach(recurring => {
-      const newTransaction: Transaction = {
-        id: uuidv4(),
-        date: new Date().toISOString(),
-        amount: recurring.amount,
-        currency: recurring.currency,
-        categoryId: recurring.categoryId,
-        accountId: recurring.accountId,
-        type: recurring.type,
-        note: recurring.note || `[Auto] ${recurring.name}`,
-        subcategory: recurring.subcategory,
-      };
+      // One transaction per missed occurrence, each dated on its own due date.
+      const { dueDates, nextDue } = getDueOccurrences(recurring, now);
+      if (dueDates.length === 0) return;
 
-      addTransaction(newTransaction);
+      dueDates.forEach(dueDate => {
+        const newTransaction: Transaction = {
+          id: uuidv4(),
+          date: getOccurrenceTimestamp(dueDate, now),
+          amount: recurring.amount,
+          currency: recurring.currency,
+          categoryId: recurring.categoryId,
+          accountId: recurring.accountId,
+          type: recurring.type,
+          note: recurring.note || `[Auto] ${recurring.name}`,
+          subcategory: recurring.subcategory,
+        };
 
-      const newNextDue = calculateNextDueDate(recurring.nextDue, recurring.frequency);
+        addTransaction(newTransaction);
+        generatedCount += 1;
+      });
+
       handleUpdateRecurring(recurring.id, {
-        lastGenerated: new Date().toISOString(),
-        nextDue: newNextDue,
+        lastGenerated: now.toISOString(),
+        nextDue,
       });
     });
 
+    if (generatedCount === 0) return;
+
     addToast(
       state.language === 'sr'
-        ? `${dueRecurrings.length} ponavljajuca transakcija generisana`
-        : `${dueRecurrings.length} recurring transaction${dueRecurrings.length > 1 ? 's' : ''} generated`,
+        ? `${generatedCount} ponavljajuca transakcija generisana`
+        : `${generatedCount} recurring transaction${generatedCount > 1 ? 's' : ''} generated`,
       'success'
     );
   }, [addToast, addTransaction, handleUpdateRecurring, state.language, state.recurringTransactions]);
