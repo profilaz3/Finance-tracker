@@ -8,6 +8,7 @@ import clsx from 'clsx';
 import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface AddPersonModalProps {
     isOpen: boolean;
@@ -25,6 +26,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
     const [avatar, setAvatar] = useState<string | undefined>(undefined);
     const [touched, setTouched] = useState(false);
     const t = TRANSLATIONS[language];
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
 
     const {
         openPicker,
@@ -105,6 +107,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-md" onClick={onClose}>
                     <m.div
+                        {...dialogProps}
                         onClick={(e) => e.stopPropagation()}
                         initial={MOTION.modal.initial}
                         animate={MOTION.modal.animate}
@@ -115,13 +118,15 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                         <div className="relative p-8">
                             {/* Close Button */}
                             <button
+                                type="button"
                                 onClick={onClose}
+                                aria-label={t.close}
                                 className="absolute top-4 right-4 p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
                             >
-                                <X size={20} className="opacity-75" />
+                                <X size={20} className="opacity-75" aria-hidden="true" />
                             </button>
 
-                            <h2 className="text-2xl font-display font-medium text-center mb-8 text-on-surface">
+                            <h2 id={titleId} className="text-2xl font-display font-medium text-center mb-8 text-on-surface">
                                 {initialData ? (t.editPerson || 'Edit Person') : (t.addPerson || 'Add Person')}
                             </h2>
 

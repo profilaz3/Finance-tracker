@@ -906,6 +906,12 @@ select:focus-visible,
   outline-offset: 0;
 }
 
+/* Dialog panels take programmatic focus on open (useDialog); they are not controls. */
+[role="dialog"][tabindex="-1"]:focus,
+[role="alertdialog"][tabindex="-1"]:focus {
+  outline: none;
+}
+
 @media (forced-colors: active) {
   :focus-visible {
     outline-color: Highlight;

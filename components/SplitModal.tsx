@@ -3,6 +3,7 @@ import { m } from 'motion/react';
 import { X, Split } from 'lucide-react';
 import { Account, Person, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
+import { useDialog } from '../hooks/useFocusTrap';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 
 interface SplitModalProps {
@@ -27,12 +28,15 @@ export const SplitModal: React.FC<SplitModalProps> = ({
     const [targetType, setTargetType] = useState<'account' | 'person'>('account');
     const [selectedTarget, setSelectedTarget] = useState('');
 
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm modal-safe-area" onClick={onClose}>
             <m.div
                 onClick={(e) => e.stopPropagation()}
+                {...dialogProps}
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
@@ -40,10 +44,10 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                 className="bg-surface-container-high w-full max-w-sm rounded-xl shadow-elevation-3 overflow-hidden"
             >
                 <div className="p-6 flex justify-between items-center border-b border-outline-variant">
-                    <h3 className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
-                        <Split size={20} /> {t.splitTransaction}
+                    <h3 id={titleId} className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
+                        <Split size={20} aria-hidden="true" /> {t.splitTransaction}
                     </h3>
-                    <button onClick={onClose} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"><X size={20} /></button>
+                    <button type="button" onClick={onClose} aria-label={t.close} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"><X size={20} aria-hidden="true" /></button>
                 </div>
 
                 <div className="p-6 space-y-6">

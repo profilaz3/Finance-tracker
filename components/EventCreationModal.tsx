@@ -8,6 +8,7 @@ import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { useImagePicker, base64ToFile, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
 import { getSupabaseService } from '../services/runtimeServices';
 
 interface EventCreationModalProps {
@@ -137,11 +138,14 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
         );
     };
 
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm">
             <m.div
+                {...dialogProps}
                 initial={MOTION.modal.initial}
                 animate={MOTION.modal.animate}
                 exit={MOTION.modal.exit}
@@ -149,9 +153,9 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 className="bg-surface w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">Create Event</h2>
-                    <button onClick={onClose} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" />
+                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">Create Event</h2>
+                    <button type="button" onClick={onClose} aria-label="Close" className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors">
+                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -161,6 +165,15 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                         <label className="block text-sm font-medium text-on-surface-variant">Event Photo</label>
                         <div
                             onClick={openPicker}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openPicker();
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Event Photo"
                             className={clsx(
                                 "relative w-full h-48 rounded-xl border-2 border-dashed border-outline/20 flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden group",
                                 !previewUrl && "hover:bg-surface-container hover:border-primary/50"

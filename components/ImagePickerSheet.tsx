@@ -1,6 +1,7 @@
 import React from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { Camera, Image, X } from 'lucide-react';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface ImagePickerSheetProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
   language = 'en',
 }) => {
   const t = translations[language];
+  const { dialogProps, titleId } = useDialog(isOpen, onClose);
 
   const handleCameraClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -71,17 +73,18 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 400 }}
+            {...dialogProps}
             className="fixed bottom-0 left-0 right-0 z-[151] bg-surface-container-high rounded-t-3xl shadow-elevation-3 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 bg-outline-variant/50 rounded-full" />
+              <div className="w-10 h-1 bg-outline-variant/50 rounded-full" aria-hidden="true" />
             </div>
 
             {/* Title */}
             <div className="px-6 pb-4 pt-2">
-              <h3 className="text-lg font-display font-medium text-on-surface text-center">
+              <h3 id={titleId} className="text-lg font-display font-medium text-on-surface text-center">
                 {title || t.addPhoto}
               </h3>
             </div>
@@ -94,7 +97,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
                 className="w-full flex items-center gap-4 p-4 bg-surface-container hover:bg-surface-container-highest rounded-2xl transition-colors active:scale-[0.98]"
               >
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Camera size={24} className="text-primary" />
+                  <Camera size={24} className="text-primary" aria-hidden="true" />
                 </div>
                 <span className="text-base font-medium text-on-surface">
                   {t.takePhoto}
@@ -107,7 +110,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
                 className="w-full flex items-center gap-4 p-4 bg-surface-container hover:bg-surface-container-highest rounded-2xl transition-colors active:scale-[0.98]"
               >
                 <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center">
-                  <Image size={24} className="text-tertiary" />
+                  <Image size={24} className="text-tertiary" aria-hidden="true" />
                 </div>
                 <span className="text-base font-medium text-on-surface">
                   {t.chooseFromGallery}
@@ -124,7 +127,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
                 }}
                 className="w-full flex items-center justify-center gap-2 p-4 bg-surface-container-highest hover:bg-error-container/20 rounded-2xl transition-colors active:scale-[0.98]"
               >
-                <X size={20} className="text-on-surface-variant" />
+                <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                 <span className="text-base font-medium text-on-surface-variant">
                   {t.cancel}
                 </span>

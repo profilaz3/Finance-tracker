@@ -4,6 +4,7 @@ import { X, FileSpreadsheet, FileJson, Calendar, Download, CheckCircle2 } from '
 import clsx from 'clsx';
 import { AppState } from '../types';
 import { exportWithOptions, ExportOptions } from '../services/storageService';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -99,6 +100,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setDateTo(to.toISOString().split('T')[0]);
   };
 
+  const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
   if (!isOpen) {
     return null;
   }
@@ -129,6 +132,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         onClick={onClose}
       >
         <m.div
+          {...dialogProps}
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
@@ -136,13 +140,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           className="bg-surface-container w-full max-w-md rounded-2xl shadow-elevation-3 overflow-hidden"
         >
           <div className="flex items-center justify-between p-4 border-b border-outline-variant/20">
-            <h2 className="text-xl font-display font-medium text-on-surface">{labels.title}</h2>
+            <h2 id={titleId} className="text-xl font-display font-medium text-on-surface">{labels.title}</h2>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 hover:bg-surface-container-high rounded-full transition-colors"
               aria-label={labels.cancel}
             >
-              <X size={20} className="text-on-surface-variant" />
+              <X size={20} className="text-on-surface-variant" aria-hidden="true" />
             </button>
           </div>
 

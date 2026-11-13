@@ -9,6 +9,7 @@ import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
 import { isSupportedReceiptImageType, RECEIPT_IMAGE_ACCEPT } from '../utils/receiptImage';
 
 interface ReceiptScanModalProps {
@@ -68,6 +69,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     resetState();
     onClose();
   };
+  const { dialogProps, titleId } = useDialog(isOpen, handleClose);
 
   // Handle image result from picker
   const handleImageResult = useCallback((result: ImageResult | null) => {
@@ -244,6 +246,7 @@ const handleScan = async () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm modal-safe-area" onClick={handleClose}>
       <m.div
+        {...dialogProps}
         onClick={(e) => e.stopPropagation()}
         initial={MOTION.modal.initial}
         animate={MOTION.modal.animate}
@@ -253,15 +256,17 @@ const handleScan = async () => {
       >
         {/* Header */}
         <div className="p-6 flex justify-between items-center border-b border-outline-variant">
-          <h3 className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
-            <Camera size={20} className="text-primary" />
+          <h3 id={titleId} className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
+            <Camera size={20} className="text-primary" aria-hidden="true" />
             {t.scanReceipt}
           </h3>
           <button
+            type="button"
             onClick={handleClose}
+            aria-label="Close"
             className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"
           >
-            <X size={20} />
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
 

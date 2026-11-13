@@ -7,6 +7,7 @@ import { formatCurrency, getShortDate } from '../utils/formatters';
 import { convertAmount } from '../services/currencyService';
 import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface PersonDetailProps {
     person: Person;
@@ -37,6 +38,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 }) => {
     const t = TRANSLATIONS[language];
     const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
+    const { dialogProps, titleId } = useDialog(true, onClose);
 
     // Filter transactions related to this person
     const personTransactions = useMemo(() => {
@@ -55,6 +57,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-md" onClick={onClose}>
             <m.div
+                {...dialogProps}
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -68,18 +71,20 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                             onClick={() => onEdit(person)}
                             className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
                             title={t.edit || 'Edit'}
+                            aria-label={t.edit || 'Edit'}
                         >
-                            <Edit2 size={20} className="opacity-75" />
+                            <Edit2 size={20} className="opacity-75" aria-hidden="true" />
                         </button>
                         <button
                             onClick={() => onDelete(person.id)}
                             className="p-2 hover:bg-error-container/20 hover:text-error rounded-full text-on-surface-variant transition-colors"
                             title={t.delete}
+                            aria-label={t.delete}
                         >
-                            <Trash2 size={20} className="opacity-75" />
+                            <Trash2 size={20} className="opacity-75" aria-hidden="true" />
                         </button>
-                        <button onClick={onClose} className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors">
-                            <X size={20} className="opacity-75" />
+                        <button type="button" onClick={onClose} aria-label={t.close} title={t.close} className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors">
+                            <X size={20} className="opacity-75" aria-hidden="true" />
                         </button>
                     </div>
 
@@ -104,7 +109,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                             )}
                         </div>
 
-                        <h2 className="text-3xl font-display font-medium text-on-surface text-center mb-1">{person.name}</h2>
+                        <h2 id={titleId} className="text-3xl font-display font-medium text-on-surface text-center mb-1">{person.name}</h2>
 
                         {totalBalanceInBase !== 0 && (
                             <p className={clsx(

@@ -7,6 +7,7 @@ import clsx from 'clsx';
 import { CURRENCIES } from '../constants';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_COLORS } from '../constants/expenseCategories';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
+import { useDialog } from '../hooks/useFocusTrap';
 
 interface SharedExpenseModalProps {
     isOpen: boolean;
@@ -209,6 +210,8 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
         });
     };
 
+    const { dialogProps, titleId } = useDialog(isOpen, onClose);
+
     if (!isOpen) return null;
 
     const remainingAmount = getRemainingAmount();
@@ -217,6 +220,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-sm">
             <m.div
+                {...dialogProps}
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
@@ -224,9 +228,9 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                 className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">{expense ? 'Edit Expense' : 'Add Shared Expense'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" />
+                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">{expense ? 'Edit Expense' : 'Add Shared Expense'}</h2>
+                    <button type="button" onClick={onClose} aria-label="Close" className="p-2 hover:bg-surface-container rounded-full transition-colors">
+                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
                     </button>
                 </div>
 

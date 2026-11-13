@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useId } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { MOTION } from '../config';
+import { useDialog } from '../hooks/useFocusTrap';
 
 type DialogType = 'danger' | 'warning' | 'info' | 'success';
 
@@ -36,6 +37,7 @@ const getTypeStyles = (type: DialogType) => {
                 iconBg: 'bg-error/10',
                 iconColor: 'text-error',
                 buttonBg: 'bg-error hover:bg-error/90',
+                buttonText: 'text-on-error',
                 Icon: Trash2
             };
         case 'warning':
@@ -43,6 +45,7 @@ const getTypeStyles = (type: DialogType) => {
                 iconBg: 'bg-warning/10',
                 iconColor: 'text-warning',
                 buttonBg: 'bg-warning hover:bg-warning/90',
+                buttonText: 'text-on-warning',
                 Icon: AlertTriangle
             };
         case 'success':
@@ -50,6 +53,7 @@ const getTypeStyles = (type: DialogType) => {
                 iconBg: 'bg-tertiary/10',
                 iconColor: 'text-tertiary',
                 buttonBg: 'bg-tertiary hover:bg-tertiary/90',
+                buttonText: 'text-on-tertiary',
                 Icon: CheckCircle
             };
         case 'info':
@@ -58,6 +62,7 @@ const getTypeStyles = (type: DialogType) => {
                 iconBg: 'bg-primary/10',
                 iconColor: 'text-primary',
                 buttonBg: 'bg-primary hover:bg-primary/90',
+                buttonText: 'text-on-primary',
                 Icon: Info
             };
     }
@@ -94,6 +99,9 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const typeStyles = options?.type ? getTypeStyles(options.type) : getTypeStyles('info');
     const IconComponent = typeStyles.Icon;
+    const isDanger = options?.type === 'danger';
+    const { dialogProps, titleId } = useDialog(isOpen && !!options, handleCancel);
+    const messageId = useId();
 
     return (
         <ConfirmDialogContext.Provider value={contextValue}>
@@ -114,14 +122,13 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                             exit={MOTION.modal.exit}
                             transition={MOTION.modal.spring}
                             onClick={(e) => e.stopPropagation()}
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="confirm-dialog-title"
-                            aria-describedby="confirm-dialog-message"
+                            {...dialogProps}
+                            role="alertdialog"
+                            aria-describedby={messageId}
                             className="bg-surface-container w-full max-w-sm rounded-2xl shadow-elevation-3 overflow-hidden"
                         >
                             {/* Icon */}
-                            <div className="pt-6 flex justify-center">
+                            <div className="pt-6 flex justify-center" aria-hidden="true">
                                 <div className={clsx(
                                     "w-16 h-16 rounded-full flex items-center justify-center",
                                     typeStyles.iconBg
@@ -132,10 +139,10 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
 
                             {/* Content */}
                             <div className="p-6 text-center">
-                                <h3 id="confirm-dialog-title" className="text-xl font-display font-medium text-on-surface mb-2">
+                                <h3 id={titleId} className="text-xl font-display font-medium text-on-surface mb-2">
                                     {options.title}
                                 </h3>
-                                <p id="confirm-dialog-message" className="text-on-surface-variant">
+                                <p id={messageId} className="text-on-surface-variant">
                                     {options.message}
                                 </p>
                             </div>
@@ -143,17 +150,21 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                             {/* Actions */}
                             <div className="px-6 pb-6 flex gap-3">
                                 <button
+                                    type="button"
                                     onClick={handleCancel}
+                                    autoFocus={isDanger}
                                     className="flex-1 py-3 bg-surface-container-high text-on-surface rounded-xl font-medium hover:bg-surface-container-highest transition-colors"
                                 >
                                     {options.cancelLabel || 'Cancel'}
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleConfirm}
-                                    autoFocus
+                                    autoFocus={!isDanger}
                                     className={clsx(
-                                        "flex-1 py-3 text-on-primary rounded-xl font-medium transition-colors",
-                                        typeStyles.buttonBg
+                                        "flex-1 py-3 rounded-xl font-medium transition-colors",
+                                        typeStyles.buttonBg,
+                                        typeStyles.buttonText
                                     )}
                                 >
                                     {options.confirmLabel || 'Confirm'}
@@ -191,6 +202,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 }) => {
     const typeStyles = getTypeStyles(type);
     const IconComponent = typeStyles.Icon;
+    const isDanger = type === 'danger';
+    const { dialogProps, titleId } = useDialog(isOpen, onCancel);
+    const messageId = useId();
 
     return (
         <AnimatePresence>
@@ -208,13 +222,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                         exit={{ scale: 0.9, opacity: 0, y: 20 }}
                         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                         onClick={(e) => e.stopPropagation()}
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="standalone-dialog-title"
-                        aria-describedby="standalone-dialog-message"
+                        {...dialogProps}
+                        role="alertdialog"
+                        aria-describedby={messageId}
                         className="bg-surface-container w-full max-w-sm rounded-2xl shadow-elevation-3 overflow-hidden"
                     >
-                        <div className="pt-6 flex justify-center">
+                        <div className="pt-6 flex justify-center" aria-hidden="true">
                             <div className={clsx(
                                 "w-16 h-16 rounded-full flex items-center justify-center",
                                 typeStyles.iconBg
@@ -224,27 +237,31 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                         </div>
 
                         <div className="p-6 text-center">
-                            <h3 id="standalone-dialog-title" className="text-xl font-display font-medium text-on-surface mb-2">
+                            <h3 id={titleId} className="text-xl font-display font-medium text-on-surface mb-2">
                                 {title}
                             </h3>
-                            <p id="standalone-dialog-message" className="text-on-surface-variant">
+                            <p id={messageId} className="text-on-surface-variant">
                                 {message}
                             </p>
                         </div>
 
                         <div className="px-6 pb-6 flex gap-3">
                             <button
+                                type="button"
                                 onClick={onCancel}
+                                autoFocus={isDanger}
                                 className="flex-1 py-3 bg-surface-container-high text-on-surface rounded-xl font-medium hover:bg-surface-container-highest transition-colors"
                             >
                                 {cancelLabel}
                             </button>
                             <button
+                                type="button"
                                 onClick={onConfirm}
-                                autoFocus
+                                autoFocus={!isDanger}
                                 className={clsx(
-                                    "flex-1 py-3 text-on-primary rounded-xl font-medium transition-colors",
-                                    typeStyles.buttonBg
+                                    "flex-1 py-3 rounded-xl font-medium transition-colors",
+                                    typeStyles.buttonBg,
+                                    typeStyles.buttonText
                                 )}
                             >
                                 {confirmLabel}
