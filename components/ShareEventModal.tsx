@@ -51,7 +51,9 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : '';
             const key = SHARE_ERROR_KEYS[message as keyof typeof SHARE_ERROR_KEYS];
-            setError(key ? t[key] : t.shareEventFailed);
+            // Handlers already throw translated messages; show those as-is.
+            const isTranslated = !!message && (Object.values(t) as unknown[]).includes(message);
+            setError(key ? t[key] : isTranslated ? message : t.shareEventFailed);
         } finally {
             setLoading(false);
         }
