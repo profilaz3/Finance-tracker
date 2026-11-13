@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { X, Receipt } from 'lucide-react';
 import { Transaction } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -30,7 +30,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4">
-            <motion.div
+            <m.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
@@ -73,7 +73,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                         {t.close}
                     </button>
                 </div>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Edit, Trash2, Receipt, Plus } from 'lucide-react';
 import { EmptyState } from '../EmptyState';
 import { TransactionItem } from '../TransactionItem';
@@ -34,7 +34,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     onOpenSharedModal,
 }) => {
     return (
-        <motion.div
+        <m.div
             key="shared"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -145,7 +145,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                     className="fixed inset-0 z-40"
                                                     onClick={() => setOpenMenuId(null)}
                                                 />
-                                                <motion.div
+                                                <m.div
                                                     initial={{ opacity: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     className="absolute right-0 top-full mt-2 z-50 bg-surface rounded-xl shadow-2xl border border-outline/10 overflow-hidden min-w-[150px]"
@@ -170,7 +170,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                                     >
                                                         <Trash2 size={16} /> Delete
                                                     </button>
-                                                </motion.div>
+                                                </m.div>
                                             </>
                                         )}
                                     </div>
@@ -181,7 +181,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 )}
             </div>
 
-        </motion.div>
+        </m.div>
     );
 };
 

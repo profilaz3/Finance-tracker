@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import clsx from 'clsx';
 import { Breadcrumb } from '../Breadcrumb';
 import { SettingsViewProps, containerVariants } from './types';
@@ -38,7 +38,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const { t, activeTab, setActiveTab, tabs, breadcrumbItems } = useSettingsViewState(state.language);
 
     return (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="max-w-3xl mx-auto space-y-6 pb-20">
+        <m.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="max-w-3xl mx-auto space-y-6 pb-20">
             <Breadcrumb items={breadcrumbItems} />
 
             <h2 className="text-2xl font-display font-medium text-on-surface">{t.settings}</h2>
@@ -183,6 +183,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onSettleUp={onSettleUp}
                 />
             )}
-        </motion.div>
+        </m.div>
     );
 };

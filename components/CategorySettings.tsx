@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Category, TransactionType } from '../types';
 import { TRANSLATIONS, INITIAL_CATEGORIES } from '../constants';
 import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Tag } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
 import { IconPicker, ICONS, IconName } from './IconPicker';
 import { v4 as uuidv4 } from 'uuid';
@@ -110,7 +110,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
             <div className="bg-surface-container-low rounded-xl shadow-elevation-1 overflow-hidden">
                 <AnimatePresence>
                     {(isAdding || editingId) && (
-                        <motion.div
+                        <m.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
@@ -202,7 +202,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                     </button>
                                 </div>
                             </div>
-                        </motion.div>
+                        </m.div>
                     )}
                 </AnimatePresence>
 
@@ -267,7 +267,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
 
                                 <AnimatePresence>
                                     {expandedId === category.id && (
-                                        <motion.div
+                                        <m.div
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
@@ -283,7 +283,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                                     <span className="text-xs text-on-surface-variant italic">No subcategories defined.</span>
                                                 )}
                                             </div>
-                                        </motion.div>
+                                        </m.div>
                                     )}
                                 </AnimatePresence>
                             </div>

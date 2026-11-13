@@ -12,6 +12,18 @@ const isPackagePath = (id: string, packageName: string) => {
   return normalizedId.includes(`/node_modules/${prefix}`);
 };
 
+const isMotionPackage = (id: string) =>
+  isPackagePath(id, 'motion') ||
+  isPackagePath(id, 'framer-motion') ||
+  isPackagePath(id, 'motion-dom') ||
+  isPackagePath(id, 'motion-utils');
+
+// Modules only the domMax feature set needs (drag, pan, layout projection nodes).
+// The small projection geometry/measure helpers are shared with the core renderer.
+const MOTION_MAX_ONLY_PATTERN =
+  /\/(projection\/(node|animation|shared)|gestures\/drag|gestures\/pan|motion\/features\/(drag|layout)|render\/dom\/features-max|layout\/)/;
+const isMotionMaxOnlyModule = (id: string) => MOTION_MAX_ONLY_PATTERN.test(id.replace(/\\/g, '/'));
+
 export default defineConfig(({ mode }) => {
   return {
     server: {
@@ -54,17 +66,32 @@ export default defineConfig(({ mode }) => {
           assetFileNames: 'assets/[name]-[hash].[ext]',
           codeSplitting: {
             groups: [
-              { name: 'markdown', test: (id) => isPackagePath(id, 'react-markdown') },
+              // React must have its own group. Without it Rolldown hoisted react into the
+              // markdown group (the first group to claim it), which put the whole
+              // markdown stack on the startup path.
+              {
+                name: 'react',
+                priority: 30,
+                test: (id) =>
+                  isPackagePath(id, 'react') ||
+                  isPackagePath(id, 'react-dom') ||
+                  isPackagePath(id, 'scheduler'),
+              },
+              { name: 'markdown', priority: 10, test: (id) => isPackagePath(id, 'react-markdown') },
+              // Views use LazyMotion + `m` with domAnimation. Drag/layout (domMax) is
+              // only needed by the Settings account Reorder list, which loads
+              // utils/motionMaxFeatures lazily; keep those modules out of this group
+              // so they stay in that on-demand chunk.
               {
                 name: 'motion',
-                test: (id) =>
-                  isPackagePath(id, 'motion') ||
-                  isPackagePath(id, 'framer-motion') ||
-                  isPackagePath(id, 'motion-dom') ||
-                  isPackagePath(id, 'motion-utils'),
+                priority: 10,
+                test: (id) => isMotionPackage(id) && !isMotionMaxOnlyModule(id),
               },
-              { name: 'icons', test: (id) => isPackagePath(id, 'lucide-react') },
-              { name: 'supabase', test: (id) => isPackagePath(id, '@supabase/') },
+              // The virtualised list library is only used by the transactions route; a
+              // separate vendor chunk keeps it cached across app deploys.
+              { name: 'virtuoso', priority: 10, test: (id) => isPackagePath(id, 'react-virtuoso') },
+              { name: 'icons', priority: 10, test: (id) => isPackagePath(id, 'lucide-react') },
+              { name: 'supabase', priority: 10, test: (id) => isPackagePath(id, '@supabase/') },
             ],
           },
         },

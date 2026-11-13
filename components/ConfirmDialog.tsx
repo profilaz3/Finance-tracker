@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { MOTION } from '../config';
@@ -98,14 +98,14 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
 
             <AnimatePresence>
                 {isOpen && options && (
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm"
                         onClick={handleCancel}
                     >
-                    <motion.div
+                    <m.div
                             initial={MOTION.modal.initial}
                             animate={MOTION.modal.animate}
                             exit={MOTION.modal.exit}
@@ -156,8 +156,8 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                                     {options.confirmLabel || 'Confirm'}
                                 </button>
                             </div>
-                        </motion.div>
-                    </motion.div>
+                        </m.div>
+                    </m.div>
                 )}
             </AnimatePresence>
         </ConfirmDialogContext.Provider>
@@ -192,14 +192,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     return (
         <AnimatePresence>
             {isOpen && (
-                <motion.div
+                <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm"
                     onClick={onCancel}
                 >
-                    <motion.div
+                    <m.div
                         initial={{ scale: 0.9, opacity: 0, y: 20 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -247,8 +247,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                                 {confirmLabel}
                             </button>
                         </div>
-                    </motion.div>
-                </motion.div>
+                    </m.div>
+                </m.div>
             )}
         </AnimatePresence>
     );

@@ -17,7 +17,7 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Receipt } from 'lucide-react';
 import { EmptyState } from './EmptyState';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
 import { AppState, Transaction, View } from '../types';
 import { MOTION } from '../config';
@@ -115,7 +115,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     return (
-        <motion.div
+        <m.div
             initial={MOTION.view.initial}
             animate={MOTION.view.animate}
             exit={MOTION.view.exit}
@@ -200,7 +200,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             };
 
                             return (
-                                <motion.button
+                                <m.button
                                     key={day.toString()}
                                     onClick={() => setSelectedDate(day)}
                                     whileTap={{ scale: 0.95 }}
@@ -254,7 +254,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                             </span>
                                         )}
                                     </div>
-                                </motion.button>
+                                </m.button>
                             );
                         })}
                     </div>
@@ -264,7 +264,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 <div className="w-full lg:w-96 flex-shrink-0">
                     <AnimatePresence mode="wait">
                         {selectedDate && (
-                            <motion.div
+                            <m.div
                                 key={selectedDate.toISOString()}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -324,11 +324,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         })
                                     )}
                                 </div>
-                            </motion.div>
+                            </m.div>
                         )}
                     </AnimatePresence>
                 </div>
             </div>
-        </motion.div>
+        </m.div>
     );
 };

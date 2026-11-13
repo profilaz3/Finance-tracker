@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Camera, Upload, Loader2, AlertCircle, Check, Image, Pencil, Trash2, Plus } from 'lucide-react';
 import { Category, Account, Currency, Transaction } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -243,7 +243,7 @@ const handleScan = async () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4" onClick={handleClose}>
-      <motion.div
+      <m.div
         onClick={(e) => e.stopPropagation()}
         initial={MOTION.modal.initial}
         animate={MOTION.modal.animate}
@@ -547,7 +547,7 @@ const handleScan = async () => {
             </div>
           )}
         </div>
-      </motion.div>
+      </m.div>
 
       {/* Image Picker Bottom Sheet */}
       <ImagePickerSheet

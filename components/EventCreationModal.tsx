@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Upload, Image as ImageIcon, Check, Loader2, Users, Type, Palette, Camera } from 'lucide-react';
 import { Person, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -141,7 +141,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/50 backdrop-blur-sm">
-            <motion.div
+            <m.div
                 initial={MOTION.modal.initial}
                 animate={MOTION.modal.animate}
                 exit={MOTION.modal.exit}
@@ -317,7 +317,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 {isUploading ? 'Uploading...' : 'Create Event'}
             </button>
         </div>
-    </motion.div>
+    </m.div>
 
     <ImagePickerSheet
         isOpen={isPickerOpen}

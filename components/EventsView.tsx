@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Plus, MapPin } from 'lucide-react';
 import { AppState, Event, Currency } from '../types';
 import { EventCard } from './EventCard';
@@ -45,7 +45,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
 
 
     return (
-        <motion.div
+        <m.div
             initial={MOTION.view.initial}
             animate={MOTION.view.animate}
             exit={MOTION.view.exit}
@@ -111,6 +111,6 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
                     action={{ label: 'Create Event', onClick: onCreateEvent }}
                 />
             )}
-        </motion.div>
+        </m.div>
     );
 };

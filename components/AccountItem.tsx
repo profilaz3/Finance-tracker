@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Account } from '../types';
-import { Reorder, useDragControls } from 'motion/react';
+import { useDragControls } from 'motion/react';
+import { Reorder } from 'motion/react-m';
 import { List, Banknote, CreditCard, Wallet, Edit2, Trash2 } from 'lucide-react';
 import { ICONS, IconName, IconPicker } from './IconPicker';
 import { BalanceInput } from './BalanceInput';

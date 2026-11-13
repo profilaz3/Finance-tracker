@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { Account, Currency, ExchangeRates, Transaction } from '../../types';
@@ -197,7 +197,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
 
   return (
     <>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
@@ -226,10 +226,10 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
             valueFormatter={(value) => formatCurrency(value, baseCurrency)}
           />
         </div>
-      </motion.div>
+      </m.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -266,9 +266,9 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
               { label: t.expense, color: chartColors.expense, gradient: `linear-gradient(180deg, ${chartColors.expense} 0%, ${chartColors.expenseSoft} 100%)` },
             ]}
           />
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
@@ -308,9 +308,9 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
               <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
             )}
           </div>
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -355,7 +355,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
               <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
             )}
           </div>
-        </motion.div>
+        </m.div>
       </div>
     </>
   );

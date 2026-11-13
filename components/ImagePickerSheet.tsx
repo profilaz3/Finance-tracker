@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Camera, Image, X } from 'lucide-react';
 
 interface ImagePickerSheetProps {
@@ -53,7 +53,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
       {isOpen && (
         <>
           {/* Backdrop */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -66,7 +66,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
           />
 
           {/* Bottom Sheet */}
-          <motion.div
+          <m.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -130,7 +130,7 @@ export const ImagePickerSheet: React.FC<ImagePickerSheetProps> = ({
                 </span>
               </button>
             </div>
-          </motion.div>
+          </m.div>
         </>
       )}
     </AnimatePresence>

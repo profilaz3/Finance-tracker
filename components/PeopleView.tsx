@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Person, Currency, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { Plus, User, ArrowUpDown, ArrowDownLeft, ArrowUpRight, Search, Handshake, Check, Wallet, Banknote } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { EmptyState } from './EmptyState';
 import { formatCurrency } from '../utils/formatters';
 import { calculateDashboardDebtSummary, getActiveDashboardPeople } from '../utils/dashboardSummarySelectors';
@@ -134,7 +134,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
             {/* Balance Summary Section */}
                     {(totalOwedToMe > 0 || totalIOwe > 0) && (
                 <div className="grid grid-cols-2 gap-4">
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10 shadow-elevation-1"
@@ -145,9 +145,9 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         <p className="text-xl md:text-2xl font-display font-medium text-tertiary">
                             {formatCurrency(totalOwedToMe, baseCurrency)}
                         </p>
-                    </motion.div>
+                    </m.div>
 
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.05 }}
@@ -159,7 +159,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         <p className="text-xl md:text-2xl font-display font-medium text-error">
                             {formatCurrency(totalIOwe, baseCurrency)}
                         </p>
-                    </motion.div>
+                    </m.div>
                 </div>
             )}
 
@@ -183,7 +183,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         const isImageAvatar = person.avatar?.startsWith('data:') || person.avatar?.startsWith('http');
 
                         return (
-                            <motion.div
+                            <m.div
                                 key={person.id}
                                 layout
                                 initial={{ opacity: 0, scale: 0.95 }}
@@ -243,7 +243,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                         </div>
                                     )}
                                 </div>
-                            </motion.div>
+                            </m.div>
                         );
                     })
                 )}

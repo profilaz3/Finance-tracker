@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
 import { Event, Person, Transaction } from '../../types';
@@ -40,7 +40,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
 
         <AnimatePresence initial={false}>
             {showMoreOptions && (
-                <motion.div
+                <m.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
@@ -146,7 +146,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                             />
                         </div>
                     </div>
-                </motion.div>
+                </m.div>
             )}
         </AnimatePresence>
     </>

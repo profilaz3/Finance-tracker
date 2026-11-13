@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { X, Split } from 'lucide-react';
 import { Account, Person, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -31,7 +31,7 @@ export const SplitModal: React.FC<SplitModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4" onClick={onClose}>
-            <motion.div
+            <m.div
                 onClick={(e) => e.stopPropagation()}
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -122,7 +122,7 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                         </button>
                     </div>
                 </div>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

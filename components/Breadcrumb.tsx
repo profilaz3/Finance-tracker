@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronRight, Home } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 export interface BreadcrumbItem {
     label: string;
@@ -36,7 +36,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className = '' })
                                 />
                             )}
                             {isClickable ? (
-                                <motion.button
+                                <m.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
                                     onClick={item.onClick}
@@ -44,7 +44,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className = '' })
                                 >
                                     {item.icon}
                                     <span>{item.label}</span>
-                                </motion.button>
+                                </m.button>
                             ) : (
                                 <span
                                     className={`flex items-center gap-1.5 px-2 py-1 whitespace-nowrap ${

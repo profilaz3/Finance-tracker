@@ -1,11 +1,15 @@
 import React from 'react';
-import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { m, AnimatePresence, LazyMotion } from 'motion/react';
+import { Reorder } from 'motion/react-m';
 import { User, Trash2, Plus } from 'lucide-react';
 import { AppState, Account, Currency } from '../../types';
 import { TRANSLATIONS, CURRENCIES } from '../../constants';
 import { MyProfileSection } from '../MyProfileSection';
 import { AccountItem } from '../AccountItem';
 import { useAccountSettingsState } from './useAccountSettingsState';
+
+// Reorder needs drag + layout (domMax); load those features only for this list.
+const loadMotionMaxFeatures = () => import('../../utils/motionMaxFeatures').then(module => module.default);
 
 interface AccountSettingsProps {
     state: AppState;
@@ -114,7 +118,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                     <div className="bg-surface-container-low p-4 md:p-6 rounded-xl shadow-elevation-1 space-y-4">
                         <AnimatePresence>
                             {isAddingAccount && (
-                                <motion.div
+                                <m.div
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
@@ -151,10 +155,11 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                                             <button onClick={handleCreateAccount} className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-lg">Create</button>
                                         </div>
                                     </div>
-                                </motion.div>
+                                </m.div>
                             )}
                         </AnimatePresence>
 
+                        <LazyMotion features={loadMotionMaxFeatures}>
                         <Reorder.Group
                             axis="y"
                             values={state.accounts}
@@ -178,6 +183,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 />
                             ))}
                         </Reorder.Group>
+                        </LazyMotion>
                     </div>
                 </section>
             </div>

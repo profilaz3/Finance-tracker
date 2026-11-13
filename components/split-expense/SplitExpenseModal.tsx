@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { X } from 'lucide-react';
 import { Currency, Transaction, SplitMode, SplitMethod, SplitShare } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -282,7 +282,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-sm" onClick={onClose}>
-            <motion.div
+            <m.div
                 onClick={(e) => e.stopPropagation()}
                 initial={MOTION.modal.initial}
                 animate={MOTION.modal.animate}
@@ -377,7 +377,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                         }
                     </button>
                 </form>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

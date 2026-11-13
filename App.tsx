@@ -6,6 +6,7 @@ import { TRANSLATIONS } from './constants';
 import { ToastContainer, Toast } from './components/Toast';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
 import clsx from 'clsx';
+import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
 import { createTransactionDraft } from './domain/transactions';
 const AuthView = lazy(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
 import type { ParsedTransaction } from './services/aiService';
@@ -575,9 +576,16 @@ const App: React.FC = () => {
 };
 
 // Wrap App with top-level ErrorBoundary
+
+// LazyMotion + `m` components keep drag/layout/projection code out of the shared
+// motion chunk; only the Settings account reorder list pulls in the domMax features.
 const AppWithErrorBoundary: React.FC = () => (
   <ErrorBoundary>
-    <App />
+    <LazyMotion features={domAnimation}>
+      <MotionConfig reducedMotion="user">
+        <App />
+      </MotionConfig>
+    </LazyMotion>
   </ErrorBoundary>
 );
 

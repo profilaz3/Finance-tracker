@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Receipt, TrendingUp, Plus } from 'lucide-react';
 
 // SVG Illustrations for different empty states
@@ -115,7 +115,7 @@ interface EmptyStateProps {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ icon: Icon, illustration, title, description, action }) => {
     return (
-        <motion.div
+        <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -123,7 +123,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ icon: Icon, illustration
         >
             {/* Floating illustration with subtle animation */}
             {illustration ? (
-                <motion.div
+                <m.div
                     className="w-48 h-40 mb-6 relative"
                     animate={{ y: [0, -8, 0] }}
                     transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
@@ -133,15 +133,15 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ icon: Icon, illustration
                     <div className="relative">
                         {illustrations[illustration]}
                     </div>
-                </motion.div>
+                </m.div>
             ) : Icon ? (
-                <motion.div
+                <m.div
                     className="relative mb-6"
                     animate={{ y: [0, -6, 0] }}
                     transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                 >
                     {/* Animated rings */}
-                    <motion.div
+                    <m.div
                         className="absolute inset-0 rounded-full bg-primary/10"
                         animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0, 0.3] }}
                         transition={{ duration: 2, repeat: Infinity }}
@@ -149,32 +149,32 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ icon: Icon, illustration
                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-surface-container-high to-surface-container-highest flex items-center justify-center shadow-lg">
                         <Icon size={36} className="text-on-surface-variant" />
                     </div>
-                </motion.div>
+                </m.div>
             ) : null}
 
             {/* Title with staggered animation */}
-            <motion.h3
+            <m.h3
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.3 }}
                 className="text-xl sm:text-2xl font-display font-semibold text-on-surface mb-2"
             >
                 {title}
-            </motion.h3>
+            </m.h3>
 
             {/* Description */}
-            <motion.p
+            <m.p
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.3 }}
                 className="text-on-surface-variant mb-8 max-w-sm text-sm sm:text-base leading-relaxed"
             >
                 {description}
-            </motion.p>
+            </m.p>
 
             {/* Enhanced CTA button */}
             {action && (
-                <motion.button
+                <m.button
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.3, type: "spring", stiffness: 400, damping: 25 }}
@@ -189,9 +189,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ icon: Icon, illustration
                         <Plus size={18} className="opacity-80" />
                         {action.label}
                     </span>
-                </motion.button>
+                </m.button>
             )}
-        </motion.div>
+        </m.div>
     );
 };
 
@@ -207,7 +207,7 @@ export const TransactionSkeleton: React.FC = () => {
     return (
         <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
-                <motion.div
+                <m.div
                     key={i}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -220,7 +220,7 @@ export const TransactionSkeleton: React.FC = () => {
                         <LoadingSkeleton className="h-3 w-1/2" />
                     </div>
                     <LoadingSkeleton className="h-4 w-16 flex-shrink-0" />
-                </motion.div>
+                </m.div>
             ))}
         </div>
     );

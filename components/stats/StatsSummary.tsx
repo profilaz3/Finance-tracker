@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Transaction, Currency, ExchangeRates } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 interface StatsSummaryProps {
   transactions: Transaction[];
@@ -40,7 +40,7 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({
   if (totalFees <= 0) return null;
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
       className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
     >
@@ -64,6 +64,6 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({
           )}
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 };

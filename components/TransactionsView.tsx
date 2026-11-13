@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useMemo, useRef, useCallback } from 'react';
-import { motion, Variants } from 'motion/react';
+import { m, Variants } from 'motion/react';
 import { exportToCSV } from '../services/storageService';
 import { AppState, Transaction, TransactionType } from '../types';
 import { parseTransaction, isAIAvailable, ParsedTransaction } from '../services/aiService';
@@ -271,7 +271,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const flatTransactions = useMemo(() => groupedData.flatMap(group => group.transactions), [groupedData]);
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="h-[calc(100vh-140px)] flex flex-col">
+    <m.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="h-[calc(100vh-140px)] flex flex-col">
       <TransactionsToolbar
         state={state}
         filterType={filterType}
@@ -390,6 +390,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         onAddTransaction={onAddTransaction}
         onOpenSplit={onOpenSplit}
       />
-    </motion.div>
+    </m.div>
   );
 };

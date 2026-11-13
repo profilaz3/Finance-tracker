@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Mail, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { MOTION } from '../config';
@@ -58,7 +58,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
             {isOpen && (
                 <>
                     {/* Backdrop */}
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -68,7 +68,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
 
                     {/* Modal */}
                     <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-                        <motion.div
+                        <m.div
                             initial={MOTION.modal.initial}
                             animate={MOTION.modal.animate}
                             exit={MOTION.modal.exit}
@@ -168,7 +168,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
                                     </div>
                                 </form>
                             </div>
-                        </motion.div>
+                        </m.div>
                     </div>
                 </>
             )}

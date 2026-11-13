@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import {
     ArrowLeft, Play, CheckCircle2,
     Trash2, MapPin, Share2, Clock, Camera, MoreVertical, Loader2
@@ -126,7 +126,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                     />
                     <AnimatePresence>
                         {isMenuOpen && (
-                            <motion.div
+                            <m.div
                                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -189,7 +189,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                 )}
 
 
-                            </motion.div>
+                            </m.div>
                         )}
                     </AnimatePresence>
                 </div>

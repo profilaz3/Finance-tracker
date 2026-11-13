@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { X, Check, Users, DollarSign, Calendar, Divide, Calculator } from 'lucide-react';
 import { Person, SharedExpense, Currency } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -216,7 +216,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-sm">
-            <motion.div
+            <m.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
@@ -490,7 +490,7 @@ export const SharedExpenseModal: React.FC<SharedExpenseModalProps> = ({
                         {expense ? 'Save Changes' : 'Add Expense'}
                     </button>
                 </form>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

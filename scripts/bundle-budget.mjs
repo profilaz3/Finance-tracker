@@ -5,8 +5,8 @@ const distAssetsDir = path.resolve('dist', 'assets');
 const distIndexHtml = path.resolve('dist', 'index.html');
 
 const budgets = [
-  { label: 'entry-chunk', prefix: 'index-', maxBytes: 330 * 1024, aggregate: false },
-  { label: 'startup-js', prefix: null, maxBytes: 380 * 1024, aggregate: false },
+  { label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false },
+  { label: 'startup-js', prefix: null, maxBytes: 360 * 1024, aggregate: false },
   { label: 'transactions-route', prefix: 'TransactionsView-', maxBytes: 80 * 1024, aggregate: false },
   { label: 'stats-shell', prefix: 'Stats-', maxBytes: 12 * 1024, aggregate: false },
   { label: 'export-modal', prefix: 'ExportModal-', maxBytes: 8 * 1024, aggregate: false },
@@ -14,6 +14,9 @@ const budgets = [
   { label: 'supabase-service', prefix: 'supabaseService-', maxBytes: 16 * 1024, aggregate: false },
   { label: 'icons', prefix: 'icons-', maxBytes: 48 * 1024, aggregate: false },
   { label: 'motion', prefix: 'motion-', maxBytes: 128 * 1024, aggregate: false },
+  { label: 'motion-max-features', prefix: 'motionMaxFeatures-', maxBytes: 56 * 1024, aggregate: false },
+  { label: 'virtuoso', prefix: 'virtuoso-', maxBytes: 64 * 1024, aggregate: false },
+  { label: 'react', prefix: 'react-', maxBytes: 224 * 1024, aggregate: false },
 ];
 
 const forbiddenChunkPrefixes = ['CartesianChart-', 'pdf-tools-', 'html2canvas.esm-'];

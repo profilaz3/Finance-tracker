@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Person, Transaction, Currency, Category, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { X, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, Wallet, Calendar, Sparkles } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { formatCurrency, getShortDate } from '../utils/formatters';
 import { convertAmount } from '../services/currencyService';
 import { BalanceInput } from './BalanceInput';
@@ -54,7 +54,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-md" onClick={onClose}>
-            <motion.div
+            <m.div
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -235,7 +235,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                         </div>
                     </div>
                 </div>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

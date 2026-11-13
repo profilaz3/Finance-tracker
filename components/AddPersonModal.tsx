@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { X, Check, User, AlertCircle, Palette, Coins, Camera } from 'lucide-react';
 import { Currency, Person } from '../types';
 import { TRANSLATIONS, CHART_COLORS, CURRENCIES } from '../constants';
@@ -104,7 +104,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
         <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-scrim/60 backdrop-blur-md" onClick={onClose}>
-                    <motion.div
+                    <m.div
                         onClick={(e) => e.stopPropagation()}
                         initial={MOTION.modal.initial}
                         animate={MOTION.modal.animate}
@@ -251,7 +251,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                 </button>
                             </form>
                         </div>
-                    </motion.div>
+                    </m.div>
 
                     <ImagePickerSheet
                         isOpen={isPickerOpen}

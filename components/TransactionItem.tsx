@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Split, Pencil, Trash2, Receipt, User, MapPin, Users, Check, Copy, Bookmark } from 'lucide-react';
 import clsx from 'clsx';
 import { Transaction, Category, Account, Person, AppState, Event } from '../types';
@@ -153,7 +153,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
     };
 
     return (
-        <motion.div
+        <m.div
             onPointerDown={handleStart}
             onPointerUp={handleEnd}
             onPointerLeave={handleEnd}
@@ -234,7 +234,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
             {/* Long Press Context Menu */}
             {isMenuOpen && menuPosition && createPortal(
                 <AnimatePresence>
-                    <motion.div
+                    <m.div
                         key="menu-backdrop"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -245,7 +245,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                         onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     />
-                    <motion.div
+                    <m.div
                         key="menu-content"
                         initial={{ opacity: 0, scale: 0.9, y: -4 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -306,7 +306,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         >
                             <Trash2 size={16} /> {t.delete}
                         </button>
-                    </motion.div>
+                    </m.div>
                 </AnimatePresence>,
                 document.body
             )}
@@ -314,7 +314,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
             {/* Expandable detail — gets a subtle inset bg */}
             <AnimatePresence>
                 {isExpanded && (
-                    <motion.div
+                    <m.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -420,10 +420,10 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 </>
                             )}
                         </div>
-                    </motion.div>
+                    </m.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </m.div>
     );
 });
 

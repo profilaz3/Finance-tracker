@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import clsx from 'clsx';
 import { GroupedVirtuoso } from 'react-virtuoso';
 import { CheckSquare, Receipt, SearchX, Square } from 'lucide-react';
@@ -137,7 +137,7 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
           const isLast = positionInGroup === groupSize - 1;
 
           return (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: Math.min(index * 0.02, 0.2) }}
@@ -204,7 +204,7 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           );
         }}
       />
