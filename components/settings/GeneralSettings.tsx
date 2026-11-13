@@ -2,6 +2,9 @@ import React from 'react';
 import { AppState, Currency } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { Segmented } from '../ui/Segmented';
+import { ChevronRight, LineChart } from 'lucide-react';
+import { formatMediumDate } from '../../utils/locale';
+import { openRates } from '../rates/ratesBus';
 
 interface GeneralSettingsProps {
     state: AppState;
@@ -41,6 +44,25 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                     className="shrink-0"
                 />
             </section>
+
+            <button
+                type="button"
+                onClick={openRates}
+                className="paper-tile flex w-full items-center gap-3 p-4 text-left"
+            >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+                    <LineChart size={19} aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-bold">{t.ratesTitle}</span>
+                    <span className="block truncate text-[13px] text-muted">
+                        {state.rates.provider === 'nbs' && state.rates.listDate
+                            ? t.ratesNbsMiddle.replace('{date}', formatMediumDate(new Date(`${state.rates.listDate}T12:00:00`), state.language))
+                            : t.ratesSettingsHint}
+                    </span>
+                </span>
+                <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden="true" />
+            </button>
 
             {/* Keyboard shortcuts only matter with a keyboard */}
             <section className="paper-tile hidden px-4 pb-1 pt-4 md:block">

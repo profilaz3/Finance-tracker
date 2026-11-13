@@ -73,7 +73,8 @@ const fromCache = (cached: CachedRates, now: number): RatesResult => {
 };
 
 /**
- * Fetches EUR-based rates. Currencies the API omits are filled from the last
+ * Fetches EUR-based rates: the official NBS middle rate when the `nbs-rates` function answers,
+ * otherwise the generic API. Currencies the API omits are filled from the last
  * cached table (rebased to EUR), then from the defaults (rebased to EUR).
  * When the API is unreachable, the last cached table is used whatever its
  * age (with its own base), and only without any cache the built-in defaults.
@@ -84,6 +85,22 @@ export const fetchRatesWithMeta = async (forceRefresh = false): Promise<RatesRes
 
     if (!forceRefresh && cached && now - cached.timestamp <= CACHE_DURATION_MS) {
         return fromCache(cached, now);
+    }
+
+    // Official NBS middle rate first (RSD per EUR and USD; EUR/USD as their cross).
+    try {
+        const [{ fetchNbsLatest }, { ratesFromNbs }] = await Promise.all([
+            import('./nbsRatesService'),
+            import('../domain/exchangeRates'),
+        ]);
+        const latest = await fetchNbsLatest();
+        if (latest) {
+            const exchangeRates = ratesFromNbs(latest, now);
+            setCachedRates(exchangeRates, now);
+            return { rates: exchangeRates, source: 'live', updatedAt: now, isStale: false };
+        }
+    } catch (error) {
+        console.warn('NBS rates unavailable, trying the fallback provider', error);
     }
 
     try {
@@ -108,6 +125,7 @@ export const fetchRatesWithMeta = async (forceRefresh = false): Promise<RatesRes
                 USD: pick('USD'),
                 RSD: pick('RSD'),
             },
+            provider: 'api',
         };
 
         setCachedRates(exchangeRates, now);

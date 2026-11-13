@@ -34,6 +34,8 @@ export interface FinanceBridgePlugin {
   getPendingShare(): Promise<{ dataUrl?: string }>;
   /** An action requested from outside the web view (the widget's "+" button). Consumed on read. */
   getPendingAction(): Promise<{ action?: string }>;
+  /** Shares a PNG (base64, no data URL prefix) through the system share sheet. */
+  shareImage(options: { base64: string; fileName: string; text?: string; title?: string }): Promise<void>;
   addListener(eventName: 'shareReceived' | 'actionReceived', listener: () => void): Promise<PluginListenerHandle>;
 }
 

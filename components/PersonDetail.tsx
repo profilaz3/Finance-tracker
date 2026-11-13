@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Person, Transaction, Currency, Category, ExchangeRates } from '../types';
 import { TRANSLATIONS, CURRENCIES } from '../constants';
-import { X, Trash2, Pencil, Check, Handshake } from 'lucide-react';
+import { X, Trash2, Pencil, Check, Handshake, QrCode } from 'lucide-react';
+import { openPaymentRequest } from './payments/paymentBus';
 import { AnimatePresence, m } from 'motion/react';
 import clsx from 'clsx';
 import { formatCurrency, getShortDate } from '../utils/formatters';
@@ -79,6 +80,24 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
         setPartialAmount('');
         setPartialError(null);
         setPartialOpen(true);
+    };
+
+    // NBS IPS QR they scan in their bank app. One open currency is requested as is (converted to
+    // dinars by the sheet); several are netted in the base currency.
+    const requestWithQr = () => {
+        const single = openCurrencies.length === 1 ? openCurrencies[0] : null;
+        openPaymentRequest({
+            amount: single ? person.balances[single] ?? 0 : totalBalanceInBase,
+            currency: single ?? baseCurrency,
+            payerName: person.name,
+            purpose: t.payPurposeDefault,
+            onSettled: ({ full, amount }) => {
+                if (full) settleAll();
+                else if (single) onSettleUp(person.id, single, amount);
+                // A part of a debt in several currencies: let the user say which one.
+                else openPartial();
+            },
+        });
     };
 
     const submitPartial = (event: React.FormEvent) => {
@@ -166,7 +185,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                                     {formatCurrency(Math.abs(totalBalanceInBase), baseCurrency)}
                                 </Big>
                                 {openCurrencies.length > 0 && (
-                                    <div className="mt-4 flex w-full max-w-[360px] flex-col items-center gap-1">
+                                    <div className="mt-4 flex w-full max-w-[360px] flex-col items-center gap-2">
                                         <button
                                             type="button"
                                             onClick={settleAll}
@@ -177,6 +196,16 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                                                 {(owesYou ? t.settleTheyPaidMe : t.settleIPaidThem).replace('{name}', person.name)}
                                             </span>
                                         </button>
+                                        {owesYou && (
+                                            <button
+                                                type="button"
+                                                onClick={requestWithQr}
+                                                className="flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-full bg-accent-soft px-4 text-[15px] font-semibold text-accent"
+                                            >
+                                                <QrCode size={18} className="shrink-0" aria-hidden="true" />
+                                                <span className="truncate">{t.payRequest}</span>
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => (partialOpen ? setPartialOpen(false) : openPartial())}

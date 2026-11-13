@@ -1,7 +1,7 @@
-import { AppearanceSchema, BudgetSchema, HomeLayoutSchema } from '../schemas';
+import { AppearanceSchema, BudgetSchema, HomeLayoutSchema, PaymentDetailsSchema } from '../schemas';
 import type { AppState } from '../types';
 
-type PrefsSlice = Pick<AppState, 'appearance' | 'homeLayout' | 'budget'>;
+type PrefsSlice = Pick<AppState, 'appearance' | 'homeLayout' | 'budget' | 'paymentDetails'>;
 
 /**
  * Read `settings.prefs` from the server. Each part is validated on its own so a
@@ -24,6 +24,14 @@ export function parseSettingsPrefs(raw: unknown): Partial<PrefsSlice> {
   } else {
     const budget = BudgetSchema.safeParse(prefs.budget);
     if (budget.success) result.budget = budget.data;
+  }
+
+  // Payment details: `payment: null` clears them, a malformed value keeps the local copy.
+  if (prefs.payment === null) {
+    result.paymentDetails = null;
+  } else {
+    const payment = PaymentDetailsSchema.safeParse(prefs.payment);
+    if (payment.success && /^\d{18}$/.test(payment.data.account)) result.paymentDetails = payment.data;
   }
 
   return result;

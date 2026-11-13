@@ -17,8 +17,10 @@ import { processImage } from '../utils/imageResize';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { CategoryGlyph } from './ui/CategoryGlyph';
 import { QrScanner } from './receipt-scan/QrScanner';
-import { decodeQrFromImage } from './receipt-scan/qr';
-import { parseFiscalUrl, type FiscalReceipt } from '../utils/fiscalReceipt';
+import { classifyScannedQr, decodeQrFromImage, type ScannedQr } from './receipt-scan/qr';
+import type { FiscalReceipt } from '../utils/fiscalReceipt';
+import { suggestIpsCategory, type IpsBill } from '../utils/ipsQr';
+import { merchantMemoryFor, usualChoice } from '../domain/merchantMemory';
 import { importFiscalReceipt } from '../services/fiscalReceiptService';
 import { SplitAssign } from './receipt-scan/SplitAssign';
 import { receiptItemsForSplit } from '../domain/receiptSplit';
@@ -30,6 +32,12 @@ interface FiscalInfo {
   partial: boolean;
   refund: boolean;
   notSale: boolean;
+}
+
+/** What the result screen needs to know about a bill read from its IPS QR code. */
+interface BillInfo {
+  /** The bill leaves the amount to the payer. */
+  noAmount: boolean;
 }
 
 interface ReceiptScanModalProps {
@@ -48,6 +56,8 @@ interface ReceiptScanModalProps {
   onAddPerson?: (name: string) => Promise<void>;
   /** Hands the worked-out split to the split expense flow. */
   onSplitRequested?: (prefill: SplitPrefill) => void;
+  /** Transaction history for the user's usual category per payee (scanned IPS bills). */
+  transactions?: Transaction[];
 }
 
 export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
@@ -63,6 +73,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   userProfile,
   onAddPerson,
   onSplitRequested,
+  transactions,
 }) => {
   const t = TRANSLATIONS[language];
   
@@ -85,14 +96,15 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [parsedReceipt, setParsedReceipt] = useState<ParsedReceipt | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
-  // Fiscal receipt URL found in the QR code of the current photo, if any.
-  const [photoFiscalUrl, setPhotoFiscalUrl] = useState<string | null>(null);
+  // Fiscal receipt or IPS bill QR code found in the current photo, if any.
+  const [photoQr, setPhotoQr] = useState<ScannedQr | null>(null);
   const [fiscalInfo, setFiscalInfo] = useState<FiscalInfo | null>(null);
+  const [billInfo, setBillInfo] = useState<BillInfo | null>(null);
   const [scanMode, setScanMode] = useState<'fiscal' | 'ai'>('ai');
   const [isSplitting, setIsSplitting] = useState(false);
   // The built-in "me" is the user, so their own profile is not offered as someone to split with.
   const splitPeople = useMemo(() => excludeOwnProfile(allPeople, userProfile), [allPeople, userProfile]);
-  const qrDetection = useRef<Promise<string | null> | null>(null);
+  const qrDetection = useRef<Promise<ScannedQr | null> | null>(null);
 
   // An image shared into the app (Android share sheet) opens preloaded, ready to scan.
   React.useEffect(() => {
@@ -112,25 +124,26 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setParsedReceipt(null);
     setIsDragging(false);
     setIsQrOpen(false);
-    setPhotoFiscalUrl(null);
+    setPhotoQr(null);
     setFiscalInfo(null);
+    setBillInfo(null);
     setIsSplitting(false);
   };
 
-  // Look for a fiscal receipt QR code in every new photo; it beats reading the photo with AI.
+  // Look for a fiscal receipt or IPS bill QR code in every new photo; it beats reading the photo with AI.
   useEffect(() => {
-    setPhotoFiscalUrl(null);
+    setPhotoQr(null);
     if (!imagePreview) {
       qrDetection.current = null;
       return;
     }
     let cancelled = false;
     const detection = decodeQrFromImage(imagePreview)
-      .then((text) => (text ? parseFiscalUrl(text)?.url ?? null : null))
+      .then((text) => (text ? classifyScannedQr(text) : null))
       .catch(() => null);
     qrDetection.current = detection;
-    void detection.then((url) => {
-      if (!cancelled) setPhotoFiscalUrl(url);
+    void detection.then((found) => {
+      if (!cancelled) setPhotoQr(found);
     });
     return () => {
       cancelled = true;
@@ -297,6 +310,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       }
       const { receipt } = result;
       setParsedReceipt(fiscalToParsed(receipt));
+      setBillInfo(null);
       setFiscalInfo({
         partial: receipt.partial,
         refund: receipt.transactionType === 1,
@@ -308,19 +322,59 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
   };
 
+  // Prefills an expense from a bill's IPS QR code (payment slip). Everything is in the code: no network.
+  const handleIpsBill = (bill: IpsBill) => {
+    setIsQrOpen(false);
+    setError(null);
+    setFiscalInfo(null);
+    const expense = categories.filter(c => c.type === 'expense');
+    const usual = transactions?.length ? usualChoice(merchantMemoryFor(transactions), bill.payee) : null;
+    const usualCategory = usual ? expense.find(c => c.id === usual.categoryId) : undefined;
+    const rule = usualCategory ? undefined : suggestIpsCategory(bill, expense);
+    const categoryName = usualCategory?.name ?? rule?.categoryName ?? expense[0]?.name ?? categories[0]?.name ?? '';
+    const usualAccount = usual?.accountId ? accounts.find(a => a.id === usual.accountId && a.currency === 'RSD') : undefined;
+    const account = usualAccount ?? accounts.find(a => a.currency === 'RSD') ?? accounts[0];
+    setParsedReceipt({
+      amount: bill.amount,
+      currency: 'RSD',
+      categoryName,
+      subcategory: rule?.subcategory,
+      type: 'expense',
+      note: bill.purpose ? `${bill.payee}, ${bill.purpose}` : bill.payee,
+      date: new Date().toISOString(),
+      accountName: account?.name,
+      receiptData: {
+        items: [{ name: bill.purpose || bill.payee, price: bill.amount, quantity: 1 }],
+        total: bill.amount,
+        merchant: bill.payee,
+      },
+    });
+    setBillInfo({ noAmount: bill.amount <= 0 });
+    vibrate(HAPTIC_PATTERNS.success);
+  };
+
+  const handleScannedQr = (found: ScannedQr) => {
+    if (found.kind === 'ips') handleIpsBill(found.bill);
+    else void handleFiscalUrl(found.url);
+  };
+
   const handleScan = async (useAi = false) => {
     if (!imagePreview) return;
 
     if (!useAi) {
-      // A fiscal QR code in the photo gives exact items, so try that before AI.
+      // A fiscal or IPS QR code in the photo gives exact details, so try that before AI.
       setScanMode('fiscal');
       setIsScanning(true);
-      const fiscalUrl = photoFiscalUrl ?? (await qrDetection.current);
-      if (fiscalUrl) {
-        await handleFiscalUrl(fiscalUrl);
+      const found = photoQr ?? (await qrDetection.current);
+      if (found?.kind === 'fiscal') {
+        await handleFiscalUrl(found.url);
         return;
       }
       setIsScanning(false);
+      if (found?.kind === 'ips') {
+        handleIpsBill(found.bill);
+        return;
+      }
     }
 
     if (!isAIAvailable()) {
@@ -332,6 +386,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setIsScanning(true);
     setError(null);
     setFiscalInfo(null);
+    setBillInfo(null);
 
     try {
       const result = await scanReceipt(imagePreview, categories, accounts);
@@ -602,10 +657,10 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 </button>
               </div>
 
-              {photoFiscalUrl && (
+              {photoQr && (
                 <div className="flex items-center gap-2 rounded-[16px] bg-pos/10 px-4 py-2.5 text-pos" role="status">
                   <QrCode size={18} className="shrink-0" aria-hidden="true" />
-                  <p className="text-[14px] font-semibold">{t.fiscalDetected}</p>
+                  <p className="text-[14px] font-semibold">{photoQr.kind === 'ips' ? t.ipsBillDetected : t.fiscalDetected}</p>
                 </div>
               )}
 
@@ -622,10 +677,10 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                     <Loader2 size={20} className="animate-spin" aria-hidden="true" />
                     {scanMode === 'fiscal' ? t.fiscalLoading : t.analyzing}
                   </>
-                ) : photoFiscalUrl ? (
+                ) : photoQr ? (
                   <>
                     <QrCode size={20} aria-hidden="true" />
-                    {t.fiscalImport}
+                    {photoQr.kind === 'ips' ? t.ipsBillImport : t.fiscalImport}
                   </>
                 ) : (
                   <>
@@ -634,7 +689,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   </>
                 )}
               </button>
-              {photoFiscalUrl && !isScanning && (
+              {photoQr && !isScanning && (
                 <button
                   type="button"
                   onClick={() => void handleScan(true)}
@@ -664,7 +719,12 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
           {/* Parsed Results */}
           {parsedReceipt && !isSplitting && (
             <div className="space-y-4">
-              {fiscalInfo && !fiscalInfo.partial ? (
+              {billInfo ? (
+                <div className="flex items-center gap-2 px-1 text-pos">
+                  <QrCode size={18} aria-hidden="true" />
+                  <span className="text-[15px] font-semibold">{t.ipsBillScanned}</span>
+                </div>
+              ) : fiscalInfo && !fiscalInfo.partial ? (
                 <div className="flex items-center gap-2 px-1 text-pos">
                   <ShieldCheck size={18} aria-hidden="true" />
                   <span className="text-[15px] font-semibold">{t.fiscalVerified}</span>
@@ -676,10 +736,11 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 </div>
               ) : null}
 
-              {fiscalInfo && [
-                fiscalInfo.partial && t.fiscalPartial,
-                fiscalInfo.refund && t.fiscalRefundNotice,
-                fiscalInfo.notSale && t.fiscalNotSaleNotice,
+              {(fiscalInfo || billInfo) && [
+                fiscalInfo?.partial && t.fiscalPartial,
+                fiscalInfo?.refund && t.fiscalRefundNotice,
+                fiscalInfo?.notSale && t.fiscalNotSaleNotice,
+                billInfo?.noAmount && t.ipsBillNoAmount,
               ].filter((notice): notice is string => Boolean(notice)).map(notice => (
                 <div key={notice} role="status" className="flex items-start gap-2 rounded-[16px] bg-chip px-4 py-3">
                   <Info className="mt-0.5 shrink-0 text-muted" size={18} aria-hidden="true" />
@@ -791,7 +852,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { setParsedReceipt(null); setImagePreview(null); setFiscalInfo(null); setError(null); }}
+                  onClick={() => { setParsedReceipt(null); setImagePreview(null); setFiscalInfo(null); setBillInfo(null); setError(null); }}
                   className="h-12 flex-1 rounded-full bg-chip text-[15px] font-semibold text-on-surface"
                 >
                   {t.scanAnother}
@@ -799,7 +860,9 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent"
+                  // A bill without an amount needs one before it becomes an expense.
+                  disabled={Boolean(billInfo) && !((parsedReceipt.receiptData?.total || parsedReceipt.amount) > 0)}
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent transition-opacity disabled:opacity-50"
                 >
                   <Check size={18} aria-hidden="true" />
                   {t.addTransactionAction}
@@ -834,7 +897,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       <QrScanner
         isOpen={isQrOpen}
         onClose={() => setIsQrOpen(false)}
-        onResult={(url) => void handleFiscalUrl(url)}
+        onResult={handleScannedQr}
         onChoosePhoto={() => { setIsQrOpen(false); openPicker(); }}
         labels={{
           title: t.scanQrCode,

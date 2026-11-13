@@ -5,6 +5,7 @@ import { AppState, Currency, Event, Person, Transaction } from '../../types';
 import { CHART_COLORS, TRANSLATIONS } from '../../constants';
 import type { SplitPrefill } from '../split-expense/types';
 import { useAskRequests } from '../ask/askBus';
+import type { PaymentDetails } from '../../types';
 
 const AddPersonModal = lazyWithReload(() => import('../AddPersonModal').then(m => ({ default: m.AddPersonModal })));
 const PersonDetail = lazyWithReload(() => import('../PersonDetail').then(m => ({ default: m.PersonDetail })));
@@ -15,6 +16,8 @@ const EventCreationModal = lazyWithReload(() => import('../EventCreationModal').
 const ReceiptScanModal = lazyWithReload(() => import('../ReceiptScanModal').then(m => ({ default: m.ReceiptScanModal })));
 const SplitExpenseModal = lazyWithReload(() => import('../split-expense').then(m => ({ default: m.SplitExpenseModal })));
 const AskSheet = lazyWithReload(() => import('../ask/AskSheet').then(m => ({ default: m.AskSheet })));
+// Listens for payment QR requests; lazy so the listener and sheet stay out of the entry chunk.
+const PaymentHost = lazyWithReload(() => import('../payments/PaymentHost'));
 
 interface AppModalsState {
   isEditModalOpen: boolean;
@@ -70,11 +73,14 @@ interface AppModalsProps {
   /** A receipt image shared into the app; opens the receipt scanner preloaded. */
   sharedReceiptImage?: string | null;
   clearSharedReceiptImage?: () => void;
+  /** Saves (or clears) the user's account for IPS QR payment requests. */
+  onSavePaymentDetails?: (details: PaymentDetails | null) => void;
 }
 
 export const AppModals: React.FC<AppModalsProps> = ({
   sharedReceiptImage,
   clearSharedReceiptImage,
+  onSavePaymentDetails,
   modals,
   state,
   selectedTransaction,
@@ -233,6 +239,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
           initialImage={sharedReceiptImage}
           people={state.people}
           userProfile={state.userProfile}
+          transactions={state.transactions}
           onAddPerson={name => addPerson(name, state.baseCurrency, CHART_COLORS[state.people.length % CHART_COLORS.length])}
           onSplitRequested={(prefill) => {
             modals.setIsReceiptScanModalOpen(false);
@@ -278,6 +285,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
       {(askMounted || modals.isAskOpen) && (
         <AskSheet isOpen={modals.isAskOpen} onClose={() => modals.setIsAskOpen(false)} state={state} seed={askSeed} />
       )}
+      {onSavePaymentDetails && <PaymentHost state={state} onSaveDetails={onSavePaymentDetails} onToast={addToast} />}
     </Suspense>
   );
 };

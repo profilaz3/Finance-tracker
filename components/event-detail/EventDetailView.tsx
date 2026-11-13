@@ -273,6 +273,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                         setSummaryCurrency={setSummaryCurrency}
                         state={state}
                         onMarkPaid={handleMarkPaid}
+                        eventName={event.name}
                     />
                 )}
             </div>
@@ -314,6 +315,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                         selfId={selfId}
                         onMarkPaid={handleMarkPaid}
                         hasSpending={spending.length > 0}
+                        requestPurpose={event.name}
                     />
                 </div>
             </GlassSheet>

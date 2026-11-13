@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONFIG } from '../config';
 import { fetchRates, fetchRatesWithMeta } from '../services/currencyService';
 
+// These cover the generic API fallback; NBS selection is in nbsRatesFallback.test.ts.
+vi.mock('../services/nbsRatesService', () => ({ fetchNbsLatest: async () => null }));
+
 // M12: rate fallback keeps each table's own base and reports staleness.
 // fetch and localStorage are stubbed; no network access.
 

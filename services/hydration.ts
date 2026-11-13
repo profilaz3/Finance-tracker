@@ -19,6 +19,7 @@ const applyPrefs = (acc: AppState, prefs: SettingsPrefs): Partial<AppState> => (
     appearance: prefs.appearance ?? acc.appearance,
     homeLayout: prefs.homeLayout ?? acc.homeLayout,
     budget: prefs.budget !== undefined ? prefs.budget : acc.budget,
+    paymentDetails: prefs.payment !== undefined ? prefs.payment : acc.paymentDetails,
 });
 
 export type RemoteSlice =
@@ -131,6 +132,7 @@ export function mergeRemoteState(prev: AppState, remote: RemoteStateResult, pend
         next.appearance = remoteState.appearance ?? prev.appearance;
         next.homeLayout = remoteState.homeLayout ?? prev.homeLayout;
         next.budget = remoteState.budget !== undefined ? remoteState.budget : prev.budget;
+        next.paymentDetails = remoteState.paymentDetails !== undefined ? remoteState.paymentDetails : prev.paymentDetails;
     }
 
     // Teams are managed online only (never queued), so the server list wins when it was fetched.

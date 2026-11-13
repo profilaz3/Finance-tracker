@@ -6,12 +6,16 @@ import { topCategories, parseLocalDate } from '../../domain/home';
 import { readableTextOn, squarify } from '../../domain/treemap';
 import { formatNumber, formatShortDate, formatMonthYear, getIntlLocale } from '../../utils/locale';
 import type { HomeActions, HomeData } from './useHomeData';
+import { openRates } from '../rates/ratesBus';
+import { RatesTrend } from '../rates/RatesTrend';
 import { Avatar, Big, BlockHead, DateChip, Empty, Label, ListRow, Ring, compactMoney, fill, fitFont, money, signedMoney } from './parts';
 
 export interface BlockProps {
   block: HomeBlock;
   data: HomeData;
   actions: HomeActions;
+  /** Gallery and settings previews: no network, stored data only. */
+  preview?: boolean;
 }
 
 /** Blocks whose content holds its own buttons; their tile is not one big button. */
@@ -29,6 +33,7 @@ export function tileAction(block: HomeBlock, data: HomeData, actions: HomeAction
     case 'people': return actions.openPeople;
     case 'event': return data.event ? () => actions.openEvent(data.event!.event) : actions.createEvent;
     case 'upcoming': return actions.openRecurring;
+    case 'rates': return openRates;
     default: return undefined;
   }
 }
@@ -767,9 +772,18 @@ const RecentBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
 
 // ---------------------------------------------------------------- Rates
 
-const RatesBlock: React.FC<BlockProps> = ({ block, data }) => {
+const RatesBlock: React.FC<BlockProps> = ({ block, data, preview }) => {
   const { t, rates } = data;
   const format = (value: number) => formatNumber(value, { maximumFractionDigits: value >= 10 ? 2 : 4, minimumFractionDigits: value >= 10 ? 2 : 4 });
+  const nbsDate = data.ratesListDate ? formatShortDate(parseLocalDate(data.ratesListDate), data.language) : null;
+  if (block.style === 'trend') {
+    return (
+      <Tile>
+        <BlockHead title={t.block_rates} right={nbsDate ? `NBS ${nbsDate}` : undefined} />
+        <RatesTrend language={data.language} t={t} fallback={data.rsdPerUnit} live={!preview} />
+      </Tile>
+    );
+  }
   if (block.style === 'compact') {
     return (
       <Tile>
@@ -787,7 +801,7 @@ const RatesBlock: React.FC<BlockProps> = ({ block, data }) => {
   }
   return (
     <Tile>
-      <BlockHead title={t.block_rates} />
+      <BlockHead title={t.block_rates} right={nbsDate ? `NBS ${nbsDate}` : undefined} />
       <div className="grid grid-cols-3 gap-2">
         {rates.map(pair => (
           <span key={`${pair.from}-${pair.to}`} className="flex min-w-0 flex-col rounded-2xl bg-chip px-3 py-2.5">

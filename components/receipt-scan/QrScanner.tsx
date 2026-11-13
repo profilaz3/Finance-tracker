@@ -4,8 +4,7 @@ import { m } from 'motion/react';
 import { Flashlight, FlashlightOff, ImageIcon, QrCode, X } from 'lucide-react';
 import { useDialog } from '../../hooks/useFocusTrap';
 import { vibrate, HAPTIC_PATTERNS } from '../../utils/haptics';
-import { parseFiscalUrl } from '../../utils/fiscalReceipt';
-import { decodeQrPixels, loadJsQr } from './qr';
+import { classifyScannedQr, decodeQrPixels, loadJsQr, type ScannedQr } from './qr';
 
 export interface QrScannerLabels {
   title: string;
@@ -20,8 +19,8 @@ export interface QrScannerLabels {
 interface QrScannerProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called once with a validated fiscal receipt URL. */
-  onResult: (url: string) => void;
+  /** Called once with a validated fiscal receipt URL or an IPS payment code (a bill). */
+  onResult: (result: ScannedQr) => void;
   /** Fallback when the camera cannot be used: pick a photo of the receipt instead. */
   onChoosePhoto: () => void;
   labels: QrScannerLabels;
@@ -39,7 +38,7 @@ const hasTorch = (track: MediaStreamTrack | undefined): boolean => {
 };
 
 /**
- * Full screen camera viewfinder that reads fiscal receipt QR codes.
+ * Full screen camera viewfinder that reads fiscal receipt and IPS bill QR codes.
  * Portaled to <body>: the receipt sheet uses backdrop-filter, which would otherwise
  * become the containing block of this fixed overlay.
  */
@@ -95,11 +94,11 @@ export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose, onResult,
       void decodeQrPixels(data, size, size)
         .then((text) => {
           if (cancelled || !text) return;
-          const fiscal = parseFiscalUrl(text);
-          if (fiscal) {
+          const scanned = classifyScannedQr(text);
+          if (scanned) {
             cancelled = true;
             vibrate(HAPTIC_PATTERNS.success);
-            onResultRef.current(fiscal.url);
+            onResultRef.current(scanned);
             return;
           }
           if (text !== lastRejected) {

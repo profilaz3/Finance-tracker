@@ -134,7 +134,9 @@ export const RecurringTransactionSchema = z.object({
 export const ExchangeRatesSchema = z.object({
     base: CurrencySchema,
     date: z.string(),
-    rates: z.record(CurrencySchema, z.number())
+    rates: z.record(CurrencySchema, z.number()),
+    provider: z.optional(z.enum(['nbs', 'api'])),
+    listDate: z.optional(z.string().check(z.maxLength(10)))
 });
 
 // Event
@@ -218,6 +220,16 @@ export const BudgetSchema = z.object({
     categoryLimits: z.record(z.string(), z.number().check(z.minimum(0), z.maximum(1e9)))
 });
 
+// The user's own account for IPS QR payment requests (settings.prefs.payment)
+export const PaymentDetailsSchema = z.object({
+    // 18 characters only (no regex check: it would pull zod's string format code into the entry
+    // chunk). The QR builder and the database CHECK both reject non-digits.
+    account: z.string().check(z.minLength(18), z.maxLength(18)),
+    name: z.string().check(z.minLength(1), z.maxLength(70)),
+    address: z.optional(z.string().check(z.maxLength(70))),
+    city: z.optional(z.string().check(z.maxLength(70)))
+});
+
 // App State
 export const AppStateSchema = z.object({
     transactions: z._default(z.array(TransactionSchema), []),
@@ -237,6 +249,7 @@ export const AppStateSchema = z.object({
     appearance: z.optional(z.catch(z.optional(AppearanceSchema), undefined)),
     homeLayout: z.optional(z.catch(z.optional(HomeLayoutSchema), undefined)),
     budget: z.optional(z.catch(z.optional(z.nullable(BudgetSchema)), undefined)),
+    paymentDetails: z.optional(z.catch(z.optional(z.nullable(PaymentDetailsSchema)), undefined)),
     teams: z.optional(z.catch(z.optional(z.array(TeamSchema)), undefined))
 });
 

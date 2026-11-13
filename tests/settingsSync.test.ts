@@ -47,7 +47,7 @@ describe('buildSettingsSyncPayload', () => {
       theme: 'harbor',
       language: 'en',
       userProfile: baseState.userProfile,
-      prefs: { appearance: undefined, homeLayout: undefined, budget: null },
+      prefs: { appearance: undefined, homeLayout: undefined, budget: null, payment: null },
     });
     expect(payload).not.toHaveProperty('categories');
   });
@@ -63,7 +63,7 @@ describe('buildSettingsSyncPayload', () => {
       theme: 'harbor',
       language: 'en',
       userProfile: undefined,
-      prefs: { appearance: undefined, homeLayout: undefined, budget: null },
+      prefs: { appearance: undefined, homeLayout: undefined, budget: null, payment: null },
     });
   });
 });

@@ -32,7 +32,7 @@ export const BlockPreview: React.FC<{ block: HomeBlock; data: HomeData; scale: n
     style={{ zoom: scale, width: previewWidth(block) }}
   >
     <div className={clsx('flex', block.size === 's' && 'h-[172px]')}>
-      <BlockContent block={block} data={data} actions={NOOP_ACTIONS} />
+      <BlockContent block={block} data={data} actions={NOOP_ACTIONS} preview />
     </div>
   </div>
 );

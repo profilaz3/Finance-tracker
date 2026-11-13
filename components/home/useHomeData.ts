@@ -3,6 +3,7 @@ import type { Account, AppState, Currency, Event, Person, Transaction, Transacti
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { spendingExpenses } from '../../domain/settle';
+import { rsdPer } from '../../domain/exchangeRates';
 import {
   computeBudgetProgress,
   computeMonthSummary,
@@ -59,6 +60,10 @@ export interface HomeData {
   upcoming: UpcomingItem[];
   recent: Transaction[];
   rates: ReturnType<typeof getRatePairs>;
+  /** NBS list date when the app's rates are the official middle rate. */
+  ratesListDate: string | null;
+  /** RSD per 1 EUR / 1 USD from the app's rate table. */
+  rsdPerUnit: { EUR: number; USD: number };
   templates: TransactionTemplate[];
   categoryName: (id: string) => string;
   categoryColor: (id: string) => string;
@@ -139,6 +144,7 @@ export function useHomeData({ state, month, netWorth, getAccountBalance, activeE
   const upcoming = useMemo(() => getUpcomingRecurring(recurringTransactions), [recurringTransactions]);
   const recent = useMemo(() => getRecentTransactions(transactions, 5), [transactions]);
   const ratePairs = useMemo(() => getRatePairs(baseCurrency, rates.rates), [baseCurrency, rates]);
+  const rsdPerUnit = useMemo(() => ({ EUR: rsdPer(rates, 'EUR'), USD: rsdPer(rates, 'USD') }), [rates]);
   const quickTemplates = useMemo(() => selectDashboardTemplates(templates, 6), [templates]);
 
   const lookups = useMemo(() => {
@@ -169,6 +175,8 @@ export function useHomeData({ state, month, netWorth, getAccountBalance, activeE
     upcoming,
     recent,
     rates: ratePairs,
+    ratesListDate: rates.provider === 'nbs' && rates.listDate ? rates.listDate : null,
+    rsdPerUnit,
     templates: quickTemplates,
     ...lookups,
   };

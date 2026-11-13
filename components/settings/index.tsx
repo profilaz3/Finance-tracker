@@ -9,6 +9,7 @@ import { DataSettings } from './DataSettings';
 import { AccountSettings } from './AccountSettings';
 import { TeamSettings } from './TeamSettings';
 import { NotificationSettings } from './NotificationSettings';
+import { PaymentSettings } from './PaymentSettings';
 import { useSettingsViewState } from './useSettingsViewState';
 import type { SettingsTab, SettingsTabId } from './useSettingsViewState';
 import { resolveAppearance } from '../../utils/appearance';
@@ -93,6 +94,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         recurring: String(activeRecurring),
         people: String(state.people.length),
         team: state.teams?.length ? String(state.teams.length) : undefined,
+        payments: state.paymentDetails ? `···${state.paymentDetails.account.slice(-6, -2)}` : t.payNotSet,
     };
 
     const accountProps = {
@@ -243,6 +245,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
                     {shownTab === 'categories' && <DataSettings {...dataProps} activeTab="categories" />}
                     {shownTab === 'recurring' && <DataSettings {...dataProps} activeTab="recurring" />}
                     {shownTab === 'people' && <DataSettings {...dataProps} activeTab="people" />}
+                    {shownTab === 'payments' && <PaymentSettings state={state} setState={setState} onToast={onToast} />}
                     {shownTab === 'team' && (
                         <TeamSettings
                             state={state}

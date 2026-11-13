@@ -72,6 +72,10 @@ export interface ExchangeRates {
   base: Currency;
   date: string;
   rates: Record<Currency, number>;
+  /** 'nbs' when RSD pairs are the official NBS middle rate; absent for the generic API. */
+  provider?: 'nbs' | 'api';
+  /** NBS list date (YYYY-MM-DD) the rates come from. */
+  listDate?: string;
 }
 
 
@@ -216,6 +220,18 @@ export interface AppState {
   budget?: Budget | null;
   /** Teams the signed-in user belongs to; undefined until fetched. */
   teams?: Team[];
+  /** Where people pay the user back (IPS QR requests); null or undefined means not set. */
+  paymentDetails?: PaymentDetails | null;
+}
+
+/** The user's own bank account for IPS QR payment requests. Synced in `settings.prefs.payment`. */
+export interface PaymentDetails {
+  /** 18 digits, valid control digits. */
+  account: string;
+  /** Name as it should appear in the payer's bank app. */
+  name: string;
+  address?: string;
+  city?: string;
 }
 
 export type TeamRole = 'owner' | 'admin' | 'member';

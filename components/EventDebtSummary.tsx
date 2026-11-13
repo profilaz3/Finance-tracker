@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
-import { ArrowRight, Check, PartyPopper, Wallet } from 'lucide-react';
+import { ArrowRight, Check, PartyPopper, QrCode, Wallet } from 'lucide-react';
+import { openPaymentRequest } from './payments/paymentBus';
 import { Person, SharedExpense, Currency, ExchangeRates, EventDebt } from '../types';
 import { calculateEventSettlement } from '../domain/events';
 import { getTranslations } from '../utils/i18n';
@@ -20,6 +21,8 @@ interface EventDebtSummaryProps {
     onMarkPaid?: (debt: EventDebt) => void;
     /** The event has real spending, so an empty plan means everyone is even. */
     hasSpending?: boolean;
+    /** Payment purpose for an IPS QR request (the event name). */
+    requestPurpose?: string;
 }
 
 const SELF_FALLBACK_ID = 'self';
@@ -35,6 +38,7 @@ export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({
     selfId,
     onMarkPaid,
     hasSpending = false,
+    requestPurpose,
 }) => {
     const t = getTranslations();
     const language = getAppLanguage();
@@ -138,6 +142,23 @@ export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({
                                         {money(debt.amount, debt.currency, language, true)}
                                     </span>
                                 </span>
+                                {onMarkPaid && youGet && (
+                                    <button
+                                        type="button"
+                                        onClick={() => openPaymentRequest({
+                                            amount: debt.amount,
+                                            currency: debt.currency,
+                                            payerName: fromPerson.name,
+                                            purpose: requestPurpose,
+                                            onSettled: ({ full, amount }) => onMarkPaid(full ? debt : { ...debt, amount }),
+                                        })}
+                                        aria-label={`${t.payRequest}: ${fromPerson.name}, ${money(debt.amount, debt.currency, language, true)}`}
+                                        title={t.payRequest}
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
+                                    >
+                                        <QrCode size={16} strokeWidth={2.4} aria-hidden="true" />
+                                    </button>
+                                )}
                                 {onMarkPaid && (
                                     <button
                                         type="button"

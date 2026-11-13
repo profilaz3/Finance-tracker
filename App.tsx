@@ -866,6 +866,7 @@ const App: React.FC = () => {
         t={t}
         sharedReceiptImage={sharedReceiptImage}
         clearSharedReceiptImage={() => setSharedReceiptImage(null)}
+        onSavePaymentDetails={details => setState(prev => ({ ...prev, paymentDetails: details }))}
       />
 
       <AppSheets

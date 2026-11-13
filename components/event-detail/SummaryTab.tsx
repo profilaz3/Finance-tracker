@@ -17,6 +17,8 @@ interface SummaryTabProps {
     setSummaryCurrency: (currency: Currency) => void;
     state: AppState;
     onMarkPaid?: (debt: EventDebt) => void;
+    /** Event name, used as the purpose of IPS QR payment requests. */
+    eventName?: string;
 }
 
 const CURRENCIES: Currency[] = ['EUR', 'USD', 'RSD'];
@@ -37,6 +39,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
     setSummaryCurrency,
     state,
     onMarkPaid,
+    eventName,
 }) => {
     const t = TRANSLATIONS[state.language];
     const { language } = state;
@@ -201,6 +204,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                     selfId={state.userProfile?.id || 'self'}
                     onMarkPaid={onMarkPaid}
                     hasSpending={spending.length > 0}
+                    requestPurpose={eventName}
                 />
             </section>
         </div>

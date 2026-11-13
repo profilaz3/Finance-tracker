@@ -1,5 +1,19 @@
 // QR decoding helpers. jsQR (~130 kB) is loaded on first use so it stays out of the main bundle.
 
+import { parseFiscalUrl } from '../../utils/fiscalReceipt';
+import { parseIpsPayload, type IpsBill } from '../../utils/ipsQr';
+
+/** What a scanned code means to the app: a fiscal receipt link or an IPS payment code (bills). */
+export type ScannedQr = { kind: 'fiscal'; url: string } | { kind: 'ips'; bill: IpsBill };
+
+export const classifyScannedQr = (text: string | null | undefined): ScannedQr | null => {
+  if (!text) return null;
+  const fiscal = parseFiscalUrl(text);
+  if (fiscal) return { kind: 'fiscal', url: fiscal.url };
+  const bill = parseIpsPayload(text);
+  return bill ? { kind: 'ips', bill } : null;
+};
+
 type JsQr = typeof import('jsqr').default;
 
 let jsQrPromise: Promise<JsQr> | null = null;

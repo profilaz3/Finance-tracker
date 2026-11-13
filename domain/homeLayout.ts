@@ -104,6 +104,7 @@ export const BLOCK_TYPES: BlockTypeDef[] = [
     styles: [
       { key: 'compact', sizes: ['s'] },
       { key: 'row', sizes: ['m'] },
+      { key: 'trend', sizes: ['m'] },
     ],
     defaultStyle: 'compact',
     defaultSize: 's',

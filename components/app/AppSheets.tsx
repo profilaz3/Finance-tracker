@@ -1,14 +1,17 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import type { AppState, TransactionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { ParsedTransaction } from '../../services/aiService';
 import { lazyWithReload } from '../../utils/lazyWithReload';
 import { GlassSheet } from '../ui/GlassSheet';
-import { AppearanceSettings } from '../settings/AppearanceSettings';
 import { AddSheet } from './AddSheet';
 import { ProfileMenu } from './ProfileMenu';
+import { useRatesRequests } from '../rates/ratesBus';
 
 const ExportModal = lazyWithReload(() => import('../ExportModal').then(m => ({ default: m.ExportModal })));
+// Lazy: the appearance sheet opens from the profile menu, so its controls stay out of the entry chunk.
+const AppearanceSettings = lazyWithReload(() => import('../settings/AppearanceSettings').then(m => ({ default: m.AppearanceSettings })));
+const RatesSheet = lazyWithReload(() => import('../rates/RatesSheet').then(m => ({ default: m.RatesSheet })));
 
 interface AppSheetsState {
   isAddSheetOpen: boolean;
@@ -56,6 +59,13 @@ export const AppSheets: React.FC<AppSheetsProps> = ({
   onWorkspaceChange,
 }) => {
   const t = TRANSLATIONS[state.language];
+  // Exchange rates sheet: loaded on first open (Home rates block, Settings), then kept for its exit animation.
+  const [ratesMounted, setRatesMounted] = useState(false);
+  const [isRatesOpen, setIsRatesOpen] = useState(false);
+  useRatesRequests(() => {
+    setRatesMounted(true);
+    setIsRatesOpen(true);
+  });
   return (
     <>
       <AddSheet
@@ -89,11 +99,18 @@ export const AppSheets: React.FC<AppSheetsProps> = ({
         title={t.appearanceLabel}
         closeLabel={t.close}
       >
-        <AppearanceSettings state={state} setState={setState} />
+        <Suspense fallback={<div className="min-h-[320px]" aria-hidden="true" />}>
+          <AppearanceSettings state={state} setState={setState} />
+        </Suspense>
       </GlassSheet>
       {modals.isExportModalOpen && (
         <Suspense fallback={null}>
           <ExportModal isOpen onClose={() => modals.setIsExportModalOpen(false)} state={state} />
+        </Suspense>
+      )}
+      {ratesMounted && (
+        <Suspense fallback={null}>
+          <RatesSheet isOpen={isRatesOpen} onClose={() => setIsRatesOpen(false)} state={state} />
         </Suspense>
       )}
     </>

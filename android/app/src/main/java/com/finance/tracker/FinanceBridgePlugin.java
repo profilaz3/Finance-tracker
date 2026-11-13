@@ -1,5 +1,7 @@
 package com.finance.tracker;
 
+import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -13,8 +15,10 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import androidx.core.content.FileProvider;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -26,6 +30,7 @@ import java.util.concurrent.Executors;
  *  - updateWidget: stores the home screen widget snapshot and redraws the widgets.
  *  - getPendingAction: the widget's "+" button (add an expense).
  *  - getPendingShare: a receipt image shared into the app from another app.
+ *  - shareImage: shares a PNG (a payment QR code) to other apps through the system share sheet.
  * Pending items survive until the web app reads them, so a share that arrives before sign-in waits.
  */
 @CapacitorPlugin(name = "FinanceBridge")
@@ -138,6 +143,58 @@ public class FinanceBridgePlugin extends Plugin {
                 }
             }
             call.resolve(result);
+        });
+    }
+
+    /**
+     * Shares a PNG through the system share sheet. Takes base64 data (no data URL prefix), a file
+     * name and an optional text. The file goes to the cache through the app's FileProvider, and this
+     * app is left out of the chooser so a QR code is never shared back into itself.
+     */
+    @PluginMethod
+    public void shareImage(PluginCall call) {
+        final String base64 = call.getString("base64");
+        final String rawName = call.getString("fileName", "payment-qr.png");
+        final String text = call.getString("text", "");
+        final String title = call.getString("title", "");
+        if (base64 == null || base64.isEmpty() || base64.length() > 8 * 1024 * 1024) {
+            call.reject("Missing or oversized image");
+            return;
+        }
+        final String fileName = rawName.replaceAll("[^A-Za-z0-9._-]", "_");
+        final Context context = getContext().getApplicationContext();
+        io.execute(() -> {
+            try {
+                File dir = new File(context.getCacheDir(), "shared-out");
+                if (!dir.exists() && !dir.mkdirs()) throw new IOException("cache dir");
+                File file = new File(dir, fileName.endsWith(".png") ? fileName : fileName + ".png");
+                try (FileOutputStream out = new FileOutputStream(file)) {
+                    out.write(Base64.decode(base64, Base64.DEFAULT));
+                }
+                Uri uri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file);
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("image/png");
+                send.putExtra(Intent.EXTRA_STREAM, uri);
+                if (!text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
+                send.setClipData(ClipData.newRawUri("", uri));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                Intent chooser = Intent.createChooser(send, title.isEmpty() ? null : title);
+                chooser.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS,
+                    new ComponentName[] { new ComponentName(context, MainActivity.class) });
+                chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                getActivity().runOnUiThread(() -> {
+                    try {
+                        getActivity().startActivity(chooser);
+                        call.resolve();
+                    } catch (Exception error) {
+                        Log.w(TAG, "Could not open the share sheet", error);
+                        call.reject("Share failed");
+                    }
+                });
+            } catch (Exception error) {
+                Log.w(TAG, "Could not prepare the shared image", error);
+                call.reject("Share failed");
+            }
         });
     }
 

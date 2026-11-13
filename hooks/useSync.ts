@@ -44,5 +44,5 @@ export function useSync(
       }
     }, CONFIG.AUTO_SYNC_DEBOUNCE_MS);
     return () => clearTimeout(timeoutId);
-  }, [state.theme, state.language, state.baseCurrency, state.userProfile, state.appearance, state.homeLayout, state.budget, isAuthenticated, isHydrated]);
+  }, [state.theme, state.language, state.baseCurrency, state.userProfile, state.appearance, state.homeLayout, state.budget, state.paymentDetails, isAuthenticated, isHydrated]);
 }

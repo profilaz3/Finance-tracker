@@ -150,8 +150,16 @@ describe('settings prefs', () => {
       appearance: { mode: 'dark', accent: 'iris', glass: 'clear' },
       homeLayout: [{ id: 'recent-0', type: 'recent', style: 'list', size: 'm' }],
       budget: { monthly: 1800, categoryLimits: { food: 400 } },
+      paymentDetails: { account: '160000000123456729', name: 'Test Person', city: 'Niš' },
     });
-    expect(parseSettingsPrefs(JSON.parse(JSON.stringify(payload.prefs)))).toEqual(payload.prefs);
+    // Payment details travel as `prefs.payment` and come back as `paymentDetails`.
+    const { payment, ...rest } = payload.prefs ?? {};
+    expect(parseSettingsPrefs(JSON.parse(JSON.stringify(payload.prefs)))).toEqual({ ...rest, paymentDetails: payment });
+  });
+
+  it('clears payment details on null and ignores a malformed value', () => {
+    expect(parseSettingsPrefs({ payment: null })).toEqual({ paymentDetails: null });
+    expect(parseSettingsPrefs({ payment: { account: '123', name: 'x' } })).toEqual({});
   });
 
   it('keeps valid parts when another part is malformed, and honours a cleared budget', () => {

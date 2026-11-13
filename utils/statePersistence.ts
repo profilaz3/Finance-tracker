@@ -8,6 +8,7 @@ export interface PersistedStatePreferences {
   appearance?: AppState['appearance'];
   homeLayout?: AppState['homeLayout'];
   budget?: AppState['budget'];
+  paymentDetails?: AppState['paymentDetails'];
 }
 
 export interface PersistedStateSegments {
@@ -56,6 +57,7 @@ export const buildStateSegments = (state: AppState): PersistedStateSegments => (
     appearance: state.appearance,
     homeLayout: state.homeLayout,
     budget: state.budget,
+    paymentDetails: state.paymentDetails,
   },
   transactions: state.transactions,
   categories: state.categories,
@@ -82,6 +84,7 @@ export const mergeStateSegments = (
   appearance: segments.preferences?.appearance ?? baseState.appearance,
   homeLayout: segments.preferences?.homeLayout ?? baseState.homeLayout,
   budget: segments.preferences?.budget !== undefined ? segments.preferences.budget : baseState.budget,
+  paymentDetails: segments.preferences?.paymentDetails !== undefined ? segments.preferences.paymentDetails : baseState.paymentDetails,
   transactions: segments.transactions ?? baseState.transactions,
   categories: segments.categories ?? baseState.categories,
   accounts: segments.accounts ?? baseState.accounts,

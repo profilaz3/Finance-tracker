@@ -255,7 +255,7 @@ export function mapTeamRow(row: SupabaseTeamRow): Team {
 export function mapSettingsRow(
     row: SupabaseSettingsRow | null | undefined,
     userId: string
-): Pick<AppState, 'baseCurrency' | 'theme' | 'language' | 'userProfile' | 'appearance' | 'homeLayout' | 'budget'> {
+): Pick<AppState, 'baseCurrency' | 'theme' | 'language' | 'userProfile' | 'appearance' | 'homeLayout' | 'budget' | 'paymentDetails'> {
     const rawUserProfile = row?.user_profile;
     const userProfile: Person | undefined = rawUserProfile ? {
         id: normalizeUserProfileId(rawUserProfile.id, userId) ?? userId,

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Bell, Palette, Repeat, Shapes, UserRound, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react';
+import { Bell, Palette, QrCode, Repeat, Shapes, UserRound, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
 import type { AppState } from '../../types';
 
-export type SettingsTabId = 'profile' | 'appearance' | 'notifications' | 'wallets' | 'categories' | 'people' | 'recurring' | 'team';
+export type SettingsTabId = 'profile' | 'appearance' | 'notifications' | 'wallets' | 'categories' | 'people' | 'recurring' | 'payments' | 'team';
 
 export interface SettingsTab {
   id: SettingsTabId;
@@ -30,6 +30,7 @@ export function useSettingsViewState(language: AppState['language']) {
     { id: 'categories', label: t.categories, icon: Shapes, tint: '#EA580C', group: 'money' },
     { id: 'recurring', label: t.settingsTabRecurring, icon: Repeat, tint: '#2563EB', group: 'money' },
     { id: 'people', label: t.people, icon: Users, tint: '#DB2777', group: 'money' },
+    { id: 'payments', label: t.settingsTabPayments, icon: QrCode, tint: '#16A34A', group: 'money' },
     { id: 'team', label: t.settingsTabTeam, icon: UsersRound, tint: '#0891B2', group: 'together' },
   ]), [t]);
 
