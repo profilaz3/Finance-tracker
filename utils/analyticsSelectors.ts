@@ -501,6 +501,54 @@ const countRecurringOccurrencesInRemainingPeriod = (
   return occurrences;
 };
 
+const AUTO_NOTE_PREFIX = '[Auto]';
+const LARGE_ONE_OFF_MEDIAN_MULTIPLIER = 3;
+const LARGE_ONE_OFF_SHARE = 0.25;
+
+const getMedian = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+};
+
+/**
+ * Splits counted amounts into a fixed part (recurring-generated transactions
+ * and large one-offs) that is NOT extrapolated, and a variable part that is.
+ * Extrapolating a rent payment from day 10 of a month would triple it.
+ */
+const splitFixedAndVariable = (
+  entries: { amount: number; isRecurring: boolean }[],
+): { fixed: number; variable: number } => {
+  let fixed = 0;
+  const variableAmounts: number[] = [];
+
+  entries.forEach(entry => {
+    if (entry.isRecurring) {
+      fixed += entry.amount;
+    } else {
+      variableAmounts.push(entry.amount);
+    }
+  });
+
+  const variableTotal = variableAmounts.reduce((sum, amount) => sum + amount, 0);
+  const median = getMedian(variableAmounts);
+  let variable = 0;
+
+  variableAmounts.forEach(amount => {
+    const isLargeOneOff = variableAmounts.length > 1
+      && amount > median * LARGE_ONE_OFF_MEDIAN_MULTIPLIER
+      && amount >= variableTotal * LARGE_ONE_OFF_SHARE;
+    if (isLargeOneOff) {
+      fixed += amount;
+    } else {
+      variable += amount;
+    }
+  });
+
+  return { fixed, variable };
+};
+
 const buildForecast = (
   recurringTransactions: RecurringTransaction[],
   period: AnalyticsPeriodRange,
@@ -510,6 +558,34 @@ const buildForecast = (
 ): AnalyticsForecast => {
   let recurringIncomeImpact = 0;
   let recurringExpenseImpact = 0;
+
+  const activeRecurring = recurringTransactions.filter(recurring => recurring.isActive);
+  const isRecurringGenerated = (transaction: Transaction): boolean => (
+    (transaction.note ?? '').startsWith(AUTO_NOTE_PREFIX)
+    || activeRecurring.some(recurring => (
+      recurring.type === transaction.type
+      && recurring.categoryId === transaction.categoryId
+      && recurring.currency === transaction.currency
+      && Math.abs(recurring.amount - transaction.amount) < 0.005
+    ))
+  );
+
+  const expenseEntries: { amount: number; isRecurring: boolean }[] = [];
+  const incomeEntries: { amount: number; isRecurring: boolean }[] = [];
+  current.countedTransactions.forEach(transaction => {
+    const isRecurring = isRecurringGenerated(transaction);
+    if (transaction.type === 'expense') {
+      expenseEntries.push({ amount: getTransactionExpenseAmount(transaction, baseCurrency, rates), isRecurring });
+    } else {
+      incomeEntries.push({ amount: convertToBase(transaction.amount, transaction.currency, baseCurrency, rates), isRecurring });
+    }
+  });
+
+  const expenseSplit = splitFixedAndVariable(expenseEntries);
+  const incomeSplit = splitFixedAndVariable(incomeEntries);
+  // Fees stay in the variable part (current.totals.expense includes them).
+  const variableExpense = Math.max(0, current.totals.expense - expenseSplit.fixed);
+  const variableIncome = Math.max(0, current.totals.income - incomeSplit.fixed);
 
   recurringTransactions
     .forEach(recurring => {
@@ -524,9 +600,11 @@ const buildForecast = (
       }
     });
 
+  // Only variable activity is extrapolated; recurring items still to come are
+  // added from the schedule instead.
   const paceRatio = period.elapsedRatio > 0 ? period.elapsedRatio : 1;
-  const projectedIncome = round(current.totals.income / paceRatio + recurringIncomeImpact);
-  const projectedExpense = round(current.totals.expense / paceRatio + recurringExpenseImpact);
+  const projectedIncome = round(incomeSplit.fixed + variableIncome / paceRatio + recurringIncomeImpact);
+  const projectedExpense = round(expenseSplit.fixed + variableExpense / paceRatio + recurringExpenseImpact);
   const recurringImpact = round(recurringIncomeImpact - recurringExpenseImpact);
   const confidence: AnalyticsForecastConfidence = current.totals.transactionCount < 3 || period.elapsedRatio < 0.15
     ? 'low'
@@ -542,7 +620,7 @@ const buildForecast = (
     confidence,
     reason: confidence === 'low'
       ? 'Limited current-period activity.'
-      : 'Based on current pace and remaining recurring transactions.',
+      : 'Based on the pace of variable activity plus remaining scheduled recurring transactions.',
   };
 };
 

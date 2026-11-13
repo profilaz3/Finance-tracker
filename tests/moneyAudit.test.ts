@@ -6,7 +6,7 @@ import { buildAnalyticsStudioSummary } from '../utils/analyticsSelectors';
 import { calculateTotalExpense, calculateTotalIncome } from '../utils/financialSelectors';
 import { calculateIPaidSplitSubmission, recalculateSplitShares } from '../utils/splitExpenseCalculator';
 import { getGroupKey, getMonthKey } from '../components/stats/types';
-import type { AppState, ExchangeRates, Person, Transaction } from '../types';
+import type { AppState, ExchangeRates, Person, RecurringTransaction, Transaction } from '../types';
 
 // Regression tests for the money-logic audit (inverted proof tests).
 
@@ -168,6 +168,19 @@ describe('M11 analytics periods use local time', () => {
     });
     expect(studio.totals.current.expense).toBe(100);
     expect(studio.totals.previous.expense).toBe(0);
+  });
+
+  it('M14 does not extrapolate recurring rent or large one-offs', () => {
+    const rent = { id: 't', date: new Date(2026, 10, 1, 10).toISOString(), amount: 1000, currency: 'EUR', categoryId: 'c3', accountId: 'acc1', type: 'expense', note: '[Auto] Rent' } as Transaction;
+    const rec = { id: 'r', name: 'Rent', amount: 1000, currency: 'EUR', categoryId: 'c3', accountId: 'acc1', type: 'expense', frequency: 'monthly', startDate: '2026-10-01', nextDue: '2026-12-01', isActive: true } as RecurringTransaction;
+    const input = { categories: INITIAL_CATEGORIES, rates, baseCurrency: 'EUR' as const, period: 'month' as const, now: new Date(2026, 10, 10, 12) };
+
+    expect(buildAnalyticsStudioSummary({ ...input, transactions: [rent], recurringTransactions: [rec] }).forecast.projectedExpense).toBe(1000);
+
+    // 10 of 30 days elapsed: 30 of variable spend extrapolates to 90, the 600 laptop stays 600.
+    const small = [10, 10, 10].map((amount, i) => ({ id: `s${i}`, date: new Date(2026, 10, 2 + i, 12).toISOString(), amount, currency: 'EUR', categoryId: 'c1', accountId: 'a', type: 'expense' } as Transaction));
+    const laptop = { id: 'l', date: new Date(2026, 10, 5, 12).toISOString(), amount: 600, currency: 'EUR', categoryId: 'c2', accountId: 'a', type: 'expense' } as Transaction;
+    expect(buildAnalyticsStudioSummary({ ...input, transactions: [...small, laptop], recurringTransactions: [] }).forecast.projectedExpense).toBe(690);
   });
 
   it('buckets chart months by local calendar month', () => {
