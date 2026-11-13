@@ -320,7 +320,7 @@ describe('build contracts', () => {
     expect(peopleView).toContain('calculateDashboardDebtSummary');
   });
 
-  it('checks in a GitHub Actions workflow that runs verify always and browser regressions when secrets exist', () => {
+  it('checks in a GitHub Actions workflow that runs verify always and browser regressions against a local Supabase', () => {
     expect(existsSync('.github/workflows/ci.yml')).toBe(true);
 
     const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
@@ -336,11 +336,14 @@ describe('build contracts', () => {
     expect(workflow).toContain('npm run build');
     expect(workflow).toContain('npx playwright install --with-deps chromium');
     expect(workflow).toContain('npm run preview -- --host 127.0.0.1 --port 4173');
-    expect(workflow).toContain('CLEANUP_RECURRING_URL: http://127.0.0.1:4173');
-    expect(workflow).toContain('EVENT_SUMMARY_REGRESSION_URL: http://127.0.0.1:4173');
-    expect(workflow).toContain('DASHBOARD_SUMMARY_REGRESSION_URL: http://127.0.0.1:4173');
-    expect(workflow).toContain('CI_E2E_EMAIL');
-    expect(workflow).toContain('CI_E2E_PASSWORD');
+    // Browser regressions and RLS tests run against a throwaway local Supabase, never production.
+    expect(workflow).toContain('supabase/setup-cli@v1');
+    expect(workflow).toContain('supabase start');
+    expect(workflow).toContain('npm run test:integration');
+    expect(workflow).toContain('E2E_URL: http://127.0.0.1:4173');
+    expect(workflow).toContain('EVENT_SUMMARY_REGRESSION_URL: ${{ env.E2E_URL }}');
+    expect(workflow).toContain('DASHBOARD_SUMMARY_REGRESSION_URL: ${{ env.E2E_URL }}');
+    expect(workflow).not.toContain('CI_E2E_PASSWORD');
     expect(workflow).toContain("hashFiles('package-lock.json')");
     expect(workflow).toContain('actions/upload-artifact');
   });
