@@ -9,6 +9,7 @@ import { useImagePicker, base64ToFile, ImageResult } from '../hooks/useImagePick
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
 import { getSupabaseService } from '../services/runtimeServices';
+import { getTranslations } from '../utils/i18n';
 
 interface EventCreationModalProps {
     isOpen: boolean;
@@ -39,6 +40,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
     const [eventId, setEventId] = useState<string>('');
+    const t = getTranslations();
     
     // Image picker hook
     const {
@@ -149,7 +151,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 className="bg-surface w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 className="text-xl font-bold font-display text-on-surface">Create Event</h2>
+                    <h2 className="text-xl font-bold font-display text-on-surface">{t.createEvent}</h2>
                     <button onClick={onClose} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors">
                         <X size={20} className="text-on-surface-variant" />
                     </button>
@@ -158,7 +160,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 <div className="overflow-y-auto p-6 space-y-6">
                     {/* Image Upload */}
                     <div className="space-y-3">
-                        <label className="block text-sm font-medium text-on-surface-variant">Event Photo</label>
+                        <label className="block text-sm font-medium text-on-surface-variant">{t.eventPhoto}</label>
                         <div
                             onClick={openPicker}
                             className={clsx(
@@ -168,7 +170,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                         >
                             {previewUrl ? (
                                 <>
-                                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                    <img src={previewUrl} alt={t.imagePreview} className="w-full h-full object-cover" />
                                     <div className="absolute inset-0 bg-scrim/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                         <div className="bg-surface/20 backdrop-blur-md p-3 rounded-full text-white">
                                             <Camera size={24} />
@@ -180,8 +182,8 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                                     <div className="w-12 h-12 bg-surface-container rounded-full flex items-center justify-center mx-auto mb-3 text-primary">
                                         <ImageIcon size={24} />
                                     </div>
-                                    <p className="text-sm font-medium text-on-surface">Add event photo</p>
-                                    <p className="text-xs text-on-surface-variant mt-1">Take photo or choose from gallery</p>
+                                    <p className="text-sm font-medium text-on-surface">{t.addEventPhoto}</p>
+                                    <p className="text-xs text-on-surface-variant mt-1">{t.takeOrChoosePhoto}</p>
                                 </div>
                             )}
                             {isUploading && (
@@ -204,24 +206,24 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <label className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                                <Type size={16} /> Event Name
+                                <Type size={16} /> {t.eventName}
                             </label>
                             <input
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                placeholder="e.g., Trip to Bergamo"
+                                placeholder={t.eventNamePlaceholder}
                                 className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20 transition-all"
                                 autoFocus
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-on-surface-variant pl-1">Description (Optional)</label>
+                            <label className="text-sm font-medium text-on-surface-variant pl-1">{t.descriptionOptional}</label>
                             <textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Add details about the trip..."
+                                placeholder={t.eventDescriptionPlaceholder}
                                 rows={3}
                                 className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                             />
@@ -231,14 +233,14 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     {/* People */}
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                            <Users size={16} /> Who's going?
+                            <Users size={16} /> {t.whosGoing}
                         </label>
                         <div className="flex flex-wrap gap-2">
                             {/* Owner (userProfile) - always included */}
                             {userProfile && (
                                 <div
                                     className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border bg-primary/10 text-primary border-primary/20 opacity-80"
-                                    title="You (event owner)"
+                                    title={t.youEventOwner}
                                 >
                                     {userProfile.avatar ? (
                                         <img src={userProfile.avatar} alt={userProfile.name} className="w-5 h-5 rounded-full object-cover" />
@@ -247,7 +249,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                                             {userProfile.name?.[0] || 'Y'}
                                         </div>
                                     )}
-                                    {userProfile.name || 'You'}
+                                    {userProfile.name || t.you}
                                     <Check size={14} />
                                 </div>
                             )}
@@ -281,7 +283,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     {/* Color */}
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                            <Palette size={16} /> Theme Color
+                            <Palette size={16} /> {t.themeColor}
                         </label>
                         <div className="flex gap-3 overflow-x-auto pb-2">
                             {COLORS.map(color => (
@@ -307,14 +309,14 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors"
             >
-                Cancel
+                {t.cancel}
             </button>
             <button
                 onClick={handleSubmit}
                 disabled={!name.trim() || isUploading}
                 className="px-6 py-2 bg-primary text-on-primary rounded-xl font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-                {isUploading ? 'Uploading...' : 'Create Event'}
+                {isUploading ? t.uploading : t.createEvent}
             </button>
         </div>
     </motion.div>
@@ -324,7 +326,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
         onClose={closePicker}
         onSelectCamera={handleCameraSelect}
         onSelectGallery={handleGallerySelect}
-        title="Choose Event Photo"
+        title={t.chooseEventPhoto}
     />
 </div>
 );

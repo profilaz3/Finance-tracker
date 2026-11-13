@@ -5,6 +5,8 @@ import { Event, Person, Currency } from '../types';
 import { formatCurrency } from '../utils/currencyUtils';
 import clsx from 'clsx';
 import { getParticipantInitials, getParticipantTooltipLabel, resolveEventParticipants } from '../utils/eventParticipants';
+import { TRANSLATIONS } from '../constants';
+import { formatShortDate, type AppLanguage } from '../utils/locale';
 
 interface EventCardProps {
     event: Event;
@@ -13,9 +15,11 @@ interface EventCardProps {
     totalCost: number;
     baseCurrency: Currency;
     onClick: () => void;
+    language?: AppLanguage;
 }
 
-export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, userProfile, totalCost, baseCurrency, onClick }) => {
+export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, userProfile, totalCost, baseCurrency, onClick, language = 'en' }) => {
+    const t = TRANSLATIONS[language];
     const eventPeople = resolveEventParticipants({
         event,
         people,
@@ -42,8 +46,8 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
     };
 
     const formatDate = (dateString?: string) => {
-        if (!dateString) return 'TBD';
-        return new Date(dateString).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        if (!dateString) return t.dateTbd;
+        return formatShortDate(dateString, language);
     };
 
     return (
@@ -75,7 +79,7 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
                     getStatusColor(event.status)
                 )}>
                     {getStatusIcon(event.status)}
-                    <span className="capitalize">{event.status}</span>
+                    <span>{event.status === 'active' ? t.eventStatusActive : event.status === 'completed' ? t.eventStatusCompleted : event.status === 'archived' ? t.eventStatusArchived : event.status}</span>
                 </div>
             </div>
 
@@ -88,10 +92,10 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
                         <Calendar size={14} />
                         <span>
                             {event.startDate
-                                ? `${formatDate(event.startDate)}${event.endDate ? ` - ${formatDate(event.endDate)}` : ' (Ongoing)'}`
+                                ? `${formatDate(event.startDate)}${event.endDate ? ` - ${formatDate(event.endDate)}` : ` (${t.eventOngoing})`}`
                                 : event.endDate
-                                    ? `Ended ${formatDate(event.endDate)}`
-                                    : 'No dates set'
+                                    ? t.eventEndedOn.replace('{date}', formatDate(event.endDate))
+                                    : t.noDatesSet
                             }
                         </span>
                     </div>
@@ -120,9 +124,9 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
                     </div>
 
                     <div className="text-right">
-                        <p className="text-xs text-on-surface-variant mb-0.5">Total Spent</p>
+                        <p className="text-xs text-on-surface-variant mb-0.5">{t.totalSpent}</p>
                         <p className="font-semibold text-on-surface">
-                            {formatCurrency(totalCost, baseCurrency)}
+                            {formatCurrency(totalCost, baseCurrency, language)}
                         </p>
                     </div>
                 </div>

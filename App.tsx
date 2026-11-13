@@ -3,11 +3,13 @@ import { Transaction, Category, Person, View, TransactionType, Event } from './t
 
 import { getSupabaseService } from './services/runtimeServices';
 import { TRANSLATIONS } from './constants';
+import { getIntlLocale, setAppLanguage } from './utils/locale';
 import { ToastContainer, Toast } from './components/Toast';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
 import clsx from 'clsx';
 import { createTransactionDraft } from './domain/transactions';
 const AuthView = lazy(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
+const SetNewPasswordView = lazy(() => import('./components/AuthView').then(m => ({ default: m.SetNewPasswordView })));
 import type { ParsedTransaction } from './services/aiService';
 import { DashboardSkeleton, TransactionsListSkeleton, CalendarSkeleton, GenericViewSkeleton } from './components/Skeleton';
 import { ErrorBoundary, ViewErrorBoundary } from './components/ErrorBoundary';
@@ -17,6 +19,7 @@ import { AppViewRouter } from './components/app/AppViewRouter';
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
+import { usePasswordRecovery } from './hooks/usePasswordRecovery';
 import { useAppState } from './hooks/useAppState';
 import { useModals } from './hooks/useModals';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -39,6 +42,7 @@ const App: React.FC = () => {
   // --- Extracted Hooks ---
   const { isAuthenticated, isLoadingAuth, handleLogin, handleLogout, handleDeleteAccount: handleDeleteUserAccount } = useAuth();
   const { state, setState, fetchRemoteState } = useAppState();
+  const authFlow = usePasswordRecovery();
   const modals = useModals();
 
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -76,7 +80,13 @@ const App: React.FC = () => {
   const touchEndXRef = useRef<number | null>(null);
   const touchEndYRef = useRef<number | null>(null);
 
+  // Keep the locale layer in sync before children render (formatters read it).
+  setAppLanguage(state.language);
   const t = TRANSLATIONS[state.language];
+
+  useEffect(() => {
+    document.documentElement.lang = getIntlLocale(state.language);
+  }, [state.language]);
   const defaultAccountId = state.accounts[0]?.id || '';
 
   // --- Use extracted hooks ---
@@ -440,6 +450,27 @@ const App: React.FC = () => {
             handleLogin();
             await fetchRemoteState();
           }}
+          language={state.language}
+          onLanguageChange={(language) => setState(prev => ({ ...prev, language }))}
+          onSignUp={authFlow.signUp}
+          onRequestPasswordReset={authFlow.requestPasswordReset}
+          redirectErrorCode={authFlow.redirectErrorCode}
+          onDismissRedirectError={authFlow.clearRedirectError}
+        />
+      </Suspense>
+    );
+  }
+
+  if (authFlow.isRecovering) {
+    return (
+      <Suspense fallback={<DashboardSkeleton />}>
+        <SetNewPasswordView
+          language={state.language}
+          onSubmit={async (password) => {
+            await authFlow.updatePassword(password);
+            addToast(t.authPasswordUpdated, 'success');
+          }}
+          onCancel={authFlow.finishRecovery}
         />
       </Suspense>
     );
@@ -453,8 +484,8 @@ const App: React.FC = () => {
         labels={{
           dashboard: t.dashboard,
           transactions: t.transactions,
-          events: 'Events',
-          calendar: 'Calendar',
+          events: t.events,
+          calendar: t.calendar,
           analytics: t.analytics,
           insights: t.aiInsights,
           settings: t.settings,
@@ -462,7 +493,7 @@ const App: React.FC = () => {
       />
 
       <a href="#main-content" className="skip-link">
-        Skip to main content
+        {t.skipToMainContent}
       </a>
 
       <main
@@ -473,7 +504,7 @@ const App: React.FC = () => {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         role="main"
-        aria-label="Main content"
+        aria-label={t.mainContent}
       >
         <div className="max-w-5xl mx-auto px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] md:p-4 md:pb-8 lg:p-8">
           <ViewErrorBoundary>
