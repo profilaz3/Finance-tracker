@@ -25,3 +25,13 @@
 (?d)*.pyc
 (?d).DS_Store
 (?d)Thumbs.db
+// Secrets and local-only data: never sync to other devices
+!.env.example
+.env
+.env.*
+backups
+generate-keystore.bat
+*.jks
+*.keystore
+supabase/.temp
+.claude/worktrees

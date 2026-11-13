@@ -37,3 +37,6 @@ generate-keystore.bat
 *.keystore
 backups/
 tmp-preview.*
+.env.*
+!.env.example
+.claude/worktrees/
