@@ -79,6 +79,7 @@ export const TransactionSchema = z.object({
     receiptData: ReceiptDataSchema.optional(),
     fees: z.number().optional(),
     eventId: z.string().optional(),
+    transferId: z.string().optional(),
     splitDetails: SplitDetailsSchema.optional()
 });
 

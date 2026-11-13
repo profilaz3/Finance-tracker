@@ -24,6 +24,7 @@ export type SupabaseTransactionRow = SupabaseRecord & {
     person_id?: string;
     split_details?: unknown;
     event_id?: string | null;
+    transfer_id?: string | null;
 };
 
 export type SupabaseAccountRow = SupabaseRecord & {
@@ -115,7 +116,8 @@ export function mapTransactionRow(row: SupabaseTransactionRow): Transaction {
         accountId: row.account_id,
         personId: row.person_id,
         splitDetails: row.split_details || undefined,
-        eventId: row.event_id || undefined
+        eventId: row.event_id || undefined,
+        transferId: row.transfer_id || undefined
     } as Transaction;
 }
 

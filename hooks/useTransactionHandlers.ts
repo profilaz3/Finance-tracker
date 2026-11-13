@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
-import { AppState, Transaction } from '../types';
+import { AppState, Currency, ExchangeRates, Transaction } from '../types';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -20,6 +20,44 @@ interface UseTransactionHandlersOptions {
 
 type SyncManagerInstance = Awaited<ReturnType<typeof getSyncManager>>;
 
+/**
+ * Records a plain transaction in its account's currency at today's rate (the
+ * amount the account is actually charged). Debts and splits keep the currency
+ * they were agreed in, because person balances are kept per currency.
+ */
+const convertToAccountCurrency = (
+  transaction: Transaction,
+  accountCurrency: Currency | undefined,
+  rates: ExchangeRates,
+): Transaction => {
+  if (!accountCurrency || transaction.currency === accountCurrency || transaction.personId || transaction.splitDetails) {
+    return transaction;
+  }
+  const fromRate = rates.rates[transaction.currency];
+  const toRate = rates.rates[accountCurrency];
+  if (!fromRate || !toRate) {
+    return transaction;
+  }
+  const converted = convertAmount(transaction.amount, transaction.currency, accountCurrency, rates);
+  if (!Number.isFinite(converted)) {
+    return transaction;
+  }
+  return { ...transaction, amount: Math.round(converted * 100) / 100, currency: accountCurrency };
+};
+
+/** The transaction plus the other leg(s) of its transfer, if it has a transferId. */
+const withTransferLegs = (transactions: Transaction[], selected: Transaction[]): Transaction[] => {
+  const transferIds = new Set(selected.map(entry => entry.transferId).filter((id): id is string => !!id));
+  if (transferIds.size === 0) {
+    return selected;
+  }
+  const selectedIds = new Set(selected.map(entry => entry.id));
+  const partners = transactions.filter(entry => (
+    !selectedIds.has(entry.id) && !!entry.transferId && transferIds.has(entry.transferId)
+  ));
+  return [...selected, ...partners];
+};
+
 const withSyncManager = async <T,>(run: (syncManager: SyncManagerInstance) => Promise<T>): Promise<T> =>
   run(await getSyncManager());
 
@@ -33,25 +71,11 @@ export function useTransactionHandlers({
   closeReceiptModal,
 }: UseTransactionHandlersOptions) {
   const addTransaction = useCallback(async (transaction: Transaction) => {
-    let finalTransaction = { ...transaction };
-
-    setState(prev => {
-      let txToAdd = { ...transaction };
-      if (txToAdd.accountId === 'acc3' && txToAdd.currency !== 'USD') {
-        const fromRate = prev.rates.rates[txToAdd.currency];
-        const toRate = prev.rates.rates.USD;
-        if (fromRate && toRate && fromRate !== 0) {
-          const rate = toRate / fromRate;
-          const convertedAmount = txToAdd.amount * rate;
-          if (Number.isFinite(convertedAmount)) {
-            txToAdd.amount = parseFloat(convertedAmount.toFixed(2));
-            txToAdd.currency = 'USD';
-          }
-        }
-      }
-      finalTransaction = txToAdd;
-      return { ...prev, transactions: [txToAdd, ...prev.transactions] };
-    });
+    // Computed before setState so the synced row is the stored row (an updater
+    // is not guaranteed to have run by the time the sync below starts).
+    const account = state.accounts.find(entry => entry.id === transaction.accountId);
+    const finalTransaction = convertToAccountCurrency(transaction, account?.currency, state.rates);
+    setState(prev => ({ ...prev, transactions: [finalTransaction, ...prev.transactions] }));
 
     try {
       await withSyncManager(syncManager => syncManager.syncTransaction(finalTransaction));
@@ -62,7 +86,7 @@ export function useTransactionHandlers({
 
     vibrate(HAPTIC_PATTERNS.success);
     addToast('Transaction added successfully', 'success');
-  }, [addToast, setState]);
+  }, [addToast, setState, state.accounts, state.rates]);
 
   /**
    * Puts deleted transactions back and re-syncs them (upsert). Person balances
@@ -100,8 +124,9 @@ export function useTransactionHandlers({
       return;
     }
 
-    // Captured per deletion: each toast's undo restores exactly what it deleted.
-    const deleted = [transaction];
+    // Captured per deletion: each toast's undo restores exactly what it deleted
+    // (both legs of a transfer).
+    const deleted = withTransferLegs(state.transactions, [transaction]);
     const deletedIds = new Set(deleted.map(entry => entry.id));
     setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => !deletedIds.has(entry.id)) }));
 
@@ -123,9 +148,15 @@ export function useTransactionHandlers({
     });
   }, [addToast, restoreTransactions, setState, state.transactions]);
 
-  const batchDeleteTransactions = useCallback(async (ids: string[]) => {
-    const idSet = new Set(ids);
-    const deletedTransactions = state.transactions.filter(transaction => idSet.has(transaction.id));
+  const batchDeleteTransactions = useCallback(async (requestedIds: string[]) => {
+    const requestedIdSet = new Set(requestedIds);
+    const deletedTransactions = withTransferLegs(
+      state.transactions,
+      state.transactions.filter(transaction => requestedIdSet.has(transaction.id)),
+    );
+    // Unknown ids are still deleted remotely; transfer partners are added.
+    const idSet = new Set([...requestedIds, ...deletedTransactions.map(transaction => transaction.id)]);
+    const ids = [...idSet];
 
     setState(prev => ({
       ...prev,
@@ -161,27 +192,46 @@ export function useTransactionHandlers({
   const updateTransaction = useCallback(async (updated: Transaction, targetAccountId?: string) => {
     const isNewTransaction = !state.transactions.find(transaction => transaction.id === updated.id);
 
+    // Editing one leg of a transfer keeps the other leg in step (date, amount).
+    const partnerLegs = updated.transferId
+      ? state.transactions
+        .filter(transaction => transaction.transferId === updated.transferId && transaction.id !== updated.id)
+        .map(partner => {
+          const rawAmount = convertAmount(updated.amount, updated.currency, partner.currency, state.rates);
+          return {
+            ...partner,
+            date: updated.date,
+            amount: Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : partner.amount,
+          };
+        })
+      : [];
+    const changed = [updated, ...partnerLegs];
+    const changedById = new Map(changed.map(transaction => [transaction.id, transaction]));
+
     // Person balances follow from the transaction itself (see domain/balances.ts),
     // so editing only replaces the row: no balance bookkeeping, no currency drift.
     setState(prev => {
       const exists = prev.transactions.some(transaction => transaction.id === updated.id);
+      const transactions = prev.transactions.map(transaction => changedById.get(transaction.id) ?? transaction);
       return {
         ...prev,
-        transactions: exists
-          ? prev.transactions.map(transaction => transaction.id === updated.id ? updated : transaction)
-          : [...prev.transactions, updated],
+        transactions: exists ? transactions : [...transactions, updated],
       };
     });
 
     try {
-      await withSyncManager(syncManager => syncManager.syncTransaction(updated));
+      await withSyncManager(syncManager =>
+        Promise.all(changed.map(transaction => syncManager.syncTransaction(transaction))).then(() => undefined)
+      );
     } catch (error) {
       console.error('Failed to sync transaction update:', error);
       addToast('Transaction updated locally, but sync failed', 'error');
     }
 
     if (isNewTransaction && targetAccountId && updated.categoryId === 'internal-transfer') {
-      const outflowTx = { ...updated, type: 'expense' as const };
+      // Both legs share a transferId so they are edited and deleted together.
+      const transferId = updated.transferId ?? createId();
+      const outflowTx = { ...updated, type: 'expense' as const, transferId };
 
       setState(prev => ({
         ...prev,
@@ -209,6 +259,7 @@ export function useTransactionHandlers({
           type: 'income',
           note: `Transfer from ${state.accounts.find(account => account.id === updated.accountId)?.name || 'Account'}`,
           subcategory: 'Transfer In',
+          transferId,
         };
 
         await addTransaction(inflowTx);

@@ -157,3 +157,68 @@ describe('transaction handlers (H3 undo, H4 derived balances)', () => {
     expect(h.balanceOf('p')).toEqual({ EUR: 0, USD: 0, RSD: 5850 });
   });
 });
+
+describe('transfers and account currency (L6, L7)', () => {
+  beforeEach(() => {
+    hookState.length = 0;
+    syncCalls.length = 0;
+  });
+
+  const withUsdAccount = () => {
+    const s = mkState();
+    s.accounts = [...s.accounts, { id: 'usd', name: 'Wallet', type: 'digital', currency: 'USD', color: '#000' }];
+    s.rates = { base: 'EUR', date: 'x', rates: { EUR: 1, USD: 1.1, RSD: 117 } };
+    return s;
+  };
+
+  it('links both transfer legs and edits and deletes them together', async () => {
+    const h = harness(withUsdAccount());
+    const outflow: Transaction = { id: 'out', date: '2026-11-01T10:00:00Z', amount: 100, currency: 'EUR', categoryId: 'internal-transfer', accountId: 'acc1', type: 'expense' };
+
+    await h.render().updateTransaction(outflow, 'usd');
+    const legs = h.state.transactions;
+    expect(legs).toHaveLength(2);
+    expect(legs.every(tx => tx.transferId === 'new-id')).toBe(true);
+    expect(legs.find(tx => tx.accountId === 'usd')).toMatchObject({ amount: 110, currency: 'USD', type: 'income' });
+
+    const stored = h.state.transactions.find(tx => tx.id === 'out')!;
+    await h.render().updateTransaction({ ...stored, amount: 50, date: '2026-11-02T10:00:00Z' });
+    expect(h.state.transactions.find(tx => tx.accountId === 'usd')).toMatchObject({ amount: 55, date: '2026-11-02T10:00:00Z' });
+
+    await h.render().deleteTransaction('out');
+    expect(h.state.transactions).toHaveLength(0);
+    expect(syncCalls.filter(call => call.method === 'deleteTransaction')).toHaveLength(2);
+
+    h.toasts.at(-1)!.action!.onClick();
+    await flush();
+    expect(h.state.transactions).toHaveLength(2);
+  });
+
+  it('batch delete removes the partner leg too', async () => {
+    const s = withUsdAccount();
+    s.transactions = [
+      { id: 'o', date: '2026-11-01', amount: 10, currency: 'EUR', categoryId: 'internal-transfer', accountId: 'acc1', type: 'expense', transferId: 'T' },
+      { id: 'i', date: '2026-11-01', amount: 11, currency: 'USD', categoryId: 'internal-transfer', accountId: 'usd', type: 'income', transferId: 'T' },
+    ];
+    const h = harness(s);
+    await h.render().batchDeleteTransactions(['o']);
+    expect(h.state.transactions).toHaveLength(0);
+  });
+
+  it('records a plain transaction in its account currency, for any account', async () => {
+    const h = harness(withUsdAccount());
+    await h.render().addTransaction({ id: 'x', date: '2026-11-01', amount: 10, currency: 'EUR', categoryId: 'c1', accountId: 'usd', type: 'expense' });
+    expect(h.state.transactions[0]).toMatchObject({ amount: 11, currency: 'USD' });
+
+    // An account called acc3 is not special any more.
+    const s = mkState();
+    s.accounts = [...s.accounts, { id: 'acc3', name: 'Renamed', type: 'bank', currency: 'EUR', color: '#000' }];
+    const h2 = harness(s);
+    await h2.render().addTransaction({ id: 'y', date: '2026-11-01', amount: 10, currency: 'EUR', categoryId: 'c1', accountId: 'acc3', type: 'expense' });
+    expect(h2.state.transactions[0]).toMatchObject({ amount: 10, currency: 'EUR' });
+
+    // Debts keep their agreed currency.
+    await h.render().addTransaction({ id: 'z', date: '2026-11-01', amount: 10, currency: 'EUR', categoryId: 'c1', accountId: 'usd', type: 'expense', personId: 'p' });
+    expect(h.state.transactions[0]).toMatchObject({ amount: 10, currency: 'EUR' });
+  });
+});
