@@ -2,6 +2,7 @@ import React from 'react';
 import { Check } from 'lucide-react';
 import clsx from 'clsx';
 import { TheyPaidSectionProps } from './types';
+import { TRANSLATIONS } from '../../constants';
 
 export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
     people,
@@ -16,13 +17,14 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
     language,
     getPerson
 }) => {
+    const t = TRANSLATIONS[language];
     return (
         // "Someone paid for me" mode - Multi-recipient
         <div className="space-y-4">
             {/* Who paid? */}
             <div>
                 <label className="block text-sm font-medium text-on-surface-variant mb-2">
-                    {language === 'sr' ? 'Ko je platio?' : 'Who paid?'}
+                    {t.whoPaid}
                 </label>
                 <div className="flex flex-wrap gap-2">
                     {people.map(person => (
@@ -58,10 +60,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
             {payerId && (
                 <div>
                     <label className="block text-sm font-medium text-on-surface-variant mb-2">
-                        {language === 'sr'
-                            ? `Za koga je ${getPerson(payerId)?.name} platio?`
-                            : `Who did ${getPerson(payerId)?.name} pay for?`
-                        }
+                        {t.whoDidPayerPayFor.replace('{name}', getPerson(payerId)?.name ?? '')}
                     </label>
                     <div className="flex flex-wrap gap-2">
                         {availableRecipients.map(recipient => {
@@ -80,7 +79,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
                                 >
                                     {recipient.personId === 'self' ? (
                                         <div aria-hidden="true" className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                                            {language === 'sr' ? 'J' : 'M'}
+                                            {t.meInitial}
                                         </div>
                                     ) : person?.avatar ? (
                                         <img src={person.avatar} alt="" aria-hidden="true" className="w-5 h-5 rounded-full object-cover" />
@@ -106,7 +105,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
             {payerId && includedRecipients.length > 0 && (
                 <div>
                     <label className="block text-sm font-medium text-on-surface-variant mb-2">
-                        {language === 'sr' ? 'Unesite iznose:' : 'Enter amounts:'}
+                        {t.enterAmounts}
                     </label>
                     <div className="space-y-2 bg-surface-container rounded-xl p-3">
                         {includedRecipients.map(recipient => {
@@ -116,7 +115,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
                                     <div className="flex items-center gap-2 w-1/3">
                                         {recipient.personId === 'self' ? (
                                             <div aria-hidden="true" className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                                                {language === 'sr' ? 'J' : 'M'}
+                                                {t.meInitial}
                                             </div>
                                         ) : person?.avatar ? (
                                             <img src={person.avatar} alt="" aria-hidden="true" className="w-6 h-6 rounded-full object-cover" />
@@ -148,7 +147,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
                         {/* Total */}
                         <div className="flex items-center justify-between pt-2 mt-2 border-t border-outline/10">
                             <span className="text-sm font-medium text-on-surface-variant">
-                                {language === 'sr' ? `Ukupno (${getPerson(payerId)?.name} platio):` : `Total paid by ${getPerson(payerId)?.name}:`}
+                                {t.totalPaidBy.replace('{name}', getPerson(payerId)?.name ?? '')}
                             </span>
                             <span className="font-bold text-on-surface">
                                 {recipientTotal.toFixed(2)} {currency}

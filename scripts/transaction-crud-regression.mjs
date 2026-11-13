@@ -51,7 +51,7 @@ const openAddTransactionModal = async (page) => {
   }
 
   await page.getByRole('button', { name: /open transaction actions|otvori akcije transakcija/i }).click();
-  const addTransactionAction = page.locator('button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]').first();
+  const addTransactionAction = page.locator('button[aria-label="Add a transaction"], button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]').first();
   await addTransactionAction.click();
   await amountInput.waitFor({ timeout: 15000 });
 

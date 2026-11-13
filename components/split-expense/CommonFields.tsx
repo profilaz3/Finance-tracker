@@ -73,7 +73,7 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
             {mode === 'i_paid' && (
                 <div className="flex gap-4">
                     <div className="flex-1">
-                        <label className="text-xs text-primary mb-1 block">Date</label>
+                        <label className="text-xs text-primary mb-1 block">{t.date}</label>
                         <input
                             type="date"
                             value={(() => {
@@ -94,7 +94,7 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
                         />
                     </div>
                     <div className="w-32">
-                        <label className="text-xs text-primary mb-1 block">Time</label>
+                        <label className="text-xs text-primary mb-1 block">{t.time}</label>
                         <input
                             type="time"
                             value={(() => {
@@ -118,7 +118,7 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
             {/* Fees - Only for I Paid mode */}
             {mode === 'i_paid' && (
                 <div className="flex-1">
-                    <label className="text-xs text-primary mb-1 block">Fees (USD)</label>
+                    <label className="text-xs text-primary mb-1 block">{t.feesUsd}</label>
                     <input
                         type="number"
                         value={fees}
@@ -145,7 +145,7 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
                             type="text"
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
-                            placeholder={language === 'sr' ? 'npr. Rucak u restoranu' : 'e.g., Lunch at restaurant'}
+                            placeholder={t.splitNotePlaceholder}
                             className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20"
                         />
                     </div>

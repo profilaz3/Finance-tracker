@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangleIcon, HomeIcon, RefreshIcon } from './icons/UiIcons';
+import { getTranslations } from '../utils/i18n';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -51,6 +52,7 @@ export class ErrorBoundary extends Component<Props, State> {
             }
 
             const variant = this.props.variant ?? 'full';
+            const t = getTranslations();
 
             if (variant === 'inline') {
                 return (
@@ -61,11 +63,11 @@ export class ErrorBoundary extends Component<Props, State> {
                             </div>
 
                             <h3 className="text-lg font-medium text-on-surface mb-2">
-                                Failed to load
+                                {t.failedToLoad}
                             </h3>
 
                             <p className="text-sm text-on-surface-variant mb-4">
-                                This section encountered an error.
+                                {t.sectionError}
                             </p>
 
                             <button
@@ -73,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-lg font-medium hover:bg-primary/90 transition-colors"
                             >
                                 <RefreshIcon size={16} />
-                                Retry
+                                {t.retry}
                             </button>
                         </div>
                     </div>
@@ -88,11 +90,11 @@ export class ErrorBoundary extends Component<Props, State> {
                         </div>
 
                         <h2 className="text-xl font-bold text-on-surface mb-2">
-                            Something went wrong
+                            {t.somethingWentWrong}
                         </h2>
 
                         <p className="text-on-surface-variant mb-6">
-                            An unexpected error occurred. Your data is safe.
+                            {t.unexpectedErrorDataSafe}
                         </p>
 
                         {IS_DEV && this.state.error && (
@@ -114,7 +116,7 @@ export class ErrorBoundary extends Component<Props, State> {
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary text-on-primary rounded-xl font-medium hover:bg-primary/90 transition-colors"
                             >
                                 <RefreshIcon size={18} />
-                                Try Again
+                                {t.tryAgain}
                             </button>
 
                             <button
@@ -122,7 +124,7 @@ export class ErrorBoundary extends Component<Props, State> {
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-surface-container text-on-surface rounded-xl font-medium hover:bg-surface-container-high transition-colors"
                             >
                                 <HomeIcon size={18} />
-                                Go Home
+                                {t.goHome}
                             </button>
                         </div>
                     </div>

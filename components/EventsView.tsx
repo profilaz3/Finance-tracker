@@ -7,6 +7,7 @@ import { convertCurrency } from '../utils/currencyUtils';
 import { EmptyState } from './EmptyState';
 import clsx from 'clsx';
 import { MOTION } from '../config';
+import { TRANSLATIONS } from '../constants';
 
 interface EventsViewProps {
     state: AppState;
@@ -16,6 +17,7 @@ interface EventsViewProps {
 
 export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, onSelectEvent }) => {
     const [viewCurrency, setViewCurrency] = useState<Currency>(state.baseCurrency);
+    const t = TRANSLATIONS[state.language];
 
     const filteredEvents = [...state.events]
         .sort((a, b) => {
@@ -54,8 +56,8 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
         >
             <header className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold font-display text-on-surface">Events</h1>
-                    <p className="text-on-surface-variant mt-1">Track your trips and travel expenses</p>
+                    <h1 className="text-2xl font-bold font-display text-on-surface">{t.events}</h1>
+                    <p className="text-on-surface-variant mt-1">{t.eventsSubtitle}</p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -79,7 +81,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
                     <button
                         onClick={onCreateEvent}
                         className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
-                        title="New Event"
+                        title={t.newEvent}
                     >
                         <Plus size={24} />
                     </button>
@@ -98,6 +100,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
                             totalCost={getEventTotal(event.id)}
                             baseCurrency={viewCurrency}
                             onClick={() => onSelectEvent(event)}
+                            language={state.language}
                         />
                     ))}
                 </AnimatePresence>
@@ -106,9 +109,9 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
             {filteredEvents.length === 0 && (
                 <EmptyState
                     icon={MapPin}
-                    title="No events yet"
-                    description="Start a new adventure by creating an event to track group expenses"
-                    action={{ label: 'Create Event', onClick: onCreateEvent }}
+                    title={t.noEvents}
+                    description={t.noEventsDescription}
+                    action={{ label: t.createEvent, onClick: onCreateEvent }}
                 />
             )}
         </motion.div>

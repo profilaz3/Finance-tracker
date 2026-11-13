@@ -1,4 +1,5 @@
 import { RecurringTransaction, RecurrenceFrequency } from '../types';
+import { TRANSLATIONS } from '../constants';
 
 const parseDateOnly = (value: string): Date => {
   const [year, month, day] = value.slice(0, 10).split('-').map(Number);
@@ -116,13 +117,14 @@ export const isDue = (recurring: RecurringTransaction, referenceDate: Date = new
 };
 
 export const getFrequencyLabel = (frequency: RecurrenceFrequency, language: 'en' | 'sr'): string => {
-  const labels: Record<RecurrenceFrequency, { en: string; sr: string }> = {
-    daily: { en: 'Daily', sr: 'Dnevno' },
-    weekly: { en: 'Weekly', sr: 'Nedeljno' },
-    biweekly: { en: 'Bi-weekly', sr: 'Dvonedeljno' },
-    monthly: { en: 'Monthly', sr: 'Mesecno' },
-    yearly: { en: 'Yearly', sr: 'Godisnje' }
+  const t = TRANSLATIONS[language] ?? TRANSLATIONS.en;
+  const labels: Record<RecurrenceFrequency, string> = {
+    daily: t.daily,
+    weekly: t.weekly,
+    biweekly: t.biweekly,
+    monthly: t.monthly,
+    yearly: t.yearly
   };
 
-  return labels[frequency][language];
+  return labels[frequency];
 };

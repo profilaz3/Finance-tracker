@@ -1,5 +1,6 @@
 import React, { lazy } from 'react';
 import { AppState, Event, Person, Transaction, View } from '../../types';
+import { TRANSLATIONS } from '../../constants';
 import type { ParsedTransaction } from '../../services/aiService';
 import { createLinkedExpenseDraft, createRepeatTransactionDraft, createTransactionDraft, duplicateTransactionDraft } from '../../domain/transactions';
 
@@ -287,14 +288,15 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
           setState(freshState);
         }}
         onDeleteAccount={async () => {
+          const t = TRANSLATIONS[state.language];
           try {
             const freshState = await handleDeleteUserAccount();
             setState(freshState);
-            addToast('Account deleted successfully', 'success');
+            addToast(t.accountDeletedSuccess, 'success');
           } catch (error: unknown) {
             console.error('Failed to delete account:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            addToast('Failed to delete account: ' + errorMessage, 'error');
+            const errorMessage = error instanceof Error ? error.message : t.unknownError;
+            addToast(t.accountDeleteFailed.replace('{error}', errorMessage), 'error');
           }
         }}
         onAddCategory={handleAddCategory}

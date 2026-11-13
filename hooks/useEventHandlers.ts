@@ -11,6 +11,7 @@ import {
   upsertSharedExpenseInCollection,
 } from '../domain/events';
 import { normalizeParticipantEmail } from '../utils/eventParticipants';
+import { getTranslations } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -35,10 +36,10 @@ export function useEventHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.syncEvent(event);
-      addToast('Event created successfully', 'success');
+      addToast(getTranslations().eventCreated, 'success');
     } catch (error) {
       console.error('Failed to sync event:', error);
-      addToast('Event created locally, but sync failed', 'error');
+      addToast(getTranslations().eventCreatedSyncFailed, 'error');
     }
   }, [addToast, setState]);
 
@@ -61,7 +62,7 @@ export function useEventHandlers({
   }, [selectedEvent?.id, setSelectedEvent, setState, state.events]);
 
   const handleDeleteEvent = useCallback(async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this event?')) return;
+    if (!window.confirm(getTranslations().deleteEventConfirmGeneric)) return;
 
     setState(prev => ({ ...prev, events: deleteEventFromCollection(prev.events, id) }));
     if (selectedEvent?.id === id) setSelectedEvent(null);
@@ -69,7 +70,7 @@ export function useEventHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.deleteEvent(id);
-      addToast('Event deleted', 'info');
+      addToast(getTranslations().eventDeleted, 'info');
     } catch (error) {
       console.error('Failed to delete event:', error);
     }
@@ -83,10 +84,10 @@ export function useEventHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.syncSharedExpense(expense);
-      addToast(isUpdate ? 'Shared expense updated' : 'Shared expense added', 'success');
+      addToast(isUpdate ? getTranslations().sharedExpenseUpdated : getTranslations().sharedExpenseAdded, 'success');
     } catch (error) {
       console.error('Failed to sync shared expense:', error);
-      addToast('Saved locally, but sync failed', 'error');
+      addToast(getTranslations().savedLocallySyncFailed, 'error');
     }
   }, [addToast, setState, state.sharedExpenses]);
 
@@ -103,12 +104,12 @@ export function useEventHandlers({
   const handleShareEvent = useCallback(async (id: string, email: string) => {
     const event = state.events.find(e => e.id === id);
     if (!event) {
-      throw new Error('Event not found');
+      throw new Error(getTranslations().eventNotFound);
     }
 
     const normalizedEmail = normalizeParticipantEmail(email);
     if (!normalizedEmail) {
-      throw new Error('Email is required');
+      throw new Error(getTranslations().emailRequired);
     }
 
     const supabaseService = await getSupabaseService();

@@ -142,14 +142,14 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
 
             {selectedCategory?.subcategories && selectedCategory.subcategories.length > 0 && (
                 <div>
-                    <label htmlFor="edit-tx-subcategory" className="text-xs text-on-surface-variant mb-1 block">Subcategory</label>
+                    <label htmlFor="edit-tx-subcategory" className="text-xs text-on-surface-variant mb-1 block">{t.subcategory}</label>
                     <select
                         id="edit-tx-subcategory"
                         value={edited.subcategory || ''}
                         onChange={e => setEdited({ ...edited, subcategory: e.target.value })}
                         className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-on-surface"
                     >
-                        <option value="">Select subcategory...</option>
+                        <option value="">{t.selectSubcategory}</option>
                         {selectedCategory.subcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
                     </select>
                 </div>
@@ -157,7 +157,7 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
 
             <div>
                 <label htmlFor="edit-tx-account" className="text-xs text-on-surface-variant mb-1 block">
-                    {isInternalTransfer ? 'From Account' : t.account}
+                    {isInternalTransfer ? t.fromAccount : t.account}
                 </label>
                 <select
                     id="edit-tx-account"
@@ -183,14 +183,14 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
 
             {isInternalTransfer && (
                 <div>
-                    <label htmlFor="edit-tx-target-account" className="text-xs text-on-surface-variant mb-1 block">To Account</label>
+                    <label htmlFor="edit-tx-target-account" className="text-xs text-on-surface-variant mb-1 block">{t.toAccount}</label>
                     <select
                         id="edit-tx-target-account"
                         value={targetAccountId}
                         onChange={e => setTargetAccountId(e.target.value)}
                         className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-on-surface"
                     >
-                        <option value="">Select account...</option>
+                        <option value="">{t.selectAccountPlaceholder}</option>
                         {accounts.filter(a => a.id !== edited.accountId).map(a => (
                             <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
                         ))}

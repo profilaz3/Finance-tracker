@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { AppState } from '../types';
 import { getSyncManager } from '../services/runtimeServices';
+import { getTranslations } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -69,7 +70,7 @@ export function useAccountHandlers({ state, setState, addToast, isHydrated = fal
       await syncManager.syncAccount(updatedAccount);
     } catch (error) {
       console.error('Failed to sync account update:', error);
-      addToast('Account updated locally, but sync failed', 'error');
+      addToast(getTranslations().accountUpdatedSyncFailed, 'error');
     }
   }, [addToast, setState, state.accounts]);
 

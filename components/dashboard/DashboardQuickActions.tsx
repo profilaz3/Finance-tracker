@@ -1,6 +1,7 @@
 import React from 'react';
 import { Camera, PlusCircle, Split, TrendingUp } from 'lucide-react';
 import type { TransactionType } from '../../types';
+import { TRANSLATIONS } from '../../constants';
 
 interface DashboardQuickActionsProps {
   language: 'en' | 'sr';
@@ -17,19 +18,13 @@ export const DashboardQuickActions: React.FC<DashboardQuickActionsProps> = ({
   onOpenReceiptScan,
   onOpenQuickSplit,
 }) => {
-  const labels = language === 'sr'
-    ? {
-        expense: 'Trosak',
-        income: 'Prihod',
-        receipt: 'Racun',
-        split: 'Podeli',
-      }
-    : {
-        expense: 'Expense',
-        income: 'Income',
-        receipt: 'Receipt',
-        split: 'Split',
-      };
+  const t = TRANSLATIONS[language];
+  const labels = {
+    expense: t.expenseType,
+    income: t.incomeType,
+    receipt: t.receipt,
+    split: t.split,
+  };
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

@@ -64,7 +64,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             <>
                 {(onLogout || onDeleteAccount) && (
                     <section className="space-y-4">
-                        <h3 className="text-lg font-medium text-on-surface">{state.language === 'sr' ? 'Nalog' : 'Account'}</h3>
+                        <h3 className="text-lg font-medium text-on-surface">{t.accountSection}</h3>
                         <div className="space-y-2">
                             {onLogout && (
                                 <button
@@ -72,22 +72,20 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                                     className="w-full px-4 py-3 bg-surface-container text-on-surface rounded-xl font-medium transition-all hover:bg-surface-container-high flex items-center justify-center gap-2 border border-outline-variant/20"
                                 >
                                     <User size={18} />
-                                    {state.language === 'sr' ? 'Odjavi se' : 'Logout'}
+                                    {t.logout}
                                 </button>
                             )}
                             {onDeleteAccount && (
                                 <button
                                     onClick={() => {
-                                        if (window.confirm(state.language === 'sr'
-                                            ? 'Da li ste sigurni da zelite da obrisete nalog? Ova radnja se ne moze ponistiti.'
-                                            : 'Are you sure you want to delete your account? This action cannot be undone.')) {
+                                        if (window.confirm(t.deleteAccountConfirm)) {
                                             onDeleteAccount();
                                         }
                                     }}
                                     className="w-full px-4 py-3 bg-error text-on-error rounded-xl font-medium transition-all hover:bg-error/80 flex items-center justify-center gap-2"
                                 >
                                     <Trash2 size={18} />
-                                    {state.language === 'sr' ? 'Obrisi nalog' : 'Delete Account'}
+                                    {t.deleteUserAccount}
                                 </button>
                             )}
                         </div>
@@ -147,8 +145,8 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                                             </select>
                                         </div>
                                         <div className="flex justify-end gap-2">
-                                            <button onClick={resetAccountForm} className="px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-highest rounded-lg">Cancel</button>
-                                            <button onClick={handleCreateAccount} className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-lg">Create</button>
+                                            <button onClick={resetAccountForm} className="px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-highest rounded-lg">{t.cancel}</button>
+                                            <button onClick={handleCreateAccount} className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-lg">{t.create}</button>
                                         </div>
                                     </div>
                                 </motion.div>

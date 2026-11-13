@@ -2,6 +2,7 @@ import React from 'react';
 import { Users, PieChart } from 'lucide-react';
 import clsx from 'clsx';
 import { ActiveTab } from './types';
+import { getTranslations } from '../../utils/i18n';
 
 interface EventTabsProps {
     activeTab: ActiveTab;
@@ -9,12 +10,13 @@ interface EventTabsProps {
 }
 
 export const EventTabs: React.FC<EventTabsProps> = ({ activeTab, setActiveTab }) => {
+    const t = getTranslations();
     return (
         <div className="flex gap-1 bg-surface-container p-1 rounded-xl overflow-x-auto" >
             {
                 [
-                    { id: 'shared', label: 'Shared Expenses', icon: Users },
-                    { id: 'summary', label: 'Summary', icon: PieChart },
+                    { id: 'shared', label: t.sharedExpenses, icon: Users },
+                    { id: 'summary', label: t.summary, icon: PieChart },
                 ].map(tab => (
                     <button
                         key={tab.id}

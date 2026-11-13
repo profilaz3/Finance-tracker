@@ -1,5 +1,7 @@
 import { Account, Category, Currency, Transaction } from '../types';
 import { formatCurrency } from './formatters';
+import { formatDateTime, getIntlLocale } from './locale';
+import { getTranslations } from './i18n';
 
 const escapeHtml = (value: string) =>
   value
@@ -9,7 +11,7 @@ const escapeHtml = (value: string) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
-const formatDate = (value: string) => new Date(value).toLocaleString();
+const formatDate = (value: string) => formatDateTime(value);
 
 const buildPrintableReport = (
   transactions: Transaction[],
@@ -17,6 +19,7 @@ const buildPrintableReport = (
   accounts: Account[],
   baseCurrency: Currency
 ) => {
+  const t = getTranslations();
   const totals = transactions.reduce(
     (summary, transaction) => {
       if (transaction.type === 'income') {
@@ -41,7 +44,7 @@ const buildPrintableReport = (
           <td>${escapeHtml(category?.name || '')}</td>
           <td>${escapeHtml(account?.name || '')}</td>
           <td>${escapeHtml(transaction.note || transaction.subcategory || '')}</td>
-          <td>${escapeHtml(transaction.type === 'income' ? 'Income' : 'Expense')}</td>
+          <td>${escapeHtml(transaction.type === 'income' ? t.income : t.expense)}</td>
           <td class="amount">${escapeHtml(formatCurrency(transaction.amount, transaction.currency))}</td>
         </tr>
       `;
@@ -50,10 +53,10 @@ const buildPrintableReport = (
 
   return `
     <!doctype html>
-    <html lang="en">
+    <html lang="${getIntlLocale()}">
       <head>
         <meta charset="utf-8" />
-        <title>Finance Report</title>
+        <title>${escapeHtml(t.financeReport)}</title>
         <style>
           :root {
             color-scheme: light;
@@ -162,40 +165,40 @@ const buildPrintableReport = (
       <body>
         <div class="header">
           <div>
-            <h1>Finance Report</h1>
-            <p class="meta">Generated: ${escapeHtml(new Date().toLocaleString())}</p>
+            <h1>${escapeHtml(t.financeReport)}</h1>
+            <p class="meta">${escapeHtml(t.reportGenerated.replace('{date}', formatDateTime(new Date())))}</p>
           </div>
           <div class="meta">
-            <div>Transactions: ${transactions.length}</div>
-            <div>Base Currency: ${escapeHtml(baseCurrency)}</div>
+            <div>${escapeHtml(t.reportTransactionCount.replace('{count}', String(transactions.length)))}</div>
+            <div>${escapeHtml(t.reportBaseCurrency.replace('{currency}', baseCurrency))}</div>
           </div>
         </div>
 
         <div class="summary">
           <div class="summary-card">
-            <div class="summary-label">Income</div>
+            <div class="summary-label">${escapeHtml(t.income)}</div>
             <div class="summary-value">${escapeHtml(formatCurrency(totals.income, baseCurrency))}</div>
           </div>
           <div class="summary-card">
-            <div class="summary-label">Expense</div>
+            <div class="summary-label">${escapeHtml(t.expense)}</div>
             <div class="summary-value">${escapeHtml(formatCurrency(totals.expense, baseCurrency))}</div>
           </div>
           <div class="summary-card">
-            <div class="summary-label">Net</div>
+            <div class="summary-label">${escapeHtml(t.net)}</div>
             <div class="summary-value">${escapeHtml(formatCurrency(totals.income - totals.expense, baseCurrency))}</div>
           </div>
         </div>
 
-        <h2 style="margin-bottom: 12px;">Transactions</h2>
+        <h2 style="margin-bottom: 12px;">${escapeHtml(t.transactions)}</h2>
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Account</th>
-              <th>Note</th>
-              <th>Type</th>
-              <th>Amount</th>
+              <th>${escapeHtml(t.date)}</th>
+              <th>${escapeHtml(t.category)}</th>
+              <th>${escapeHtml(t.account)}</th>
+              <th>${escapeHtml(t.note)}</th>
+              <th>${escapeHtml(t.transactionType)}</th>
+              <th>${escapeHtml(t.amount)}</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>

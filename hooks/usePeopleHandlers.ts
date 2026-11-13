@@ -14,6 +14,8 @@ import {
 } from '../domain/people';
 import { LEGACY_USER_PROFILE_ID, normalizeUserProfileId } from '../utils/remotePeople';
 import { calculateBalanceOffset, getEffectivePersonBalances } from '../domain/balances';
+import { TRANSLATIONS } from '../constants';
+import { getTranslations } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -48,7 +50,7 @@ export function usePeopleHandlers({
       await syncManager.syncPerson(newPerson);
     } catch (error) {
       console.error('Failed to sync person:', error);
-      addToast('Person saved locally, but sync failed', 'error');
+      addToast(getTranslations().personSavedSyncFailed, 'error');
     }
   }, [addToast, createId, setState]);
 
@@ -77,7 +79,7 @@ export function usePeopleHandlers({
       await syncManager.syncPerson(updatedPerson);
     } catch (error) {
       console.error('Failed to sync person update:', error);
-      addToast('Person updated locally, but sync failed', 'error');
+      addToast(getTranslations().personUpdatedSyncFailed, 'error');
     }
   }, [addToast, selectedPerson?.id, setSelectedPerson, setState, state.people]);
 
@@ -88,7 +90,7 @@ export function usePeopleHandlers({
     const newProfile = buildUserProfile({ profileId, name, defaultCurrency, color, avatar });
 
     setState(prev => ({ ...prev, userProfile: newProfile }));
-    addToast(state.language === 'sr' ? 'Profil napravljen' : 'Profile created', 'success');
+    addToast(TRANSLATIONS[state.language].profileCreated, 'success');
     closeUserProfileModal();
   }, [addToast, closeUserProfileModal, setState, state.language]);
 
@@ -99,7 +101,7 @@ export function usePeopleHandlers({
 
     const updatedProfile = { ...state.userProfile, ...updates };
     setState(prev => ({ ...prev, userProfile: updatedProfile }));
-    addToast(state.language === 'sr' ? 'Profil azuriran' : 'Profile updated', 'success');
+    addToast(TRANSLATIONS[state.language].profileUpdated, 'success');
     closeUserProfileModal();
   }, [addToast, closeUserProfileModal, setState, state.language, state.userProfile]);
 
@@ -125,10 +127,10 @@ export function usePeopleHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.syncPerson(updatedPerson);
-      addToast(`Balance updated for ${person.name}`, 'success');
+      addToast(getTranslations().balanceUpdatedFor.replace('{name}', person.name), 'success');
     } catch (error) {
       console.error('Failed to sync person balance:', error);
-      addToast('Balance updated locally, but sync failed', 'error');
+      addToast(getTranslations().balanceUpdatedSyncFailed, 'error');
     }
   }, [addToast, setState, state.people, state.transactions]);
 
@@ -143,7 +145,7 @@ export function usePeopleHandlers({
       await syncManager.deletePerson(id);
     } catch (error) {
       console.error('Failed to delete person from Supabase:', error);
-      addToast('Person deleted locally, but sync failed', 'error');
+      addToast(getTranslations().personDeletedSyncFailed, 'error');
     }
   }, [addToast, selectedPerson?.id, setSelectedPerson, setState]);
 
@@ -153,20 +155,20 @@ export function usePeopleHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.syncAccount(account);
-      addToast('Account created', 'success');
+      addToast(getTranslations().walletAccountCreated, 'success');
     } catch (error) {
       console.error('Failed to sync new account:', error);
-      addToast('Account created locally, but sync failed', 'error');
+      addToast(getTranslations().walletAccountCreatedSyncFailed, 'error');
     }
   }, [addToast, setState]);
 
   const handleDeleteAccount = useCallback(async (id: string) => {
     if (state.accounts.length <= 1) {
-      addToast(state.language === 'sr' ? 'Morate imati bar jedan racun.' : 'You must have at least one account.', 'error');
+      addToast(TRANSLATIONS[state.language].atLeastOneAccount, 'error');
       return;
     }
 
-    if (!window.confirm('Are you sure? Transactions linked to this account will remain but might need attention.')) {
+    if (!window.confirm(getTranslations().deleteWalletAccountConfirm)) {
       return;
     }
 
@@ -175,10 +177,10 @@ export function usePeopleHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.deleteAccount(id);
-      addToast('Account deleted', 'info');
+      addToast(getTranslations().walletAccountDeleted, 'info');
     } catch (error) {
       console.error('Failed to sync account deletion:', error);
-      addToast('Account deleted locally, but sync failed', 'error');
+      addToast(getTranslations().walletAccountDeletedSyncFailed, 'error');
     }
   }, [addToast, setState, state.accounts.length, state.language]);
 
@@ -220,7 +222,7 @@ export function usePeopleHandlers({
     // The settlement transaction itself moves the derived balance; nothing else to write.
     await addTransaction(settlement.transaction);
 
-    addToast(settlement.isPartial ? 'Partial settlement recorded' : 'Debt settled', 'success');
+    addToast(settlement.isPartial ? getTranslations().partialSettlementRecorded : getTranslations().debtSettled, 'success');
   }, [addToast, addTransaction, createId, setState, state.accounts, state.categories, state.people, state.transactions]);
 
   const handleAddCategory = useCallback(async (category: Category) => {

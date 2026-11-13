@@ -32,7 +32,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
             onClick={onToggle}
             className="w-full flex items-center justify-between py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
         >
-            <span className="font-medium">More options</span>
+            <span className="font-medium">{t.moreOptions}</span>
             {showMoreOptions
                 ? <ChevronUp size={16} aria-hidden="true" />
                 : <ChevronDown size={16} aria-hidden="true" />}
@@ -50,7 +50,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                     <div className="space-y-4 pb-1">
                         <div className="flex gap-3">
                             <div className="flex-1">
-                                <label htmlFor="edit-tx-date" className="text-xs text-on-surface-variant mb-1 block">Date</label>
+                                <label htmlFor="edit-tx-date" className="text-xs text-on-surface-variant mb-1 block">{t.date}</label>
                                 <input
                                     id="edit-tx-date"
                                     type="date"
@@ -72,7 +72,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                                 />
                             </div>
                             <div className="w-28">
-                                <label htmlFor="edit-tx-time" className="text-xs text-on-surface-variant mb-1 block">Time</label>
+                                <label htmlFor="edit-tx-time" className="text-xs text-on-surface-variant mb-1 block">{t.time}</label>
                                 <input
                                     id="edit-tx-time"
                                     type="time"
@@ -109,14 +109,14 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                         )}
 
                         <div>
-                            <label htmlFor="edit-tx-event" className="text-xs text-on-surface-variant mb-1 block">Event (Optional)</label>
+                            <label htmlFor="edit-tx-event" className="text-xs text-on-surface-variant mb-1 block">{t.eventOptional}</label>
                             <select
                                 id="edit-tx-event"
                                 value={edited.eventId || ''}
                                 onChange={e => setEdited({ ...edited, eventId: e.target.value || undefined })}
                                 className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-on-surface"
                             >
-                                <option value="">None</option>
+                                <option value="">{t.none}</option>
                                 {events
                                     .filter(e => e.status !== 'archived' || e.id === edited.eventId)
                                     .map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -124,7 +124,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                         </div>
 
                         <div>
-                            <label htmlFor="edit-tx-fees" className="text-xs text-on-surface-variant mb-1 block">Fees (USD)</label>
+                            <label htmlFor="edit-tx-fees" className="text-xs text-on-surface-variant mb-1 block">{t.feesUsd}</label>
                             <input
                                 id="edit-tx-fees"
                                 type="number"
@@ -141,7 +141,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                                 id="edit-tx-note"
                                 value={edited.note || ''}
                                 onChange={e => setEdited({ ...edited, note: e.target.value })}
-                                placeholder="Add a note..."
+                                placeholder={t.addNotePlaceholder}
                                 className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-on-surface"
                             />
                         </div>

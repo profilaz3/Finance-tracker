@@ -75,7 +75,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
     };
 
     const handleDelete = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this category? Transactions using this category might display incorrectly.')) {
+        if (window.confirm(t.deleteCategoryConfirm)) {
             onDeleteCategory(id);
         }
     };
@@ -144,7 +144,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                         <input
                                             value={name}
                                             onChange={e => setName(e.target.value)}
-                                            placeholder="Category Name"
+                                            placeholder={t.categoryName}
                                             className="bg-surface-container-high border-none rounded-lg px-4 py-2 text-on-surface placeholder-on-surface-variant/60 w-full"
                                             autoFocus
                                         />
@@ -168,7 +168,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-on-surface-variant uppercase">Subcategories</label>
+                                    <label className="text-xs font-medium text-on-surface-variant uppercase">{t.subcategories}</label>
                                     <div className="flex flex-wrap gap-2">
                                         {subcategories.map(sub => (
                                             <span key={sub} className="bg-surface-container-highest px-2 py-1 rounded-md text-sm flex items-center gap-1">
@@ -184,7 +184,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                             value={newSubcategory}
                                             onChange={e => setNewSubcategory(e.target.value)}
                                             onKeyDown={e => e.key === 'Enter' && addSubcategory()}
-                                            placeholder="Add subcategory..."
+                                            placeholder={t.addSubcategoryPlaceholder}
                                             className="bg-surface-container-high border-none rounded-lg px-4 py-2 text-sm text-on-surface placeholder-on-surface-variant/60 flex-1"
                                         />
                                         <button onClick={addSubcategory} className="bg-secondary-container text-on-secondary-container p-2 rounded-lg">
@@ -245,7 +245,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                         <p className="text-sm text-on-surface-variant truncate">
                                             {category.subcategories.length > 0
                                                 ? category.subcategories.join(', ')
-                                                : <span className="italic opacity-50">No subcategories</span>}
+                                                : <span className="italic opacity-50">{t.noSubcategories}</span>}
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-1 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -280,7 +280,7 @@ export const CategorySettings: React.FC<CategorySettingsProps> = ({ categories, 
                                                     </span>
                                                 ))}
                                                 {category.subcategories.length === 0 && (
-                                                    <span className="text-xs text-on-surface-variant italic">No subcategories defined.</span>
+                                                    <span className="text-xs text-on-surface-variant italic">{t.noSubcategoriesDefined}</span>
                                                 )}
                                             </div>
                                         </motion.div>

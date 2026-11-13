@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { TRANSLATIONS } from '../constants';
 
 describe('build contracts', () => {
   it('uses package-path chunk rules instead of broad "react" substring matching', () => {
@@ -177,13 +178,17 @@ describe('build contracts', () => {
     expect(script).toContain('TRANSACTION_REGRESSION_PASSWORD');
     expect(script).toContain('transaction-crud-regression-success.png');
     expect(script).toContain("getByRole('button', { name: /open transaction actions|otvori akcije transakcija/i })");
-    expect(script).toContain('button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]');
+    expect(script).toContain('button[aria-label="Add a transaction"], button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]');
     expect(script).toContain("getByRole('heading', { name: /new transaction|add transaction|add a transaction|nova transakcija|dodaj transakciju/i })");
     expect(script).toContain('New transaction modal exposed delete action.');
     expect(script).toContain("getByRole('button', { name: /^edit$|^izmeni$/i })");
     expect(script).toContain("getByRole('button', { name: /^delete$|^obrisi$|^obriši$/i })");
-    expect(fab).toContain("aria-label={language === 'sr' ? 'Otvori akcije transakcija' : 'Open transaction actions'}");
-    expect(fab).toContain("aria-label={language === 'sr' ? 'Dodaj transakciju' : 'Add transaction'}");
+    expect(fab).toContain('aria-label={TRANSLATIONS[language].openTransactionActions}');
+    expect(fab).toContain('aria-label={TRANSLATIONS[language].addTransaction}');
+    expect(TRANSLATIONS.en.openTransactionActions).toBe('Open transaction actions');
+    expect(TRANSLATIONS.sr.openTransactionActions).toBe('Otvori akcije transakcija');
+    expect(TRANSLATIONS.en.addTransaction).toBe('Add a transaction');
+    expect(TRANSLATIONS.sr.addTransaction).toBe('Dodaj transakciju');
   });
 
   it('checks in a browser regression for account edit flow in wallet settings', () => {
@@ -263,9 +268,13 @@ describe('build contracts', () => {
     expect(script).toContain('Pause recurring');
     expect(script).toContain('Resume recurring');
     expect(script).toContain('Delete recurring');
-    expect(dataSettings).toContain("aria-label={state.language === 'sr' ? 'Dodaj ponavljajucu transakciju' : 'Add recurring transaction'}");
-    expect(dataSettings).toContain("aria-label={recurring.isActive ? 'Pause recurring' : 'Resume recurring'}");
-    expect(dataSettings).toContain('aria-label="Delete recurring"');
+    expect(dataSettings).toContain('aria-label={t.addRecurringTransaction}');
+    expect(dataSettings).toContain('aria-label={recurring.isActive ? t.pauseRecurring : t.resumeRecurring}');
+    expect(dataSettings).toContain('aria-label={t.deleteRecurring}');
+    expect(TRANSLATIONS.en.addRecurringTransaction).toBe('Add recurring transaction');
+    expect(TRANSLATIONS.en.pauseRecurring).toBe('Pause recurring');
+    expect(TRANSLATIONS.en.resumeRecurring).toBe('Resume recurring');
+    expect(TRANSLATIONS.en.deleteRecurring).toBe('Delete recurring');
   });
 
   it('checks in a one-shot cleanup script for old recurring regression rows', () => {
@@ -295,10 +304,14 @@ describe('build contracts', () => {
     expect(script).toContain('event-summary-regression-success.png');
     expect(script).toContain('Spending Breakdown');
     expect(script).toContain('Display Currency');
-    expect(summaryTab).toContain('Spending Breakdown');
-    expect(summaryTab).toContain('Settlement');
-    expect(summaryTab).toContain('Display Currency');
-    expect(eventTabs).toContain("label: 'Summary'");
+    expect(summaryTab).toContain('{t.spendingBreakdown}');
+    expect(summaryTab).toContain('t.settlement');
+    expect(summaryTab).toContain('t.displayCurrency');
+    expect(eventTabs).toContain('label: t.summary');
+    expect(TRANSLATIONS.en.spendingBreakdown).toBe('Spending Breakdown');
+    expect(TRANSLATIONS.en.settlement).toBe('Settlement');
+    expect(TRANSLATIONS.en.displayCurrency).toBe('Display Currency');
+    expect(TRANSLATIONS.en.summary).toBe('Summary');
   });
 
   it('checks in a browser regression for dashboard wallet and debt summary rendering', () => {

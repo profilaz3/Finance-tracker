@@ -23,6 +23,8 @@ import { AppState, Transaction, View } from '../types';
 import { MOTION } from '../config';
 import { convertAmount } from '../services/currencyService';
 import { formatCurrency } from '../utils/formatters';
+import { formatDate, formatMonthYear } from '../utils/locale';
+import { TRANSLATIONS } from '../constants';
 import { TransactionItem } from './TransactionItem';
 
 interface CalendarViewProps {
@@ -112,7 +114,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [selectedDate, state.transactions]);
 
-    const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const t = TRANSLATIONS[state.language];
+    // 2024-01-01 is a Monday; the grid starts on Monday.
+    const weekDays = Array.from({ length: 7 }, (_, i) => formatDate(new Date(2024, 0, 1 + i), { weekday: 'short' }, state.language));
 
     return (
         <motion.div
@@ -125,13 +129,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             {/* Header */}
             <div className="flex items-center justify-between px-2">
                 <h2 className="text-2xl font-display font-bold text-on-surface">
-                    {format(currentDate, 'MMMM yyyy')}
+                    {formatMonthYear(currentDate, state.language)}
                 </h2>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={jumpToToday}
                         className="p-2 text-primary hover:bg-primary-container/20 rounded-full transition-colors mr-2"
-                        title="Jump to Today"
+                        title={t.jumpToToday}
                     >
                         <CalendarIcon size={20} />
                     </button>
@@ -273,7 +277,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             >
                                 <div className="flex items-center justify-between px-2">
                                     <h3 className="text-lg font-medium text-on-surface">
-                                        {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE, MMMM d')}
+                                        {isToday(selectedDate) ? t.today : formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' }, state.language)}
                                     </h3>
                                     {dailyTotals[format(selectedDate, 'yyyy-MM-dd')] && (
                                         <div className="text-sm font-mono">
@@ -288,8 +292,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         <div className="bg-surface-container-low rounded-xl">
                                             <EmptyState
                                                 icon={Receipt}
-                                                title="No transactions"
-                                                description="No transactions recorded on this day"
+                                                title={t.noTransactionsOnDay}
+                                                description={t.noTransactionsOnDayDesc}
                                             />
                                         </div>
                                     ) : (

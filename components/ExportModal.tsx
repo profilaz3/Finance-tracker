@@ -4,6 +4,7 @@ import { X, FileSpreadsheet, FileJson, Calendar, Download, CheckCircle2 } from '
 import clsx from 'clsx';
 import { AppState } from '../types';
 import { exportWithOptions, ExportOptions } from '../services/storageService';
+import { TRANSLATIONS } from '../constants';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -23,39 +24,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [dateTo, setDateTo] = useState('');
   const [includeEvents, setIncludeEvents] = useState(true);
 
-  const labels = state.language === 'sr'
-    ? {
-        title: 'Izvoz podataka',
-        timePeriod: 'Vremenski period',
-        customRange: 'Prilagodeni period',
-        from: 'Od',
-        to: 'Do',
-        options: 'Opcije',
-        includeEvents: 'Ukljuci podatke o eventima',
-        preview: 'Broj transakcija za izvoz:',
-        cancel: 'Otkazi',
-        export: 'Izvezi',
-        thisMonth: 'Ovaj mesec',
-        lastThreeMonths: 'Poslednja 3 meseca',
-        thisYear: 'Ova godina',
-        allTime: 'Sve',
-      }
-    : {
-        title: 'Export Data',
-        timePeriod: 'Time Period',
-        customRange: 'Custom Range',
-        from: 'From',
-        to: 'To',
-        options: 'Options',
-        includeEvents: 'Include event data',
-        preview: 'Transactions to export:',
-        cancel: 'Cancel',
-        export: 'Export',
-        thisMonth: 'This Month',
-        lastThreeMonths: 'Last 3 Months',
-        thisYear: 'This Year',
-        allTime: 'All Time',
-      };
+  const t = TRANSLATIONS[state.language];
+  const labels = {
+    title: t.exportData,
+    timePeriod: t.timePeriod,
+    customRange: t.customRange,
+    from: t.dateFrom,
+    to: t.dateTo,
+    options: t.options,
+    includeEvents: t.includeEventData,
+    preview: t.transactionsToExport,
+    cancel: t.cancel,
+    export: t.export,
+    thisMonth: t.thisMonth,
+    lastThreeMonths: t.lastThreeMonths,
+    thisYear: t.thisYear,
+    allTime: t.allTime,
+  };
 
   const handleExport = () => {
     const options: ExportOptions = {
@@ -148,7 +133,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
           <div className="p-4 space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-on-surface-variant">Format</label>
+              <label className="text-sm font-medium text-on-surface-variant">{t.exportFormat}</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setFormat('csv')}

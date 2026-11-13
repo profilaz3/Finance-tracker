@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { TRANSLATIONS } from '../constants';
 
 const readSource = (path: string) => readFileSync(path, 'utf8');
 
@@ -43,6 +44,7 @@ describe('QOL source contracts', () => {
     expect(transactionsView).toContain('unsafeCount');
 
     expect(handlers).toContain('restoreTransactions(deletedTransactions');
-    expect(handlers).toContain('Batch restored');
+    expect(handlers).toContain('getTranslations(state.language).batchRestored');
+    expect(TRANSLATIONS.en.batchRestored).toBe('Batch restored');
   });
 });

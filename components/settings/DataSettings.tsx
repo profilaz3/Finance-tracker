@@ -2,10 +2,10 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Plus, Trash2, RefreshCw, Play, Pause, Calendar, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { format } from 'date-fns';
 import { AppState, Person, TransactionType, Currency, Category, RecurringTransaction, RecurrenceFrequency } from '../../types';
 import { getFrequencyLabel } from '../../utils/recurringUtils';
 import { TRANSLATIONS } from '../../constants';
+import { formatMoney, formatShortDate } from '../../utils/locale';
 import { PeopleView } from '../PeopleView';
 import { CategorySettings } from '../CategorySettings';
 import { countDueRecurringTransactions, getRecurringStatus } from '../../utils/recurringSelectors';
@@ -82,7 +82,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-medium text-on-surface flex items-center gap-2">
                             <RefreshCw size={20} />
-                            {state.language === 'sr' ? 'Ponavljajuce transakcije' : 'Recurring Transactions'}
+                            {t.recurringTransactions}
                         </h3>
                         <div className="flex items-center gap-2">
                             {onProcessRecurring && dueCount > 0 && (
@@ -91,13 +91,13 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                     className="flex items-center gap-1.5 px-3 py-2 bg-tertiary text-on-tertiary rounded-full text-sm font-medium hover:bg-tertiary/90 transition-colors"
                                 >
                                     <Play size={14} fill="currentColor" />
-                                    {state.language === 'sr' ? `Obradi (${dueCount})` : `Process (${dueCount})`}
+                                    {t.processDueRecurring.replace('{count}', String(dueCount))}
                                 </button>
                             )}
                             <button
                                 onClick={() => setIsAddingRecurring(true)}
-                                aria-label={state.language === 'sr' ? 'Dodaj ponavljajucu transakciju' : 'Add recurring transaction'}
-                                title={state.language === 'sr' ? 'Dodaj ponavljajucu transakciju' : 'Add recurring transaction'}
+                                aria-label={t.addRecurringTransaction}
+                                title={t.addRecurringTransaction}
                                 className="p-2 bg-primary text-on-primary rounded-full hover:bg-primary/90 transition-colors"
                             >
                                 <Plus size={18} />
@@ -118,7 +118,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                         type="text"
                                         value={newRecurringName}
                                         onChange={(e) => setNewRecurringName(e.target.value)}
-                                        placeholder={state.language === 'sr' ? 'Ime (npr. Netflix pretplata)' : 'Name (e.g., Netflix subscription)'}
+                                        placeholder={t.recurringNamePlaceholder}
                                         className="w-full bg-surface-container border-none rounded-lg px-4 py-3 text-on-surface placeholder-on-surface-variant/60"
                                     />
                                     <div className="grid grid-cols-2 gap-4">
@@ -126,7 +126,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                             type="number"
                                             value={newRecurringAmount}
                                             onChange={(e) => setNewRecurringAmount(e.target.value)}
-                                            placeholder={state.language === 'sr' ? 'Iznos' : 'Amount'}
+                                            placeholder={t.amount}
                                             className="bg-surface-container border-none rounded-lg px-4 py-3 text-on-surface placeholder-on-surface-variant/60"
                                         />
                                         <select
@@ -134,11 +134,11 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                             onChange={(e) => setNewRecurringFrequency(e.target.value as RecurrenceFrequency)}
                                             className="bg-surface-container border-none rounded-lg px-4 py-3 text-on-surface"
                                         >
-                                            <option value="daily">{state.language === 'sr' ? 'Dnevno' : 'Daily'}</option>
-                                            <option value="weekly">{state.language === 'sr' ? 'Nedeljno' : 'Weekly'}</option>
-                                            <option value="biweekly">{state.language === 'sr' ? 'Dvonedeljno' : 'Bi-weekly'}</option>
-                                            <option value="monthly">{state.language === 'sr' ? 'Mesecno' : 'Monthly'}</option>
-                                            <option value="yearly">{state.language === 'sr' ? 'Godisnje' : 'Yearly'}</option>
+                                            <option value="daily">{t.daily}</option>
+                                            <option value="weekly">{t.weekly}</option>
+                                            <option value="biweekly">{t.biweekly}</option>
+                                            <option value="monthly">{t.monthly}</option>
+                                            <option value="yearly">{t.yearly}</option>
                                         </select>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -147,15 +147,15 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                             onChange={(e) => setNewRecurringType(e.target.value as TransactionType)}
                                             className="bg-surface-container border-none rounded-lg px-4 py-3 text-on-surface"
                                         >
-                                            <option value="expense">{state.language === 'sr' ? 'Trosak' : 'Expense'}</option>
-                                            <option value="income">{state.language === 'sr' ? 'Prihod' : 'Income'}</option>
+                                            <option value="expense">{t.expense}</option>
+                                            <option value="income">{t.income}</option>
                                         </select>
                                         <select
                                             value={newRecurringCategoryId}
                                             onChange={(e) => setNewRecurringCategoryId(e.target.value)}
                                             className="bg-surface-container border-none rounded-lg px-4 py-3 text-on-surface"
                                         >
-                                            <option value="">{state.language === 'sr' ? 'Kategorija' : 'Category'}</option>
+                                            <option value="">{t.category}</option>
                                             {state.categories.filter(c => c.type === newRecurringType).map(cat => (
                                                 <option key={cat.id} value={cat.id}>{cat.name}</option>
                                             ))}
@@ -166,14 +166,14 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                         onChange={(e) => setNewRecurringAccountId(e.target.value)}
                                         className="w-full bg-surface-container border-none rounded-lg px-4 py-3 text-on-surface"
                                     >
-                                        <option value="">{state.language === 'sr' ? 'Racun' : 'Account'}</option>
+                                        <option value="">{t.account}</option>
                                         {state.accounts.map(acc => (
                                             <option key={acc.id} value={acc.id}>{acc.name}</option>
                                         ))}
                                     </select>
                                     <div className="flex items-center gap-2">
                                         <Calendar size={18} className="text-on-surface-variant" />
-                                        <span className="text-sm text-on-surface-variant">{state.language === 'sr' ? 'Pocinje' : 'Starts on'}</span>
+                                        <span className="text-sm text-on-surface-variant">{t.startsOn}</span>
                                         <input
                                             type="date"
                                             value={newRecurringStartDate}
@@ -186,14 +186,14 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                             onClick={resetRecurringForm}
                                             className="px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg transition-colors"
                                         >
-                                            {state.language === 'sr' ? 'Otkazi' : 'Cancel'}
+                                            {t.cancel}
                                         </button>
                                         <button
                                             onClick={handleCreateRecurring}
                                             disabled={!newRecurringName.trim() || !newRecurringAmount}
                                             className="px-4 py-2 bg-primary text-on-primary rounded-lg disabled:opacity-50 transition-colors"
                                         >
-                                            {state.language === 'sr' ? 'Dodaj' : 'Add'}
+                                            {t.add}
                                         </button>
                                     </div>
                                 </div>
@@ -205,8 +205,8 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                         {(!state.recurringTransactions || state.recurringTransactions.length === 0) ? (
                             <div className="text-center py-12 text-on-surface-variant/60">
                                 <RefreshCw size={48} className="mx-auto mb-4 opacity-30" />
-                                <p className="text-sm">{state.language === 'sr' ? 'Nema ponavljajucih transakcija' : 'No recurring transactions'}</p>
-                                <p className="text-xs mt-1">{state.language === 'sr' ? 'Dodajte pretplate ili redovne racune' : 'Add subscriptions or regular bills'}</p>
+                                <p className="text-sm">{t.noRecurringTransactions}</p>
+                                <p className="text-xs mt-1">{t.noRecurringTransactionsHint}</p>
                             </div>
                         ) : (
                             state.recurringTransactions.map(recurring => {
@@ -234,7 +234,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium text-on-surface truncate">{recurring.name}</p>
                                             <p className="text-xs text-on-surface-variant">
-                                                {getFrequencyLabel(recurring.frequency, state.language)} - {category?.name || 'Unknown'}
+                                                {getFrequencyLabel(recurring.frequency, state.language)} - {category?.name || t.unknown}
                                             </p>
                                             <p className={clsx(
                                                 "text-xs flex items-center gap-1 mt-0.5",
@@ -243,7 +243,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                                         "text-on-surface-variant/60"
                                             )}>
                                                 {recurringStatus.isOverdue && recurring.isActive ? <AlertCircle size={10} /> : <Calendar size={10} />}
-                                                {format(recurringStatus.nextDueDate, 'MMM d')} ({recurringStatus.countdownText})
+                                                {formatShortDate(recurringStatus.nextDueDate, state.language)} ({recurringStatus.countdownText})
                                             </p>
                                         </div>
                                         <div className="text-right flex-shrink-0">
@@ -251,15 +251,15 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                                 "font-semibold",
                                                 recurring.type === 'income' ? "text-tertiary" : "text-on-surface"
                                             )}>
-                                                {recurring.type === 'income' ? '+' : '-'}{recurring.amount.toLocaleString()} {recurring.currency}
+                                                {recurring.type === 'income' ? '+' : '-'}{formatMoney(recurring.amount, recurring.currency, state.language)}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1 flex-shrink-0">
                                             {onToggleRecurring && (
                                                 <button
                                                     onClick={() => onToggleRecurring(recurring.id)}
-                                                    aria-label={recurring.isActive ? 'Pause recurring' : 'Resume recurring'}
-                                                    title={recurring.isActive ? 'Pause recurring' : 'Resume recurring'}
+                                                    aria-label={recurring.isActive ? t.pauseRecurring : t.resumeRecurring}
+                                                    title={recurring.isActive ? t.pauseRecurring : t.resumeRecurring}
                                                     className={clsx(
                                                         "p-2 rounded-lg transition-colors",
                                                         recurring.isActive ? "text-tertiary hover:bg-tertiary/10" : "text-on-surface-variant hover:bg-surface-container"
@@ -271,8 +271,8 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                             {onDeleteRecurring && (
                                                 <button
                                                     onClick={() => onDeleteRecurring(recurring.id)}
-                                                    aria-label="Delete recurring"
-                                                    title="Delete recurring"
+                                                    aria-label={t.deleteRecurring}
+                                                    title={t.deleteRecurring}
                                                     className="p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
                                                 >
                                                     <Trash2 size={16} />

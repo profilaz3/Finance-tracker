@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { getTranslations } from '../utils/i18n';
 
 export interface ImageResult {
   base64: string;      // Raw base64 without data URL prefix
@@ -162,12 +163,12 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
       }
       } catch (err: unknown) {
       // User cancelled is not an error
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : getTranslations().unknownError;
       if (errorMessage?.includes('User cancelled') || errorMessage?.includes('canceled')) {
         console.log('User cancelled camera');
       } else {
         console.error('Camera error:', err);
-        setError(errorMessage || 'Failed to access camera');
+        setError(errorMessage || getTranslations().cameraAccessFailed);
       }
     } finally {
       setIsLoading(false);
@@ -222,7 +223,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
               if (files && files[0]) {
                 const file = files[0];
                 if (!file.type.startsWith('image/')) {
-                  setError('Please select an image file');
+                  setError(getTranslations().selectImageFile);
                   reject(new Error('Invalid file type'));
                   return;
                 }
@@ -238,7 +239,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
                   })
                   .catch(err => {
                     console.error('File read error:', err);
-                    setError(err?.message || 'Failed to read file');
+                    setError(err?.message || getTranslations().fileReadFailed);
                     reject(err);
                   });
               } else {
@@ -256,12 +257,12 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
       }
       } catch (err: unknown) {
       // User cancelled is not an error
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : getTranslations().unknownError;
       if (errorMessage?.includes('User cancelled') || errorMessage?.includes('canceled')) {
         console.log('User cancelled gallery');
       } else {
         console.error('Gallery error:', err);
-        setError(errorMessage || 'Failed to access gallery');
+        setError(errorMessage || getTranslations().galleryAccessFailed);
       }
     } finally {
       setIsLoading(false);
@@ -283,7 +284,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
     e.target.value = '';
 
     if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
+      setError(getTranslations().selectImageFile);
       return null;
     }
 
@@ -301,7 +302,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
       };
       } catch (err: unknown) {
         console.error('File read error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to read file');
+        setError(err instanceof Error ? err.message : getTranslations().fileReadFailed);
         return null;
     } finally {
       setIsLoading(false);

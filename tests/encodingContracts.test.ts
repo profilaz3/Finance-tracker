@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { TRANSLATIONS } from '../constants';
 
 const SOURCE_FILES = [
   'constants.ts',
@@ -14,66 +15,13 @@ const SOURCE_FILES = [
   'utils/transactionFilters.ts',
   'scripts/cleanup-recurring-regressions.mjs',
   'scripts/recurring-regression.mjs',
+  'scripts/transaction-crud-regression.mjs',
+  'components/AuthView.tsx',
+  'hooks/usePasswordRecovery.ts',
+  'utils/authValidation.ts',
+  'utils/formatters.ts',
+  'utils/locale.ts',
 ] as const;
-
-const EXPECTED_TRANSLITERATIONS: Record<string, string[]> = {
-  'components/ExportModal.tsx': [
-    'Prilagodeni period',
-    'Ukljuci podatke o eventima',
-    'Otkazi',
-  ],
-  'utils/transactionFilters.ts': [
-    'Juce',
-  ],
-  'components/transactions/TransactionsToolbar.tsx': [
-    'Pretrazi transakcije...',
-  ],
-  'components/transactions/TransactionsList.tsx': [
-    'Dodajte prvu transakciju da biste poceli sa pracenjem',
-  ],
-  'components/settings/DataSettings.tsx': [
-    'Ponavljajuce transakcije',
-    'Mesecno',
-    'Godisnje',
-    'Trosak',
-    'Racun',
-    'Pocinje',
-    'Otkazi',
-    'Nema ponavljajucih transakcija',
-    'Dodajte pretplate ili redovne racune',
-  ],
-  'components/settings/AccountSettings.tsx': [
-    'Da li ste sigurni da zelite da obrisete nalog? Ova radnja se ne moze ponistiti.',
-    'Obrisi nalog',
-  ],
-  'components/settings/useSettingsViewState.tsx': [
-    'Novcanici',
-  ],
-  'components/ReceiptScanModal.tsx': [
-    'Greska pri snimanju',
-    'Greska pri ucitavanju',
-    'Nije moguce procitati racun. Pokusajte ponovo.',
-    'Serverski AI kljuc nije ispravno podesen',
-    'Previse zahteva. Sacekajte malo.',
-    'Greska u mrezi. Proverite internet.',
-    'Greska pri skeniranju. Pokusajte ponovo.',
-    'Ucitavanje slike...',
-    'Ucitavanje...',
-    'Dodaj sliku racuna',
-    'Dodaj Sliku Racuna',
-  ],
-  'utils/recurringUtils.ts': [
-    'Mesecno',
-    'Godisnje',
-  ],
-  'scripts/cleanup-recurring-regressions.mjs': [
-    'podesavanja',
-  ],
-  'scripts/recurring-regression.mjs': [
-    'podesavanja',
-    'dodaj ponavljajucu transakciju',
-  ],
-};
 
 const readSource = (filePath: string): string =>
   readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
@@ -97,13 +45,17 @@ describe('encoding contracts', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps Serbian UI strings in the established ASCII transliteration style', () => {
-    for (const [filePath, expectedStrings] of Object.entries(EXPECTED_TRANSLITERATIONS)) {
-      const source = readSource(filePath);
+  it('keeps Serbian translations in Latin script with real diacritics', () => {
+    const offenders = Object.entries(TRANSLATIONS.sr).flatMap(([key, value]) => {
+      const text = String(value);
+      const hasCyrillic = /[\u0400-\u04ff]/u.test(text);
+      const hasMojibake = /[\u00c2-\u00c5\u00e2\uFFFD\u0080-\u009f]/u.test(text);
+      return hasCyrillic || hasMojibake ? [`${key}: ${text}`] : [];
+    });
 
-      for (const expectedString of expectedStrings) {
-        expect(source, `${filePath} should contain ${expectedString}`).toContain(expectedString);
-      }
-    }
+    expect(offenders).toEqual([]);
+    expect(TRANSLATIONS.sr.addRecurringTransaction).toBe('Dodaj ponavljajuću transakciju');
+    expect(TRANSLATIONS.sr.deleteRecurring).toBe('Obriši ponavljanje');
+    expect(TRANSLATIONS.sr.backToEvents).toBe('Nazad na događaje');
   });
 });

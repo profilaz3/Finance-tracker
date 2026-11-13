@@ -7,6 +7,7 @@ import clsx from 'clsx';
 import { AppState, Transaction, View, Currency, Person, Event, Account, TransactionType } from '../types';
 import { AnimatedNumber } from './AnimatedNumber';
 import { formatCurrency } from '../utils/formatters';
+import { formatNumber } from '../utils/locale';
 import { convertAmount } from '../services/currencyService';
 import { TRANSLATIONS } from '../constants';
 import { parseTransaction, isAIAvailable, ParsedTransaction } from '../services/aiService';
@@ -127,7 +128,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const incomeShare = totalFlow > 0 ? (totalIncome / totalFlow) * 100 : 50;
   const expenseShare = totalFlow > 0 ? 100 - incomeShare : 50;
   const netDelta = totalIncome - totalExpense;
-  const netLabel = state.language === 'sr' ? 'Neto' : 'Net';
+  const netLabel = t.net;
   const heroDecimals = state.baseCurrency === 'RSD' ? 0 : 2;
   const walletSummaries = useMemo(
     () => getDashboardWalletSummaries(state.accounts, getAccountBalance),
@@ -210,8 +211,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <p className="text-sm font-medium text-on-surface truncate">{activeEvent.name}</p>
                 <p className="text-xs text-on-surface-variant">
                   {linkToActiveEvent
-                    ? (state.language === 'sr' ? 'Transakcije se dodaju ovom eventu' : 'Transactions link to this event')
-                    : (state.language === 'sr' ? 'Aktivan event' : 'Active event')
+                    ? t.activeEventLinking
+                    : t.activeEvent
                   }
                 </p>
               </div>
@@ -225,7 +226,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     ? "bg-primary text-on-primary"
                     : "bg-surface-container hover:bg-surface-container-high text-on-surface-variant"
                 )}
-                title={linkToActiveEvent ? "Stop linking" : "Link transactions to event"}
+                title={linkToActiveEvent ? t.stopLinkingEvent : t.linkTransactionsToEvent}
               >
                 {linkToActiveEvent ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
               </button>
@@ -233,7 +234,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <button
                   onClick={() => onViewEvent(activeEvent)}
                   className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center bg-surface-container hover:bg-surface-container-high text-on-surface-variant rounded-lg transition-colors"
-                  title="View event"
+                  title={t.viewEvent}
                 >
                   <ExternalLink size={18} />
                 </button>
@@ -256,7 +257,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 value={smartInput}
                 onChange={e => { setSmartInput(e.target.value); setParseError(null); }}
                 onKeyDown={e => e.key === 'Enter' && !isAIParsing && handleSmartParse()}
-                placeholder={`${t.addTransaction}... (e.g., "Lunch 20 EUR")`}
+                placeholder={`${t.addTransaction}... ${t.smartAddExample}`}
                 className="w-full bg-surface-container border-none rounded-lg px-4 py-3 pr-10 text-on-surface placeholder-on-surface-variant/60"
                 disabled={isAIParsing}
               />
@@ -471,7 +472,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                         <span className="text-[10px] font-bold uppercase tracking-wider opacity-60 text-on-surface-variant leading-none">{acc.currency}</span>
                       </div>
-                      <p className="text-sm sm:text-lg md:text-2xl font-display font-medium text-on-surface w-full truncate tabular-nums">{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-sm sm:text-lg md:text-2xl font-display font-medium text-on-surface w-full truncate tabular-nums">{formatNumber(balance, { minimumFractionDigits: 2, maximumFractionDigits: 2 }, state.language)}</p>
                     </div>
                   );
                 })}
@@ -518,7 +519,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <EmptyState
                     icon={User}
                     title={t.noActiveBalances}
-                    description={state.language === 'sr' ? 'Svi dugovi su podmireni' : 'All debts are settled'}
+                    description={t.allDebtsSettled}
                   />
                 </div>
               )}
@@ -561,7 +562,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         onClick={() => { onOpenQuickSplit(); setIsFabOpen(false); }}
                         className="flex items-center gap-3 bg-surface-container-high text-on-surface pl-4 pr-3 py-2.5 rounded-full shadow-lg hover:bg-surface-container-highest transition-colors"
                       >
-                        <span className="text-sm font-medium whitespace-nowrap">{state.language === 'sr' ? 'Podeli' : 'Split'}</span>
+                        <span className="text-sm font-medium whitespace-nowrap">{t.split}</span>
                         <div className="w-10 h-10 bg-tertiary text-on-tertiary rounded-full flex items-center justify-center">
                           <Split size={20} />
                         </div>
@@ -571,7 +572,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       onClick={() => { handleOpenAddTransaction('expense'); setIsFabOpen(false); }}
                       className="flex items-center gap-3 bg-surface-container-high text-on-surface pl-4 pr-3 py-2.5 rounded-full shadow-lg hover:bg-surface-container-highest transition-colors"
                     >
-                      <span className="text-sm font-medium whitespace-nowrap">{state.language === 'sr' ? 'Transakcija' : 'Transaction'}</span>
+                      <span className="text-sm font-medium whitespace-nowrap">{t.transaction}</span>
                       <div className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center">
                         <Banknote size={20} />
                       </div>

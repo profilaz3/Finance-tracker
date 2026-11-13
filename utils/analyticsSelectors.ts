@@ -10,6 +10,7 @@ import {
   NON_EARNING_INCOME_CATEGORY_IDS,
   REPAYMENT_CATEGORY_IDS,
 } from '../domain/money';
+import { formatDate } from './locale';
 
 export type AnalyticsPeriod = 'month' | 'quarter' | 'year';
 export type AnalyticsForecastConfidence = 'low' | 'normal';
@@ -626,10 +627,10 @@ const buildForecast = (
 
 const getPeriodLabel = (period: AnalyticsPeriodRange): string => {
   if (period.period === 'month') {
-    return new Intl.DateTimeFormat('en-US', {
+    return formatDate(period.currentStart, {
       month: 'long',
       year: 'numeric',
-    }).format(period.currentStart);
+    });
   }
 
   return period.currentKey;

@@ -183,7 +183,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
                 );
               })}
               {categoryData.length === 0 ? (
-                <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
+                <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
               ) : null}
             </div>
           </div>
@@ -197,7 +197,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
       >
         <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-          <h3 className="text-lg font-medium text-on-surface">{t.categoryVolatility || 'Category Volatility'}</h3>
+          <h3 className="text-lg font-medium text-on-surface">{t.categoryVolatility}</h3>
         </div>
         {volatilityData.length > 0 ? (
           <HorizontalBarChart
@@ -210,7 +210,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
             valueFormatter={(value) => formatCurrency(value, baseCurrency)}
           />
         ) : (
-          <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
+          <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
         )}
       </motion.div>
     </>
@@ -288,10 +288,10 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
         <div>
           <h3 className="text-lg font-medium text-on-surface">
-            {language === 'sr' ? 'Placeno za druge' : 'Advanced for Others'}
+            {t.paidForOthers}
           </h3>
           <p className="text-sm text-on-surface-variant mt-1">
-            {language === 'sr' ? 'Ukupno:' : 'Total:'} {formatCurrency(paidForOthersData.total, baseCurrency)}
+            {t.totalLabel} {formatCurrency(paidForOthersData.total, baseCurrency)}
           </p>
         </div>
         <div className="bg-surface-container rounded-full p-1 flex gap-1">

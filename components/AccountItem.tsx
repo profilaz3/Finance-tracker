@@ -7,6 +7,7 @@ import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
 import { formatCurrency } from '../utils/formatters';
 import { calculateAdjustedInitialBalance } from '../utils/balanceMutations';
+import { TRANSLATIONS } from '../constants';
 
 interface AccountItemProps {
     account: Account;
@@ -23,6 +24,7 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
     getAccountBalance,
     language
 }) => {
+    const t = TRANSLATIONS[language];
     const dragControls = useDragControls();
     const [isEditingIcon, setIsEditingIcon] = useState(false);
     const [isEditingBalance, setIsEditingBalance] = useState(false);
@@ -79,7 +81,7 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
                             value={account.name}
                             onChange={e => onUpdate(account.id, { name: e.target.value })}
                             className="bg-transparent border-none text-base font-medium text-on-surface w-full focus:ring-0 p-0 placeholder-on-surface-variant/50"
-                            placeholder="Account Name"
+                            placeholder={t.accountName}
                         />
                     </div>
 
@@ -120,7 +122,7 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
                     {onDelete && (
                         <button
                             onClick={() => {
-                                if (window.confirm('Delete this wallet? Transactions will be preserved but unlinked.')) {
+                                if (window.confirm(t.deleteWalletConfirm)) {
                                     onDelete(account.id);
                                 }
                             }}

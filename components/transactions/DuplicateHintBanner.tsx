@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import type { DuplicateTransactionGroup } from '../../utils/qolSuggestions';
+import { TRANSLATIONS } from '../../constants';
 
 interface DuplicateHintBannerProps {
   language: 'en' | 'sr';
@@ -21,19 +22,13 @@ export const DuplicateHintBanner: React.FC<DuplicateHintBannerProps> = ({
   }
 
   const extraCount = groups.length - 1;
-  const labels = language === 'sr'
-    ? {
-        title: 'Moguci duplikati',
-        description: `${group.transactions.length} slicne transakcije su pronadjene${extraCount > 0 ? `, plus jos ${extraCount} grupa` : ''}.`,
-        review: 'Pregledaj',
-        dismiss: 'Sakrij',
-      }
-    : {
-        title: 'Possible duplicates',
-        description: `${group.transactions.length} similar transactions found${extraCount > 0 ? `, plus ${extraCount} more group${extraCount === 1 ? '' : 's'}` : ''}.`,
-        review: 'Review',
-        dismiss: 'Dismiss',
-      };
+  const t = TRANSLATIONS[language];
+  const labels = {
+    title: t.possibleDuplicates,
+    description: `${t.similarTransactionsFound.replace('{count}', String(group.transactions.length))}${extraCount > 0 ? (extraCount === 1 ? t.plusMoreGroup : t.plusMoreGroups).replace('{count}', String(extraCount)) : ''}.`,
+    review: t.review,
+    dismiss: t.dismiss,
+  };
 
   return (
     <div className="mb-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 flex items-center gap-3">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Person, Currency } from '../types';
 import { formatCurrency } from '../utils/currencyUtils';
+import { getTranslations } from '../utils/i18n';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 interface PersonStatCardProps {
@@ -11,6 +12,7 @@ interface PersonStatCardProps {
 }
 
 export const PersonStatCard: React.FC<PersonStatCardProps> = ({ person, totalPaid, totalOwed, currency }) => {
+    const t = getTranslations();
     const balance = totalPaid - totalOwed;
     const isPositive = balance > 0.01;
     const isNegative = balance < -0.01;
@@ -32,9 +34,9 @@ export const PersonStatCard: React.FC<PersonStatCardProps> = ({ person, totalPai
                 <div className="flex-1">
                     <p className="font-semibold text-on-surface">{person.name}</p>
                     <p className="text-xs text-on-surface-variant">
-                        {isPositive && 'Is owed'}
-                        {isNegative && 'Owes'}
-                        {isNeutral && 'Settled'}
+                        {isPositive && t.isOwed}
+                        {isNegative && t.owes}
+                        {isNeutral && t.settled}
                     </p>
                 </div>
                 {!isNeutral && (
@@ -46,22 +48,22 @@ export const PersonStatCard: React.FC<PersonStatCardProps> = ({ person, totalPai
                 {isNeutral && (
                     <div className="flex items-center gap-1 text-on-surface-variant">
                         <Minus size={16} />
-                        <span className="font-medium text-sm">Even</span>
+                        <span className="font-medium text-sm">{t.even}</span>
                     </div>
                 )}
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-surface-container rounded-lg p-2">
-                    <p className="text-xs text-on-surface-variant mb-1">Paid</p>
+                    <p className="text-xs text-on-surface-variant mb-1">{t.paid}</p>
                     <p className="text-sm font-semibold text-on-surface">{formatCurrency(totalPaid, currency)}</p>
                 </div>
                 <div className="bg-surface-container rounded-lg p-2">
-                    <p className="text-xs text-on-surface-variant mb-1">Spent</p>
+                    <p className="text-xs text-on-surface-variant mb-1">{t.spent}</p>
                     <p className="text-sm font-semibold text-on-surface">{formatCurrency(totalOwed, currency)}</p>
                 </div>
                 <div className={`bg-surface-container rounded-lg p-2 ${isPositive ? 'ring-1 ring-tertiary/20' : isNegative ? 'ring-1 ring-error/20' : ''}`}>
-                    <p className="text-xs text-on-surface-variant mb-1">Balance</p>
+                    <p className="text-xs text-on-surface-variant mb-1">{t.balance}</p>
                     <p className={`text-sm font-bold ${isPositive ? 'text-tertiary' : isNegative ? 'text-error' : 'text-on-surface'}`}>
                         {formatCurrency(balance, currency)}
                     </p>

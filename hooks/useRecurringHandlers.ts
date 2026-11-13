@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { AppState, RecurringTransaction, Transaction } from '../types';
+import { TRANSLATIONS } from '../constants';
 import { getSyncManager } from '../services/runtimeServices';
 import { getDueOccurrences, getOccurrenceTimestamp, isDue } from '../utils/recurringUtils';
 import { buildRecurringOccurrenceId } from '../utils/recurringOccurrence';
@@ -26,7 +27,7 @@ export function useRecurringHandlers({
       ...prev,
       recurringTransactions: [...prev.recurringTransactions, recurring],
     }));
-    addToast(state.language === 'sr' ? 'Ponavljajuca transakcija dodana' : 'Recurring transaction added', 'success');
+    addToast(TRANSLATIONS[state.language].recurringAdded, 'success');
 
     try {
       const syncManager = await getSyncManager();
@@ -61,7 +62,7 @@ export function useRecurringHandlers({
       ...prev,
       recurringTransactions: prev.recurringTransactions.filter(r => r.id !== id),
     }));
-    addToast(state.language === 'sr' ? 'Ponavljajuca transakcija obrisana' : 'Recurring transaction deleted', 'success');
+    addToast(TRANSLATIONS[state.language].recurringDeleted, 'success');
 
     try {
       const syncManager = await getSyncManager();
@@ -132,9 +133,7 @@ export function useRecurringHandlers({
     if (generatedCount === 0) return;
 
     addToast(
-      state.language === 'sr'
-        ? `${generatedCount} ponavljajuca transakcija generisana`
-        : `${generatedCount} recurring transaction${generatedCount > 1 ? 's' : ''} generated`,
+      TRANSLATIONS[state.language].recurringGenerated.replace('{count}', String(generatedCount)),
       'success'
     );
   }, [addToast, addTransaction, handleUpdateRecurring, state.language, state.recurringTransactions, state.transactions]);

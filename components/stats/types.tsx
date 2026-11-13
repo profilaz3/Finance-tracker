@@ -2,6 +2,7 @@ import React from 'react';
 import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction } from '../../types';
 import clsx from 'clsx';
 import { isTransferTransaction } from '../../domain/money';
+import { formatDate } from '../../utils/locale';
 
 // ─── Public Props (same API as original Stats component) ────────────────────
 
@@ -191,9 +192,9 @@ const parseLocalKey = (dateKey: string) => {
 };
 
 export const formatLabel = (dateKey: string, tf: string, language: 'en' | 'sr') => {
-  if (tf === 'daily') return parseLocalKey(dateKey).toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', { month: 'short', day: 'numeric' });
+  if (tf === 'daily') return formatDate(parseLocalKey(dateKey), { month: 'short', day: 'numeric' }, language);
   if (tf === 'weekly') return dateKey; // Keep Wxx format or improve
-  if (tf === 'monthly') return parseLocalKey(dateKey).toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', { month: 'short', year: '2-digit' });
+  if (tf === 'monthly') return formatDate(parseLocalKey(dateKey), { month: 'short', year: '2-digit' }, language);
   if (tf === 'quarterly') return dateKey;
   if (tf === 'yearly') return dateKey;
   return dateKey;

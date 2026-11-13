@@ -1,8 +1,8 @@
 import type { Currency, Event, Person } from '../types';
+import { getTranslations } from './i18n';
 
 const PLACEHOLDER_COLOR = '#9E9E9E';
 const EMAIL_PLACEHOLDER_ID_PREFIX = 'shared-email:';
-const ORGANIZER_LABEL = 'Organizer';
 
 export const normalizeParticipantEmail = (email: string): string =>
   email.trim().toLowerCase();
@@ -11,7 +11,7 @@ export const isInvitedEmailPlaceholder = (personId: string): boolean =>
   personId.startsWith(EMAIL_PLACEHOLDER_ID_PREFIX);
 
 export const getParticipantTooltipLabel = (person: Person): string =>
-  isInvitedEmailPlaceholder(person.id) ? `Invited guest: ${person.name}` : person.name;
+  isInvitedEmailPlaceholder(person.id) ? getTranslations().invitedGuest.replace('{name}', person.name) : person.name;
 
 export const addSharedEmailToEvent = (event: Event, email: string): Event => {
   const normalizedEmail = normalizeParticipantEmail(email);
@@ -119,7 +119,7 @@ export const resolveEventParticipants = ({
   const placeholderParticipants = missingIds.map(personId => ({
     id: personId,
     name: personId === event.userId
-      ? ORGANIZER_LABEL
+      ? getTranslations().organizer
       : buildPlaceholderName(guestIds.indexOf(personId), isCollaboratorView ? undefined : sharedEmails, guestIds.length),
     color: PLACEHOLDER_COLOR,
     defaultCurrency: userProfile?.defaultCurrency ?? fallbackCurrency,

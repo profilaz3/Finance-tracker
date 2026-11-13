@@ -29,7 +29,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
             {/* Split Method */}
             <div>
                 <label className="block text-sm font-medium text-on-surface-variant mb-2">
-                    {language === 'sr' ? 'Metod podele' : 'Split Method'}
+                    {t.splitMethod}
                 </label>
                 <div className="flex bg-surface-container rounded-xl p-1">
                     <button
@@ -42,7 +42,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                                 : "text-on-surface-variant hover:text-on-surface"
                         )}
                     >
-                        <Calculator size={14} /> {language === 'sr' ? 'Tačno' : 'Exact'}
+                        <Calculator size={14} /> {t.splitExact}
                     </button>
                     <button
                         type="button"
@@ -54,7 +54,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                                 : "text-on-surface-variant hover:text-on-surface"
                         )}
                     >
-                        <Divide size={14} /> {language === 'sr' ? 'Jednako' : 'Equal'}
+                        <Divide size={14} /> {t.equalSplit}
                     </button>
                     <button
                         type="button"
@@ -75,7 +75,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
             {parseFloat(amount) > 0 && includedCount > 0 && (
                 <div className="bg-tertiary/10 border border-tertiary/20 rounded-xl p-3 flex justify-between items-center">
                     <span className="text-sm text-on-surface-variant">
-                        {language === 'sr' ? 'Tvoj deo' : 'Your portion'}
+                        {t.myPortion}
                     </span>
                     <span className="font-bold text-tertiary">
                         {yourPortionPreview.toFixed(2)} {currency}
@@ -87,7 +87,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
             <div>
                 <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-on-surface-variant">
-                        {language === 'sr' ? 'Podeli sa' : 'Split with'} ({includedCount})
+                        {t.splitWith} ({includedCount})
                     </label>
                     {splitMethod === 'equal' && (
                         <button
@@ -95,7 +95,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                             onClick={() => setShares(prev => prev.map(s => ({ ...s, isIncluded: true })))}
                             className="text-primary text-xs hover:underline"
                         >
-                            {language === 'sr' ? 'Izaberi sve' : 'Select All'}
+                            {t.selectAll}
                         </button>
                     )}
                 </div>
@@ -191,7 +191,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                                         type="button"
                                         onClick={() => togglePersonIncluded(share.personId)}
                                         className="p-2 hover:bg-error-container hover:text-on-error-container rounded-full text-on-surface-variant transition-colors"
-                                        title={language === 'sr' ? 'Ukloni' : 'Remove'}
+                                        title={t.remove}
                                     >
                                         <X size={16} />
                                     </button>
@@ -203,7 +203,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                         {shares.some(s => !s.isIncluded) && (
                             <div className="mt-2 pt-2 border-t border-outline/10">
                                 <p className="text-xs text-on-surface-variant mb-2">
-                                    {language === 'sr' ? 'Dodaj osobu:' : 'Add person:'}
+                                    {t.addPersonToSplit}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
                                     {shares.filter(s => !s.isIncluded).map(share => {
@@ -235,7 +235,7 @@ export const IPaidSection: React.FC<IPaidSectionProps> = ({
                         )}>
                             <span>
                                 {splitMethod === 'exact' && remainingAmount >= 0
-                                    ? (language === 'sr' ? 'Tvoj deo' : 'Your portion')
+                                    ? t.myPortion
                                     : t.remaining
                                 }:
                             </span>

@@ -8,6 +8,7 @@ import { PersonCategoryBreakdown } from '../PersonCategoryBreakdown';
 import { EventDebtSummary } from '../EventDebtSummary';
 import clsx from 'clsx';
 import { calculateEventPersonTotals } from '../../utils/eventSummarySelectors';
+import { TRANSLATIONS } from '../../constants';
 
 interface SummaryTabProps {
     eventPeople: Person[];
@@ -24,6 +25,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
     setSummaryCurrency,
     state,
 }) => {
+    const t = TRANSLATIONS[state.language];
     const personTotals = calculateEventPersonTotals({
         people: eventPeople,
         expenses: allExpensesForSummary,
@@ -41,7 +43,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
         >
             <div className="bg-surface-container-low rounded-2xl border border-outline/10 overflow-hidden">
                 <div className="p-4 border-b border-outline/10">
-                    <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">Spending Breakdown</h3>
+                    <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">{t.spendingBreakdown}</h3>
                 </div>
                 <PersonStatsRing
                     people={eventPeople}
@@ -55,7 +57,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
                 <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-3">
                         <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider px-1">
-                            Individual Stats
+                            {t.individualStats}
                         </h3>
                         <div className="space-y-3">
                             {personTotals.map(summary => {
@@ -79,7 +81,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
 
                     <div className="space-y-3">
                         <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider px-1">
-                            By Category
+                            {t.byCategory}
                         </h3>
                         <div className="bg-surface-container-low p-5 rounded-2xl border border-outline/10">
                             <CategoryBreakdownChart
@@ -95,7 +97,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
             {eventPeople.length > 0 && allExpensesForSummary.length > 0 && (
                 <div className="space-y-3">
                     <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider px-1">
-                        Categories by Person
+                        {t.categoriesByPerson}
                     </h3>
                     <div className="grid md:grid-cols-2 gap-4">
                         {eventPeople.map(person => (
@@ -113,7 +115,7 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
 
             <div className="space-y-3">
                 <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider px-1">
-                    Settlement
+                    {t.settlement}
                 </h3>
                 <EventDebtSummary
                     expenses={allExpensesForSummary}
@@ -126,10 +128,10 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({
 
             <div className="space-y-3">
                 <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider px-1">
-                    Display Currency
+                    {t.displayCurrency}
                 </h3>
                 <div className="bg-surface-container-low rounded-xl p-4 border border-outline/10">
-                    <p className="text-xs text-on-surface-variant mb-3">Choose currency for summary calculations above</p>
+                    <p className="text-xs text-on-surface-variant mb-3">{t.displayCurrencyDesc}</p>
                     <div className="flex gap-2">
                         {(['EUR', 'USD', 'RSD'] as Currency[]).map(c => (
                             <button

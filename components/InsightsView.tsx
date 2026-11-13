@@ -4,6 +4,7 @@ import { Sparkles, RefreshCw, Calendar, Loader2, AlertCircle } from 'lucide-reac
 import clsx from 'clsx';
 import { Transaction, Category, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
+import { formatDate } from '../utils/locale';
 import { generateInsights, isAIAvailable } from '../services/aiService';
 
 const MarkdownRenderer = React.lazy(() => import('react-markdown'));
@@ -148,7 +149,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                     <div>
                         <p className="text-sm text-on-surface font-medium">{t.aiUnavailable}</p>
                         <p className="text-xs text-on-surface-variant mt-1">
-                            Configure Supabase and the AI edge function secret to enable AI features.
+                            {t.aiConfigureHint}
                         </p>
                     </div>
                 </motion.div>
@@ -197,12 +198,12 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                                 <Calendar size={16} />
                                 {generatedAt && (
                                     <span>
-                                        {t.generatedOn} {generatedAt.toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', {
+                                        {t.generatedOn} {formatDate(generatedAt, {
                                             month: 'short',
                                             day: 'numeric',
                                             hour: '2-digit',
                                             minute: '2-digit'
-                                        })}
+                                        }, language)}
                                     </span>
                                 )}
                             </div>

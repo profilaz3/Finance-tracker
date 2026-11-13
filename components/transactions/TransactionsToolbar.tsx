@@ -4,6 +4,7 @@ import { Calendar, CheckCircle2, CheckSquare, ChevronDown, Download, FileText, F
 import clsx from 'clsx';
 import { AppState, TransactionType } from '../../types';
 import { CommonFilterChips } from './CommonFilterChips';
+import { TRANSLATIONS } from '../../constants';
 import type { CommonFilterId, CommonTransactionFilter } from '../../utils/qolSuggestions';
 
 interface TransactionsToolbarProps {
@@ -95,47 +96,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
   clearAllFilters,
   isScrolled,
 }) => {
-  const t = state.language === 'sr'
-    ? {
-        deselectAll: 'Ponisti izbor',
-        selectAll: 'Izaberi sve',
-        selected: 'izabrano',
-        exportSelected: 'Izvezi izabrano',
-        deleteSelected: 'Obrisi izabrano',
-        selectMultiple: 'Izaberi vise',
-        openExport: 'Otvori opcije izvoza',
-        printableReport: 'Otvori stampani izvestaj',
-        searchPlaceholder: 'Pretrazi transakcije...',
-        smartAddPlaceholder: 'npr. Rucak 1200 RSD iz Kesa',
-        parse: 'Protumaci',
-        all: 'Sve',
-        expense: 'Trosak',
-        income: 'Prihod',
-        wallet: 'Novcanik',
-        dates: 'Datum',
-        dateRange: 'Period',
-        clear: 'Obrisi',
-      }
-    : {
-        deselectAll: 'Deselect all',
-        selectAll: 'Select all',
-        selected: 'selected',
-        exportSelected: 'Export selected',
-        deleteSelected: 'Delete selected',
-        selectMultiple: 'Select multiple',
-        openExport: 'Open export options',
-        printableReport: 'Open printable report',
-        searchPlaceholder: 'Search transactions...',
-        smartAddPlaceholder: 'e.g. Lunch 20 EUR from Cash',
-        parse: 'Parse',
-        all: 'All',
-        expense: 'Expense',
-        income: 'Income',
-        wallet: 'Wallet',
-        dates: 'Dates',
-        dateRange: 'Date range',
-        clear: 'Clear',
-      };
+  const t = TRANSLATIONS[state.language];
 
   const filterAccountName = filterAccount !== 'all'
     ? state.accounts.find(account => account.id === filterAccount)?.name || t.wallet
@@ -194,7 +155,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
 
       <div className={clsx('flex justify-between items-center transition-all duration-200', isScrolled ? 'mb-2' : 'mb-3')}>
         <h2 className={clsx('font-display font-medium text-on-surface transition-all duration-200', isScrolled ? 'text-lg' : 'text-2xl')}>
-          {state.language === 'sr' ? 'Transakcije' : 'Transactions'}
+          {t.transactions}
         </h2>
         <div className="flex gap-1">
           <button
@@ -210,7 +171,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
           <button
             onClick={onOpenExportModal}
             className="p-2 hover:bg-surface-container-high text-on-surface-variant rounded-full transition-colors"
-            title={state.language === 'sr' ? 'Izvoz' : 'Export'}
+            title={t.export}
             aria-label={t.openExport}
           >
             <Download size={18} />
@@ -219,7 +180,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
             onClick={onOpenPrintableReport}
             disabled={isExportingPdf}
             className="p-2 hover:bg-surface-container-high text-on-surface-variant rounded-full transition-colors"
-            title="Export PDF"
+            title={t.exportPdf}
             aria-label={t.printableReport}
           >
             {isExportingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
@@ -276,7 +237,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                 'p-2 rounded-xl transition-colors',
                 inputMode === 'add' ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:bg-surface-container-high'
               )}
-              title={inputMode === 'search' ? 'Smart add' : 'Search'}
+              title={inputMode === 'search' ? t.smartAdd : t.search}
             >
               {inputMode === 'search' ? <Sparkles size={16} /> : <Search size={16} />}
             </button>
@@ -287,7 +248,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
         )}
         {inputMode === 'add' && !aiAvailable && (
           <p className="text-xs text-error mt-2 px-1">
-            {state.language === 'sr' ? 'AI nije dostupan.' : 'AI is not available.'}
+            {t.aiUnavailable}
           </p>
         )}
       </div>

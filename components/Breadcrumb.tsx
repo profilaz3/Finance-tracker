@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronRight, Home } from 'lucide-react';
 import { motion } from 'motion/react';
+import { getTranslations } from '../utils/i18n';
 
 export interface BreadcrumbItem {
     label: string;
@@ -14,11 +15,12 @@ interface BreadcrumbProps {
 }
 
 export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className = '' }) => {
+    const t = getTranslations();
     if (items.length === 0) return null;
 
     return (
         <nav
-            aria-label="Breadcrumb"
+            aria-label={t.breadcrumb}
             className={`flex items-center gap-1 text-sm overflow-x-auto ${className}`}
         >
             <ol className="flex items-center gap-1 list-none m-0 p-0">

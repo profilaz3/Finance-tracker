@@ -3,6 +3,7 @@ import { Transaction, Currency, ExchangeRates } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { motion } from 'motion/react';
+import { formatMoney } from '../../utils/locale';
 
 interface StatsSummaryProps {
   transactions: Transaction[];
@@ -49,11 +50,11 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({
           <p className="text-on-surface-variant text-sm font-medium mb-2">{t.totalFeesPaid}</p>
           <div className="flex items-baseline gap-3 flex-wrap">
             <p className="text-2xl font-display font-medium text-on-surface">
-              {totalFeesUSD.toFixed(2)} USD
+              {formatMoney(totalFeesUSD, 'USD', language)}
             </p>
             {baseCurrency !== 'USD' && (
               <p className="text-lg text-on-surface-variant">
-                ≈ {totalFees.toFixed(2)} {baseCurrency}
+                ≈ {formatMoney(totalFees, baseCurrency, language)}
               </p>
             )}
           </div>

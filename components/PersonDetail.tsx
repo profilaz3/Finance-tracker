@@ -67,7 +67,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                         <button
                             onClick={() => onEdit(person)}
                             className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
-                            title={t.edit || 'Edit'}
+                            title={t.edit}
                         >
                             <Edit2 size={20} className="opacity-75" />
                         </button>
@@ -117,7 +117,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
 
                         {totalBalanceInBase === 0 && (
                             <p className="text-on-surface-variant/70 mb-6 flex items-center gap-2 text-sm">
-                                <Sparkles size={14} /> {t.allSettled || "All settled up"}
+                                <Sparkles size={14} /> {t.allSettled}
                             </p>
                         )}
                     </div>
@@ -212,7 +212,7 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                                             </div>
                                             <div>
                                                 <p className="font-medium text-on-surface text-sm">{tx.note || category?.name}</p>
-                                                <p className="text-xs text-on-surface-variant/70">{getShortDate(tx.date)}</p>
+                                                <p className="text-xs text-on-surface-variant/70">{getShortDate(tx.date, language)}</p>
                                             </div>
                                         </div>
                                         <span className={clsx(

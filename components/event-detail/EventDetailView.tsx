@@ -15,6 +15,7 @@ import { EventHeader } from './EventHeader';
 import { EventTabs } from './EventTabs';
 import { ExpensesList, ExpensesFab } from './ExpensesList';
 import { SummaryTab } from './SummaryTab';
+import { TRANSLATIONS } from '../../constants';
 
 export const EventDetailView: React.FC<EventDetailViewProps> = ({
     event,
@@ -39,6 +40,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [summaryCurrency, setSummaryCurrency] = useState<Currency>('EUR');
     const [imageVersion, setImageVersion] = useState(0);
+    const t = TRANSLATIONS[state.language];
 
     // Image picker hook
     const {
@@ -70,14 +72,14 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             setImageVersion(prev => prev + 1);
         } catch (error: unknown) {
             console.error('Failed to upload photo:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const errorMessage = error instanceof Error ? error.message : t.unknownError;
             if (onShowToast) {
-                onShowToast(`Failed to upload photo: ${errorMessage}`, 'error');
+                onShowToast(t.photoUploadFailed.replace('{error}', errorMessage), 'error');
             }
         } finally {
             setIsUploadingPhoto(false);
         }
-    }, [event.id, event.imageUrl, onUpdateEvent, onShowToast]);
+    }, [event.id, event.imageUrl, onUpdateEvent, onShowToast, t]);
 
     // Handle camera selection
     const handleCameraSelect = useCallback(async () => {
@@ -127,7 +129,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             {/* Breadcrumb Navigation */}
             <Breadcrumb
                 items={[
-                    { label: 'Events', onClick: onBack, icon: <MapPin size={14} /> },
+                    { label: t.events, onClick: onBack, icon: <MapPin size={14} /> },
                     { label: event.name }
                 ]}
             />
@@ -204,7 +206,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 onSelectCamera={handleCameraSelect}
                 onSelectGallery={handleGallerySelect}
                 language={state.language}
-                title={state.language === 'sr' ? 'Promeni Sliku' : 'Change Photo'}
+                title={t.changePhoto}
             />
         </div>
     );

@@ -196,7 +196,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                         <span className="text-base font-medium text-on-surface truncate">
-                            {transaction.note || category?.name || 'Untitled'}
+                            {transaction.note || category?.name || t.untitled}
                         </span>
                         {hasSplit && (
                             <span className="text-on-surface-variant/40 text-xs shrink-0">
@@ -281,14 +281,14 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                             }}
                             className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                         >
-                            <Pencil size={16} className="text-on-surface-variant" /> {t.edit || 'Edit'}
+                            <Pencil size={16} className="text-on-surface-variant" /> {t.edit}
                         </button>
                         {onDuplicate && (
                             <button
                                 onClick={() => { onDuplicate(); setIsMenuOpen(false); setMenuPosition(null); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                             >
-                                <Copy size={16} className="text-on-surface-variant" /> {t.duplicate || 'Duplicate'}
+                                <Copy size={16} className="text-on-surface-variant" /> {t.duplicate}
                             </button>
                         )}
                         {onSaveAsTemplate && (
@@ -296,7 +296,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 onClick={() => { onSaveAsTemplate(); setIsMenuOpen(false); setMenuPosition(null); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
                             >
-                                <Bookmark size={16} className="text-on-surface-variant" /> {state.language === 'sr' ? 'Sačuvaj kao šablon' : 'Save as Template'}
+                                <Bookmark size={16} className="text-on-surface-variant" /> {t.saveAsTemplate}
                             </button>
                         )}
                         <div className="h-px bg-outline-variant/15 mx-3 my-1" />
@@ -327,7 +327,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 <>
                                     <SplitRow
                                         avatar={state.userProfile?.avatar}
-                                        name={state.userProfile?.name || (state.language === 'sr' ? 'Tvoj deo' : 'You')}
+                                        name={state.userProfile?.name || t.you}
                                         color={state.userProfile?.color || '#10b981'}
                                         amount={formatCurrency(transaction.splitDetails!.myPortion, transaction.currency)}
                                         amountClassName="text-tertiary"
@@ -346,7 +346,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                         );
                                     })}
                                     <div className="flex justify-between items-center text-xs pt-1.5 border-t border-outline-variant/10">
-                                        <span className="text-on-surface-variant">{state.language === 'sr' ? 'Ukupno' : 'Total'}</span>
+                                        <span className="text-on-surface-variant">{t.total}</span>
                                         <span className="font-semibold text-on-surface">
                                             {formatCurrency(transaction.splitDetails!.totalAmount, transaction.currency)}
                                         </span>
@@ -359,7 +359,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 <>
                                     {transaction.receiptData.merchant && (
                                         <DetailRow
-                                            label={state.language === 'sr' ? 'Prodavnica' : 'Merchant'}
+                                            label={t.merchant}
                                             value={transaction.receiptData.merchant}
                                         />
                                     )}
@@ -377,13 +377,13 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                             ))}
                                             {transaction.receiptData.items.length > 5 && (
                                                 <div className="text-[10px] text-on-surface-variant/40 text-center">
-                                                    +{transaction.receiptData.items.length - 5} {state.language === 'sr' ? 'više' : 'more'}
+                                                    +{transaction.receiptData.items.length - 5} {t.more}
                                                 </div>
                                             )}
                                         </div>
                                     )}
                                     <div className="flex justify-between items-center text-xs pt-1.5 border-t border-outline-variant/10">
-                                        <span className="text-on-surface-variant">{state.language === 'sr' ? 'Ukupno' : 'Total'}</span>
+                                        <span className="text-on-surface-variant">{t.total}</span>
                                         <span className="font-semibold text-on-surface">
                                             {formatCurrency(transaction.receiptData.total || transaction.amount, transaction.currency)}
                                         </span>
@@ -399,20 +399,20 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                     )}
                                     {transaction.subcategory && (
                                         <DetailRow
-                                            label={state.language === 'sr' ? 'Podkategorija' : 'Subcategory'}
+                                            label={t.subcategory}
                                             value={transaction.subcategory}
                                         />
                                     )}
                                     {transaction.fees && transaction.fees > 0 && (
                                         <DetailRow
-                                            label={state.language === 'sr' ? 'Naknade' : 'Fees'}
+                                            label={t.fees}
                                             value={formatCurrency(transaction.fees, 'USD')}
                                             valueClassName="text-error"
                                         />
                                     )}
                                     {event && (
                                         <DetailRow
-                                            label={state.language === 'sr' ? 'Događaj' : 'Event'}
+                                            label={t.event}
                                             value={event.name}
                                             valueClassName="text-primary"
                                         />

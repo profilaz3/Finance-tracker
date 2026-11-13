@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { TRANSLATIONS } from '../constants';
 
 describe('event detail contracts', () => {
   it('renders shared tab content as a single AnimatePresence child', () => {
@@ -73,9 +74,13 @@ describe('event detail contracts', () => {
   it('labels the event header icon buttons for accessibility and automation', () => {
     const eventHeader = readFileSync('components/event-detail/EventHeader.tsx', 'utf8');
 
-    expect(eventHeader).toContain('aria-label="Back to events"');
-    expect(eventHeader).toContain('title="Back to events"');
-    expect(eventHeader).toContain('aria-label="Event actions"');
-    expect(eventHeader).toContain('title="Event actions"');
+    expect(eventHeader).toContain('aria-label={t.backToEvents}');
+    expect(eventHeader).toContain('title={t.backToEvents}');
+    expect(eventHeader).toContain('aria-label={t.eventActions}');
+    expect(eventHeader).toContain('title={t.eventActions}');
+    expect(TRANSLATIONS.en.backToEvents).toBe('Back to events');
+    expect(TRANSLATIONS.en.eventActions).toBe('Event actions');
+    expect(TRANSLATIONS.sr.backToEvents).toBe('Nazad na događaje');
+    expect(TRANSLATIONS.sr.eventActions).toBe('Akcije događaja');
   });
 });

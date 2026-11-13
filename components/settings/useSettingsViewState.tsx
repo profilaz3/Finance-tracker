@@ -17,13 +17,13 @@ export function useSettingsViewState(language: AppState['language']) {
   const [activeTab, setActiveTab] = useState<SettingsTabId>('profile');
 
   const tabs = useMemo<SettingsTab[]>(() => ([
-    { id: 'profile', label: language === 'sr' ? 'Profil' : 'Profile', icon: User },
-    { id: 'appearance', label: language === 'sr' ? 'Izgled' : 'Appearance', icon: Palette },
-    { id: 'wallets', label: language === 'sr' ? 'Novcanici' : 'Wallets', icon: Wallet },
-    { id: 'categories', label: language === 'sr' ? 'Kategorije' : 'Categories', icon: Tag },
-    { id: 'recurring', label: language === 'sr' ? 'Ponavljanja' : 'Recurring', icon: RefreshCw },
-    { id: 'people', label: language === 'sr' ? 'Osobe' : 'People', icon: Users },
-  ]), [language]);
+    { id: 'profile', label: t.settingsTabProfile, icon: User },
+    { id: 'appearance', label: t.settingsTabAppearance, icon: Palette },
+    { id: 'wallets', label: t.wallets, icon: Wallet },
+    { id: 'categories', label: t.categories, icon: Tag },
+    { id: 'recurring', label: t.settingsTabRecurring, icon: RefreshCw },
+    { id: 'people', label: t.people, icon: Users },
+  ]), [t]);
 
   const currentTab = tabs.find(tab => tab.id === activeTab);
 

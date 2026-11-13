@@ -114,7 +114,7 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
       className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1 lg:col-span-2"
     >
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <h3 className="text-lg font-medium text-on-surface">{t.netWorthTrend || 'Net Worth Trend'}</h3>
+        <h3 className="text-lg font-medium text-on-surface">{t.netWorthTrend}</h3>
         <div className="bg-surface-container rounded-full p-1 flex gap-1">
           {(['weekly', 'monthly', 'quarterly'] as const).map((timeFrame) => (
             <ToggleButton
@@ -132,27 +132,27 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
             rows={netWorthData}
             labelKey="label"
             areaKeys={[
-              { key: 'cash', label: t.cash || 'Cash', color: chartColors.income },
-              { key: 'receivables', label: t.receivables || 'Receivables', color: chartColors.accent },
-              { key: 'payables', label: t.payables || 'Payables', color: chartColors.expense },
+              { key: 'cash', label: t.cash, color: chartColors.income },
+              { key: 'receivables', label: t.receivables, color: chartColors.accent },
+              { key: 'payables', label: t.payables, color: chartColors.expense },
             ]}
             lineKey="netWorth"
-            lineLabel={t.totalNetWorth || 'Net Worth'}
+            lineLabel={t.totalNetWorth}
             lineColor={chartColors.netLine}
             yTickFormatter={formatCompactNumber}
             valueFormatter={(value) => formatCurrency(value, baseCurrency)}
           />
         ) : (
-          <p className="text-on-surface-variant text-center italic mt-10">{t.noData || 'No data'}</p>
+          <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
         )}
       </div>
       {netWorthData.length > 0 ? (
         <ChartLegend
           items={[
-            { label: t.cash || 'Cash', color: chartColors.income, gradient: `linear-gradient(180deg, ${chartColors.income} 0%, ${chartColors.incomeSoft} 100%)` },
-            { label: t.receivables || 'Receivables', color: chartColors.accent, gradient: `linear-gradient(180deg, ${chartColors.accent} 0%, ${chartColors.accentSoft} 100%)` },
-            { label: t.payables || 'Payables', color: chartColors.expense, gradient: `linear-gradient(180deg, ${chartColors.expense} 0%, ${chartColors.expenseSoft} 100%)` },
-            { label: t.totalNetWorth || 'Net Worth', color: chartColors.netLine, line: true },
+            { label: t.cash, color: chartColors.income, gradient: `linear-gradient(180deg, ${chartColors.income} 0%, ${chartColors.incomeSoft} 100%)` },
+            { label: t.receivables, color: chartColors.accent, gradient: `linear-gradient(180deg, ${chartColors.accent} 0%, ${chartColors.accentSoft} 100%)` },
+            { label: t.payables, color: chartColors.expense, gradient: `linear-gradient(180deg, ${chartColors.expense} 0%, ${chartColors.expenseSoft} 100%)` },
+            { label: t.totalNetWorth, color: chartColors.netLine, line: true },
           ]}
         />
       ) : null}

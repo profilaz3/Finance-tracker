@@ -7,6 +7,8 @@ import {
 import { Event, Person } from '../../types';
 import clsx from 'clsx';
 import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
+import { getTranslations } from '../../utils/i18n';
+import { formatDate as formatLocaleDate } from '../../utils/locale';
 
 interface EventHeaderProps {
     event: Event;
@@ -28,8 +30,8 @@ interface EventHeaderProps {
 }
 
 const formatDate = (dateString?: string) => {
-    if (!dateString) return 'TBD';
-    return new Date(dateString).toLocaleDateString(undefined, {
+    if (!dateString) return getTranslations().dateTbd;
+    return formatLocaleDate(dateString, {
         weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 };
@@ -52,6 +54,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
     openPicker,
     handleFileChange,
 }) => {
+    const t = getTranslations();
     const handleStartEvent = () => {
         onUpdateEvent(event.id, {
             startDate: new Date().toISOString(),
@@ -93,8 +96,8 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
             <div className="absolute top-4 left-4 z-20">
                 <button
                     onClick={onBack}
-                    aria-label="Back to events"
-                    title="Back to events"
+                    aria-label={t.backToEvents}
+                    title={t.backToEvents}
                     className="p-2 bg-black/30 backdrop-blur-md rounded-full text-white hover:bg-black/50 transition-colors"
                 >
                     <ArrowLeft size={24} />
@@ -109,8 +112,8 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                 <div className="relative">
                     <button
                         onClick={() => setIsMenuOpen(!isMenuOpen)}
-                        aria-label="Event actions"
-                        title="Event actions"
+                        aria-label={t.eventActions}
+                        title={t.eventActions}
                         className="p-2 bg-black/30 backdrop-blur-md rounded-full text-white hover:bg-black/50 transition-colors"
                     >
                         <MoreVertical size={24} />
@@ -146,7 +149,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                     ) : (
                                         <Camera size={16} />
                                     )}
-                                    {isUploadingPhoto ? 'Uploading...' : 'Change Photo'}
+                                    {isUploadingPhoto ? t.uploading : t.changePhoto}
                                 </button>
 
                                 <button
@@ -157,7 +160,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                     }}
                                     className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
                                 >
-                                    <Share2 size={16} /> Share Event
+                                    <Share2 size={16} /> {t.shareEvent}
                                 </button>
 
                                 {event.status === 'active' && (
@@ -169,14 +172,14 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                         }}
                                         className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
                                     >
-                                        <CheckCircle2 size={16} /> End Event
+                                        <CheckCircle2 size={16} /> {t.endEvent}
                                     </button>
                                 )}
 
                                 {event.status === 'completed' && (
                                     <button
                                         onClick={() => {
-                                            if (window.confirm(`Delete "${event.name}"? This cannot be undone.`)) {
+                                            if (window.confirm(t.deleteEventConfirm.replace('{name}', event.name))) {
                                                 onDeleteEvent(event.id);
                                                 onBack();
                                             }
@@ -184,7 +187,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                         }}
                                         className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
                                     >
-                                        <Trash2 size={16} /> Delete Event
+                                        <Trash2 size={16} /> {t.deleteEvent}
                                     </button>
                                 )}
 
@@ -206,7 +209,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                             )}>
                                 {event.status === 'active' && <Play size={12} fill="currentColor" />}
                                 {event.status === 'completed' && <CheckCircle2 size={12} />}
-                                <span className="capitalize">{event.status}</span>
+                                <span className="capitalize">{event.status === 'active' ? t.eventStatusActive : event.status === 'completed' ? t.eventStatusCompleted : t.eventStatusArchived}</span>
                             </span>
 
                             {/* Show dates */}
@@ -244,7 +247,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                     onClick={handleStartEvent}
                                     className="px-4 py-2 bg-tertiary hover:bg-tertiary/90 text-on-tertiary rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-tertiary/20"
                                 >
-                                    <Play size={16} fill="currentColor" /> Start Event
+                                    <Play size={16} fill="currentColor" /> {t.startEvent}
                                 </button>
                             )}
                             {event.status === 'completed' && (
@@ -252,7 +255,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                                     onClick={handleReopenEvent}
                                     className="px-4 py-2 bg-on-surface/20 backdrop-blur-md hover:bg-on-surface/30 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
                                 >
-                                    <Play size={16} /> Reopen
+                                    <Play size={16} /> {t.reopenEvent}
                                 </button>
                             )}
                         </div>

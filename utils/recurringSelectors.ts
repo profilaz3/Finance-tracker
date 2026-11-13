@@ -1,5 +1,7 @@
 import type { RecurringTransaction } from '../types';
 import { isDue } from './recurringUtils';
+import { getTranslations } from './i18n';
+import { getIntlLocale } from './locale';
 
 const parseDateOnly = (value: string): Date => {
   const [year, month, day] = value.split('-').map(Number);
@@ -9,13 +11,23 @@ const parseDateOnly = (value: string): Date => {
 const normalizeDateOnly = (referenceDate: Date): Date =>
   new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
 
-const getDayLabel = (days: number, language: 'en' | 'sr'): string => {
-  if (language === 'sr') {
-    return days === 1 ? 'dan' : 'dana';
-  }
+const pluralRulesCache = new Map<string, Intl.PluralRules>();
 
-  return days === 1 ? 'day' : 'days';
+const getDayLabel = (days: number, language: 'en' | 'sr'): string => {
+  const locale = getIntlLocale(language);
+  let rules = pluralRulesCache.get(locale);
+  if (!rules) {
+    rules = new Intl.PluralRules(locale);
+    pluralRulesCache.set(locale, rules);
+  }
+  const t = getTranslations(language);
+  return rules.select(days) === 'one' ? t.dayUnitOne : t.dayUnitOther;
 };
+
+const formatDayCount = (template: string, days: number, language: 'en' | 'sr'): string =>
+  template
+    .replace('{count}', String(days))
+    .replace('{unit}', getDayLabel(days, language));
 
 export const countDueRecurringTransactions = (
   recurringTransactions: RecurringTransaction[],
@@ -33,18 +45,14 @@ export const getRecurringStatus = (
   const isOverdue = daysUntil < 0;
   const isDueToday = daysUntil === 0;
 
+  const t = getTranslations(language);
   let countdownText: string;
   if (isDueToday) {
-    countdownText = language === 'sr' ? 'Danas' : 'Today';
+    countdownText = t.today;
   } else if (isOverdue) {
-    const overdueDays = Math.abs(daysUntil);
-    countdownText = language === 'sr'
-      ? `Kasni ${overdueDays} ${getDayLabel(overdueDays, language)}`
-      : `Overdue ${overdueDays} ${getDayLabel(overdueDays, language)}`;
+    countdownText = formatDayCount(t.recurringOverdue, Math.abs(daysUntil), language);
   } else {
-    countdownText = language === 'sr'
-      ? `za ${daysUntil} ${getDayLabel(daysUntil, language)}`
-      : `in ${daysUntil} ${getDayLabel(daysUntil, language)}`;
+    countdownText = formatDayCount(t.recurringDueIn, daysUntil, language);
   }
 
   return {

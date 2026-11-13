@@ -4,6 +4,7 @@ import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { AppState, Currency, ExchangeRates, Transaction } from '../types';
+import { getTranslations } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -81,11 +82,11 @@ export function useTransactionHandlers({
       await withSyncManager(syncManager => syncManager.syncTransaction(finalTransaction));
     } catch (error) {
       console.error('Failed to sync transaction:', error);
-      addToast('Transaction saved locally, but sync failed', 'error');
+      addToast(getTranslations().transactionSavedSyncFailed, 'error');
     }
 
     vibrate(HAPTIC_PATTERNS.success);
-    addToast('Transaction added successfully', 'success');
+    addToast(getTranslations().transactionAdded, 'success');
   }, [addToast, setState, state.accounts, state.rates]);
 
   /**
@@ -111,7 +112,7 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to sync restored transactions:', error);
-      addToast('Restored locally, but sync failed', 'error');
+      addToast(getTranslations().transactionsRestoredSyncFailed, 'error');
       return;
     }
 
@@ -136,14 +137,14 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to delete transaction from Supabase:', error);
-      addToast('Transaction deleted locally, but sync failed', 'error');
+      addToast(getTranslations().transactionDeletedSyncFailed, 'error');
     }
 
     vibrate(HAPTIC_PATTERNS.success);
-    addToast('Transaction deleted', 'info', {
-      label: 'Undo',
+    addToast(getTranslations().transactionDeleted, 'info', {
+      label: getTranslations().undo,
       onClick: () => {
-        void restoreTransactions(deleted, 'Transaction restored');
+        void restoreTransactions(deleted, getTranslations().transactionRestored);
       },
     });
   }, [addToast, restoreTransactions, setState, state.transactions]);
@@ -169,12 +170,12 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to sync batch deletion:', error);
-      addToast('Transactions deleted locally, but sync failed', 'error');
+      addToast(getTranslations().transactionsDeletedSyncFailed, 'error');
     }
 
     vibrate(HAPTIC_PATTERNS.success);
 
-    const message = `${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`;
+    const message = getTranslations(state.language).transactionsDeletedCount.replace('{count}', String(ids.length));
     if (deletedTransactions.length === 0) {
       addToast(message, 'success');
       return;
@@ -182,9 +183,9 @@ export function useTransactionHandlers({
 
     // Balances are derived from transactions, so every batch can be undone safely.
     addToast(message, 'info', {
-      label: state.language === 'sr' ? 'Vrati' : 'Undo',
+      label: getTranslations(state.language).undo,
       onClick: () => {
-        void restoreTransactions(deletedTransactions, 'Batch restored');
+        void restoreTransactions(deletedTransactions, getTranslations(state.language).batchRestored);
       },
     });
   }, [addToast, restoreTransactions, setState, state.language, state.transactions]);
@@ -225,7 +226,7 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to sync transaction update:', error);
-      addToast('Transaction updated locally, but sync failed', 'error');
+      addToast(getTranslations().transactionUpdatedSyncFailed, 'error');
     }
 
     if (isNewTransaction && targetAccountId && updated.categoryId === 'internal-transfer') {
@@ -269,7 +270,7 @@ export function useTransactionHandlers({
     closeEditModal();
     closeReceiptModal();
     setSelectedTransaction(null);
-    addToast('Transaction updated', 'success');
+    addToast(getTranslations().transactionUpdated, 'success');
   }, [addToast, addTransaction, closeEditModal, closeReceiptModal, createId, setSelectedTransaction, setState, state.accounts, state.rates, state.transactions]);
 
   return {

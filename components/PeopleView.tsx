@@ -140,7 +140,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10 shadow-elevation-1"
                     >
                         <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-1 flex items-center gap-1">
-                            <ArrowDownLeft size={10} /> {language === 'sr' ? 'Duguju mi' : 'Owes You'}
+                            <ArrowDownLeft size={10} /> {t.owesYou}
                         </p>
                         <p className="text-xl md:text-2xl font-display font-medium text-tertiary">
                             {formatCurrency(totalOwedToMe, baseCurrency)}
@@ -154,7 +154,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10 shadow-elevation-1"
                     >
                         <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-1 flex items-center gap-1">
-                            <ArrowUpRight size={10} /> {language === 'sr' ? 'Dugujem' : 'You Owe'}
+                            <ArrowUpRight size={10} /> {t.youOwe}
                         </p>
                         <p className="text-xl md:text-2xl font-display font-medium text-error">
                             {formatCurrency(totalIOwe, baseCurrency)}
@@ -171,10 +171,10 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                             icon={User}
                             title={searchQuery ? t.noPeopleFound : t.noPeopleAdded}
                             description={searchQuery
-                                ? (language === 'sr' ? 'Pokušajte sa drugim pojmom za pretragu' : 'Try a different search term')
-                                : (language === 'sr' ? 'Dodajte kontakte da biste pratili zajedničke troškove' : 'Add contacts to track shared expenses')
+                                ? t.tryDifferentSearch
+                                : t.addContactsToTrack
                             }
-                            action={!searchQuery ? { label: language === 'sr' ? 'Dodaj osobu' : 'Add Person', onClick: onAddPerson } : undefined}
+                            action={!searchQuery ? { label: t.addPerson, onClick: onAddPerson } : undefined}
                         />
                     </div>
                 ) : (
@@ -227,7 +227,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                                                 onSettleUp(person.id, currency as Currency);
                                                             }}
                                                             className="p-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
-                                                            title={language === 'sr' ? 'Izmiri dug' : 'Settle up'}
+                                                            title={t.settleUp}
                                                         >
                                                             <Handshake size={14} />
                                                         </button>

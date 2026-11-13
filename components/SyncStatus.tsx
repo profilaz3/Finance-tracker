@@ -3,6 +3,7 @@ import type { QueuedOperation } from '../services/offlineQueue';
 import { getOfflineQueue } from '../services/runtimeServices';
 import clsx from 'clsx';
 import { AlertCircleIcon, CheckIcon, CloudIcon, RefreshIcon, WifiOffIcon } from './icons/UiIcons';
+import { getTranslations } from '../utils/i18n';
 
 interface SyncStatusProps {
     className?: string;
@@ -13,6 +14,7 @@ type SyncState = 'synced' | 'syncing' | 'pending' | 'offline' | 'error';
 type OfflineQueueInstance = Awaited<ReturnType<typeof getOfflineQueue>>;
 
 export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails = false }) => {
+    const t = getTranslations();
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [offlineQueue, setOfflineQueue] = useState<OfflineQueueInstance | null>(null);
     const [queue, setQueue] = useState<QueuedOperation[]>([]);
@@ -76,16 +78,16 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
     const getLabel = () => {
         switch (state) {
             case 'offline':
-                return 'Offline';
+                return t.offline;
             case 'syncing':
-                return 'Syncing...';
+                return t.syncing;
             case 'error':
-                return `${pendingCount} failed`;
+                return t.syncFailedCount.replace('{count}', String(pendingCount));
             case 'pending':
-                return `${pendingCount} pending`;
+                return t.syncPendingCount.replace('{count}', String(pendingCount));
             case 'synced':
             default:
-                return 'Synced';
+                return t.synced;
         }
     };
 
@@ -154,8 +156,8 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
                                 <div className="bg-error/20 p-3 flex items-center gap-2 border-b border-error/20">
                                     <WifiOffIcon size={18} className="text-error" />
                                     <div>
-                                        <p className="text-sm font-medium text-error">You're offline</p>
-                                        <p className="text-xs text-error/70">Changes will sync when you're back online</p>
+                                        <p className="text-sm font-medium text-error">{t.youAreOffline}</p>
+                                        <p className="text-xs text-error/70">{t.changesWillSyncOnline}</p>
                                     </div>
                                 </div>
                             )}
@@ -165,14 +167,14 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
                                     <div className="p-3 border-b border-outline-variant/20">
                                         <div className="flex items-center justify-between">
                                             <span className="font-medium text-on-surface">
-                                                {pendingCount} pending {pendingCount === 1 ? 'operation' : 'operations'}
+                                                {(pendingCount === 1 ? t.pendingOperationsOne : t.pendingOperationsOther).replace('{count}', String(pendingCount))}
                                             </span>
                                             {hasErrors && isOnline && (
                                                 <button
                                                     onClick={handleRetry}
                                                     className="text-xs text-primary hover:underline font-medium"
                                                 >
-                                                    Retry all
+                                                    {t.retryAll}
                                                 </button>
                                             )}
                                         </div>
@@ -189,7 +191,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
                                                     </span>
                                                     {op.lastError && (
                                                         <span className="text-xs text-error font-medium">
-                                                            Failed ({op.retries}x)
+                                                            {t.syncFailedRetries.replace('{count}', String(op.retries))}
                                                         </span>
                                                     )}
                                                 </div>
@@ -207,7 +209,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
                             {isOnline && pendingCount === 0 && (
                                 <div className="p-4 text-center">
                                     <CheckIcon size={24} className="text-tertiary mx-auto mb-2" />
-                                    <p className="text-sm text-on-surface-variant">All changes synced</p>
+                                    <p className="text-sm text-on-surface-variant">{t.allChangesSynced}</p>
                                 </div>
                             )}
                     </div>
@@ -219,6 +221,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ className, showDetails =
 
 // Minimal version for mobile nav - more prominent when offline
 export const SyncIndicator: React.FC<{ className?: string }> = ({ className }) => {
+    const t = getTranslations();
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [pendingCount, setPendingCount] = useState(0);
 
@@ -255,7 +258,7 @@ export const SyncIndicator: React.FC<{ className?: string }> = ({ className }) =
             {!isOnline ? (
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-error/20">
                     <WifiOffIcon size={12} className="text-error" />
-                    <span className="text-[10px] font-medium text-error">Offline</span>
+                    <span className="text-[10px] font-medium text-error">{t.offline}</span>
                 </div>
             ) : pendingCount > 0 ? (
                 <div className="relative">

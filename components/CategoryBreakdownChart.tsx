@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { SharedExpense, Currency, ExchangeRates } from '../types';
 import { formatCurrency, convertCurrency } from '../utils/currencyUtils';
+import { getTranslations } from '../utils/i18n';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_COLORS } from '../constants/expenseCategories';
 
 interface CategoryBreakdownChartProps {
@@ -10,6 +11,7 @@ interface CategoryBreakdownChartProps {
 }
 
 export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = ({ expenses, currency, rates }) => {
+    const t = getTranslations();
     const categoryTotals = useMemo(() => {
         const totals: Record<string, number> = {};
         let grandTotal = 0;
@@ -41,7 +43,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = ({ 
     if (categoryTotals.length === 0) {
         return (
             <div className="text-center py-4 text-on-surface-variant text-sm">
-                No expenses to categorize
+                {t.noExpensesToCategorize}
             </div>
         );
     }
