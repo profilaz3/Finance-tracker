@@ -1,6 +1,7 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
+import { guardBackend } from './e2eGuard.mjs';
 
 const EXPORT_REGRESSION_URL = process.env.EXPORT_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const EXPORT_REGRESSION_EMAIL = process.env.EXPORT_REGRESSION_EMAIL;
@@ -154,6 +155,7 @@ const verifyPrintableReport = async (page) => {
 
 const browser = await chromium.launch({ headless: !EXPORT_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
+await guardBackend(context);
 const page = await context.newPage();
 
 page.on('console', (message) => {

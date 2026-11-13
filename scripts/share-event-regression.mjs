@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
+import { guardBackend } from './e2eGuard.mjs';
 
 const SHARE_REGRESSION_URL = process.env.SHARE_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const SHARE_REGRESSION_EMAIL = process.env.SHARE_REGRESSION_EMAIL;
@@ -76,6 +77,7 @@ const shareEvent = async (page) => {
 
 const browser = await chromium.launch({ headless: !SHARE_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
+await guardBackend(context);
 const page = await context.newPage();
 
 try {

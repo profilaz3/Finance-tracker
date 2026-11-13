@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
+import { guardBackend } from './e2eGuard.mjs';
 
 const ACCOUNT_EDIT_REGRESSION_URL = process.env.ACCOUNT_EDIT_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const ACCOUNT_EDIT_REGRESSION_EMAIL = process.env.ACCOUNT_EDIT_REGRESSION_EMAIL;
@@ -108,6 +109,7 @@ const setDisplayedBalance = async (row, amount) => {
 
 const browser = await chromium.launch({ headless: !ACCOUNT_EDIT_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
+await guardBackend(context);
 const page = await context.newPage();
 
 page.on('console', (message) => {

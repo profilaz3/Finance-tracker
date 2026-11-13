@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
+import { guardBackend } from './e2eGuard.mjs';
 
 const RECURRING_REGRESSION_URL = process.env.RECURRING_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const RECURRING_REGRESSION_EMAIL = process.env.RECURRING_REGRESSION_EMAIL;
@@ -141,6 +142,7 @@ const deleteRecurring = async (page, rowIndex, expectedCountAfterDelete) => {
 
 const browser = await chromium.launch({ headless: !RECURRING_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
+await guardBackend(context);
 const page = await context.newPage();
 
 page.on('console', message => {

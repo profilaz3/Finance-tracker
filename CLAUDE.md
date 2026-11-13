@@ -30,6 +30,7 @@ Optional Edge Function secrets:
 
 - Schema lives in `supabase/migrations/` (baseline + hardening migrations). Never edit an applied migration; add a new timestamped file. `supabase/legacy/` holds the old hand-run SQL for reference only.
 - Local stack: `supabase start` (applies migrations + `supabase/seed.sql`: users `ci-owner@example.test` / `ci-guest@example.test`, password `CiPassword123`, with a shared "Bergamo" event). `supabase db reset` re-applies everything.
+- Browser regressions (`npm run test:*-regression`, Playwright) create and delete data. Run the app against the local stack (`VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=<anon key from supabase status> npm run dev`; shell env overrides `.env`). `scripts/e2eGuard.mjs` aborts requests to hosted Supabase unless `E2E_ALLOW_REMOTE=1`.
 - Remote: `supabase db push --project-ref <ref>` and `supabase functions deploy <fn> --project-ref <ref> --use-api`. CI does this on main when the `ENABLE_SUPABASE_DEPLOY` repo variable is `true`.
 - Edge functions share `supabase/functions/_shared/` (`http.ts` CORS/body limits/errors, `auth.ts` user check + AI quota, `openai.ts`, `input.ts`). `parse-transaction` and `scan-receipt` reuse validators from `utils/aiShared.ts`.
 - Every table is RLS-protected; events are shared by email (`shared_emails`), and guests may edit but not take over or reshare an event. Data CHECK constraints reject oversized or malformed rows (error `23514`).
