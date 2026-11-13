@@ -38,13 +38,22 @@ describe('getRelativeDate', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-05T15:00:00.000Z'));
 
-    expect(getRelativeDate('2026-04-07T09:30:00.000Z')).toBe('Apr 07, 2026');
+    expect(getRelativeDate('2026-04-07T09:30:00.000Z')).toBe('7 Apr 2026');
   });
 
   it('uses local calendar days instead of elapsed 24-hour blocks across DST', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-05T10:00:00.000Z'));
 
-    expect(getRelativeDate('2026-03-29T10:00:00.000Z')).toBe('1 weeks ago');
+    expect(getRelativeDate('2026-03-29T10:00:00.000Z')).toBe('Last week');
+  });
+
+  it('localizes relative dates for Serbian', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-05T15:00:00.000Z'));
+
+    expect(getRelativeDate('2026-04-05T09:30:00.000Z', 'sr')).toBe('Danas');
+    expect(getRelativeDate('2026-04-04T12:00:00.000Z', 'sr')).toBe('Juče');
+    expect(getRelativeDate('2026-04-02T12:00:00.000Z', 'sr')).toBe('Pre 3 dana');
   });
 });
