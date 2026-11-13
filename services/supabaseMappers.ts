@@ -192,3 +192,14 @@ export function mapSettingsRow(
         userProfile
     };
 }
+
+/** Pages are fetched by id; restore the user's account order (unordered rows keep their place at the end). */
+export const sortAccountsByOrder = (accounts: Account[]): Account[] =>
+    accounts
+        .map((account, index) => ({ account, index }))
+        .sort((a, b) => {
+            const orderA = a.account.order ?? Number.MAX_SAFE_INTEGER;
+            const orderB = b.account.order ?? Number.MAX_SAFE_INTEGER;
+            return orderA - orderB || a.index - b.index;
+        })
+        .map(entry => entry.account);

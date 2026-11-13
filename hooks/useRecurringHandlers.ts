@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { AppState, RecurringTransaction, Transaction } from '../types';
 import { getSyncManager } from '../services/runtimeServices';
 import { isDue, calculateNextDueDate } from '../utils/recurringUtils';
+import { buildRecurringOccurrenceId } from '../utils/recurringOccurrence';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -95,8 +95,10 @@ export function useRecurringHandlers({
     if (dueRecurrings.length === 0) return;
 
     dueRecurrings.forEach(recurring => {
+      // Same id for the same occurrence everywhere, so another tab/device cannot duplicate it.
+      const occurrenceId = buildRecurringOccurrenceId(recurring.id, recurring.nextDue);
       const newTransaction: Transaction = {
-        id: uuidv4(),
+        id: occurrenceId,
         date: new Date().toISOString(),
         amount: recurring.amount,
         currency: recurring.currency,
@@ -107,7 +109,9 @@ export function useRecurringHandlers({
         subcategory: recurring.subcategory,
       };
 
-      addTransaction(newTransaction);
+      if (!state.transactions.some(transaction => transaction.id === occurrenceId)) {
+        addTransaction(newTransaction);
+      }
 
       const newNextDue = calculateNextDueDate(recurring.nextDue, recurring.frequency);
       handleUpdateRecurring(recurring.id, {
@@ -122,7 +126,7 @@ export function useRecurringHandlers({
         : `${dueRecurrings.length} recurring transaction${dueRecurrings.length > 1 ? 's' : ''} generated`,
       'success'
     );
-  }, [addToast, addTransaction, handleUpdateRecurring, state.language, state.recurringTransactions]);
+  }, [addToast, addTransaction, handleUpdateRecurring, state.language, state.recurringTransactions, state.transactions]);
 
   return {
     handleAddRecurring,

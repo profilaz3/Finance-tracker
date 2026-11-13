@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspens
 import { Transaction, Category, Person, View, TransactionType, Event } from './types';
 
 import { getSupabaseService } from './services/runtimeServices';
+import { subscribeStorageErrors } from './services/storageHealth';
+import { CONFIG } from './config';
 import { TRANSLATIONS } from './constants';
 import { ToastContainer, Toast } from './components/Toast';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
@@ -38,7 +40,7 @@ const createId = () => crypto.randomUUID();
 const App: React.FC = () => {
   // --- Extracted Hooks ---
   const { isAuthenticated, isLoadingAuth, handleLogin, handleLogout, handleDeleteAccount: handleDeleteUserAccount } = useAuth();
-  const { state, setState, fetchRemoteState } = useAppState();
+  const { state, setState, fetchRemoteState, areSlicesHydrated } = useAppState(isAuthenticated);
   const modals = useModals();
 
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -81,7 +83,7 @@ const App: React.FC = () => {
 
   // --- Use extracted hooks ---
   useExchangeRates(isAuthenticated, setState);
-  useSync(state, isAuthenticated);
+  useSync(state, isAuthenticated, areSlicesHydrated('settings'));
 
   // Fetch remote state on auth
   useEffect(() => {
@@ -153,6 +155,24 @@ const App: React.FC = () => {
     }
   };
 
+  // Local storage full: tell the user instead of silently losing data.
+  const storageWarningLanguageRef = useRef(state.language);
+  storageWarningLanguageRef.current = state.language;
+  useEffect(() => {
+    let lastShownAt = 0;
+    return subscribeStorageErrors(() => {
+      const now = Date.now();
+      if (now - lastShownAt < CONFIG.STORAGE_WARNING_THROTTLE_MS) return;
+      lastShownAt = now;
+      const id = `toast-storage-${now}`;
+      const message = storageWarningLanguageRef.current === 'sr'
+        ? 'Memorija uređaja je puna: najnovije izmene možda nisu sačuvane lokalno'
+        : 'Device storage is full: recent changes may not be saved locally';
+      setToasts(prev => [...prev, { id, message, type: 'error', duration: 6000 }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
+    });
+  }, []);
+
   const dismissToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
@@ -176,6 +196,7 @@ const App: React.FC = () => {
     state,
     setState,
     addToast,
+    isHydrated: areSlicesHydrated('accounts'),
   });
 
   const {
@@ -326,6 +347,7 @@ const App: React.FC = () => {
 
   useRecurringProcessor({
     isAuthenticated,
+    isHydrated: areSlicesHydrated('transactions', 'recurringTransactions'),
     recurringTransactions: state.recurringTransactions,
     processRecurringTransactions,
   });
@@ -437,7 +459,7 @@ const App: React.FC = () => {
       <Suspense fallback={<DashboardSkeleton />}>
         <AuthView
           onAuthSuccess={async () => {
-            handleLogin();
+            await handleLogin();
             await fetchRemoteState();
           }}
         />

@@ -4,7 +4,8 @@ import { INITIAL_CATEGORIES, INITIAL_ACCOUNTS, DEFAULT_RATES } from '../constant
 import { safeValidateAppState } from '../schemas';
 import { CONFIG } from '../config';
 import { sanitizeLoadedState } from '../utils/loadedStateSanitizer';
-import { safeGet, safeRemove, safeSet } from '../utils/safeStorage';
+import { safeGet, safeRemove } from '../utils/safeStorage';
+import { writeStorage } from './storageHealth';
 import {
   buildStateSegments,
   mergeStateSegments,
@@ -65,22 +66,23 @@ const performSave = () => {
         const nextSerializedSegments = {} as Record<PersistedStateSegmentName, string>;
 
         STATE_SEGMENT_NAMES.forEach(segmentName => {
-          const serializedValue = JSON.stringify(segments[segmentName]);
-          nextSerializedSegments[segmentName] = serializedValue;
+          const serializedValue = JSON.stringify(segments[segmentName]) ?? 'null';
 
           if (latestSerializedSegments?.[segmentName] !== serializedValue) {
-            try {
-              localStorage.setItem(STATE_SEGMENT_KEYS[segmentName], serializedValue);
-            } catch {
-              // Ignore storage quota/unavailability failures
+            // Failures (quota) are reported to the UI; the segment is retried on the next save.
+            if (!writeStorage('state', STATE_SEGMENT_KEYS[segmentName], serializedValue)) {
+              const previous = latestSerializedSegments?.[segmentName];
+              if (previous !== undefined) nextSerializedSegments[segmentName] = previous;
+              return;
             }
           }
+          nextSerializedSegments[segmentName] = serializedValue;
         });
 
-        safeSet(STATE_SEGMENT_META_KEY, {
+        writeStorage('state', STATE_SEGMENT_META_KEY, JSON.stringify({
           version: STATE_SEGMENT_VERSION,
           updatedAt: new Date().toISOString(),
-        });
+        }));
         safeRemove(STORAGE_KEY);
         latestSerializedSegments = nextSerializedSegments;
     }
@@ -116,10 +118,37 @@ const readSegmentedState = (baseState: AppState): AppState => {
   return mergeStateSegments(baseState, segments);
 };
 
+/** Legacy fixed ids (c1-c8, acc1-acc3) were global primary keys shared by every user. */
+const LEGACY_DEFAULT_ID = /^(c[1-8]|acc[1-3])$/;
+
+const createDefaultId = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+
+/**
+ * Default categories for a new user. User-editable defaults get fresh UUIDs so
+ * they never collide with another user's rows; app-internal categories
+ * (internal-transfer, debt/loan repayment) keep their fixed ids.
+ */
+export const createDefaultCategories = (): Category[] =>
+  INITIAL_CATEGORIES.map(category => ({
+    ...category,
+    subcategories: [...category.subcategories],
+    id: LEGACY_DEFAULT_ID.test(category.id) ? createDefaultId() : category.id,
+  }));
+
+export const createDefaultAccounts = (): Account[] =>
+  INITIAL_ACCOUNTS.map((account, index) => ({
+    ...account,
+    id: createDefaultId(),
+    order: index,
+  }));
+
 export const createInitialState = (): AppState => ({
   transactions: [],
-  categories: INITIAL_CATEGORIES,
-  accounts: INITIAL_ACCOUNTS,
+  categories: createDefaultCategories(),
+  accounts: createDefaultAccounts(),
   people: [],
   userProfile: undefined,
   baseCurrency: 'RSD',
@@ -147,7 +176,7 @@ export const loadState = (): AppState => {
         })();
 
     // Ensure arrays exist
-    if (!mergedState.accounts || mergedState.accounts.length === 0) mergedState.accounts = INITIAL_ACCOUNTS;
+    if (!mergedState.accounts || mergedState.accounts.length === 0) mergedState.accounts = baseState.accounts;
     if (!mergedState.people) mergedState.people = [];
     if (!mergedState.events) mergedState.events = [];
     if (!mergedState.sharedExpenses) mergedState.sharedExpenses = [];
@@ -218,6 +247,36 @@ export const flushSaveState = () => {
     saveTimer = null;
   }
   performSave();
+};
+
+const SEGMENT_NAME_BY_KEY = new Map<string, PersistedStateSegmentName>(
+  STATE_SEGMENT_NAMES.map(segmentName => [STATE_SEGMENT_KEYS[segmentName], segmentName])
+);
+
+/**
+ * Apply a segment written by another tab (`storage` event) to this tab's state.
+ * Returns null when the key is not a state segment or the value is unreadable.
+ * The incoming value is recorded as already persisted so it is not echoed back.
+ */
+export const applyExternalSegmentChange = (
+  state: AppState,
+  key: string | null,
+  newValue: string | null
+): AppState | null => {
+  if (!key) return null;
+  const segmentName = SEGMENT_NAME_BY_KEY.get(key);
+  if (!segmentName || newValue === null) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(newValue);
+  } catch {
+    return null;
+  }
+  if (parsed === null || parsed === undefined) return null;
+
+  latestSerializedSegments = { ...(latestSerializedSegments ?? {}), [segmentName]: newValue };
+  return mergeStateSegments(state, { [segmentName]: parsed } as Partial<PersistedStateSegments>);
 };
 
 export const clearPersistedState = () => {
