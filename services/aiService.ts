@@ -27,6 +27,62 @@ const unwrapFunctionData = <T>(payload: unknown): T | null => {
   return (payload as T) ?? null;
 };
 
+export type AiErrorKind = 'quota' | 'unavailable' | 'rejected' | 'network' | 'unknown';
+
+export interface AiErrorInfo {
+  fn: EdgeFunctionName;
+  kind: AiErrorKind;
+  status?: number;
+  message?: string;
+}
+
+type AiErrorListener = (info: AiErrorInfo) => void;
+
+const aiErrorListeners = new Set<AiErrorListener>();
+
+/** AI calls still resolve to null on failure; subscribe here to tell the user why. */
+export const subscribeAiErrors = (listener: AiErrorListener): (() => void) => {
+  aiErrorListeners.add(listener);
+  return () => {
+    aiErrorListeners.delete(listener);
+  };
+};
+
+const emitAiError = (info: AiErrorInfo): void => {
+  aiErrorListeners.forEach(listener => {
+    try {
+      listener(info);
+    } catch {
+      // A broken listener must not break the caller
+    }
+  });
+};
+
+export const classifyAiStatus = (status: number | undefined): AiErrorKind => {
+  if (status === undefined) return 'network';
+  if (status === 429) return 'quota';
+  if (status === 502 || status === 503 || status === 504) return 'unavailable';
+  if (status >= 400 && status < 500) return 'rejected';
+  return 'unknown';
+};
+
+const describeFunctionError = async (error: unknown): Promise<{ status?: number; message?: string }> => {
+  const context = (error as { context?: unknown } | null)?.context;
+  if (context instanceof Response) {
+    let message: string | undefined;
+    try {
+      const body: unknown = await context.clone().json();
+      if (body && typeof body === 'object' && isNonEmptyString((body as EdgeFunctionEnvelope<unknown>).error)) {
+        message = (body as EdgeFunctionEnvelope<unknown>).error;
+      }
+    } catch {
+      // Non-JSON error body
+    }
+    return { status: context.status, message };
+  }
+  return {};
+};
+
 async function invokeAiFunction<T>(
   functionName: EdgeFunctionName,
   body: Record<string, unknown>,
@@ -41,11 +97,21 @@ async function invokeAiFunction<T>(
     const supabaseService = await getSupabaseService();
     const { data, error } = await supabaseService.client.functions.invoke(functionName, { body });
     if (error) {
-      throw error;
+      const { status, message } = await describeFunctionError(error);
+      emitAiError({ fn: functionName, kind: classifyAiStatus(status), status, message });
+      if (import.meta.env.DEV) {
+        console.error(`${errorLabel}:`, status, message ?? error);
+      }
+      return null;
     }
 
-    return validate(unwrapFunctionData(data));
+    const result = validate(unwrapFunctionData(data));
+    if (result === null) {
+      emitAiError({ fn: functionName, kind: 'rejected' });
+    }
+    return result;
   } catch (error) {
+    emitAiError({ fn: functionName, kind: 'network' });
     if (import.meta.env.DEV) {
       console.error(`${errorLabel}:`, error);
     }
