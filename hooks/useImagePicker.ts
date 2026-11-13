@@ -1,50 +1,61 @@
 import { useState, useRef, useCallback } from 'react';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Camera, MediaTypeSelection } from '@capacitor/camera';
+import type { MediaResult } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { PHOTO_MAX_DIMENSION, fetchAsBlob, processImage } from '../utils/imageResize';
 
 export interface ImageResult {
   base64: string;      // Raw base64 without data URL prefix
   dataUrl: string;     // data:image/... format for display
-  file?: File;         // File object for upload (web only, or converted)
+  file?: File;         // Downscaled, re-encoded file ready for upload
   webPath?: string;    // Web path for native display
 }
 
 interface UseImagePickerOptions {
-  quality?: number;        // 0-100, default 80
-  maxWidth?: number;       // Default 1920
-  maxHeight?: number;      // Default 1920
+  quality?: number;        // 0-100, default 80 (WebP/JPEG encoder quality)
+  maxDimension?: number;   // Longest edge in px, default PHOTO_MAX_DIMENSION (1600)
 }
 
 interface UseImagePickerReturn {
   // Open the picker sheet
   openPicker: () => void;
-  
+
   // Picker sheet state
   isPickerOpen: boolean;
-  
+
   // Close the picker
   closePicker: () => void;
-  
+
   // Pick from camera
   pickFromCamera: () => Promise<ImageResult | null>;
-  
+
   // Pick from gallery
   pickFromGallery: () => Promise<ImageResult | null>;
-  
+
   // Loading state
   isLoading: boolean;
-  
+
   // Error state
   error: string | null;
-  
+
   // Clear error
   clearError: () => void;
-  
+
   // Hidden file input ref (for web fallback)
   fileInputRef: React.RefObject<HTMLInputElement | null>;
-  
+
   // Handle file input change (for web fallback)
   handleFileInputChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<ImageResult | null>;
+}
+
+// Error codes from @capacitor/camera 8 (CameraErrorCode) for a user-cancelled action.
+const CANCEL_CODES = new Set(['OS-PLUG-CAMR-0006', 'OS-PLUG-CAMR-0013', 'OS-PLUG-CAMR-0020']);
+
+function isCancellation(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && CANCEL_CODES.has(code)) return true;
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  return /cancel/i.test(message);
 }
 
 /**
@@ -54,7 +65,7 @@ export function base64ToFile(base64: string, filename: string = 'image.jpg'): Fi
   // Handle both raw base64 and data URL formats
   let base64Data = base64;
   let mimeType = 'image/jpeg';
-  
+
   if (base64.startsWith('data:')) {
     const matches = base64.match(/^data:([^;]+);base64,(.+)$/);
     if (matches) {
@@ -62,48 +73,37 @@ export function base64ToFile(base64: string, filename: string = 'image.jpg'): Fi
       base64Data = matches[2];
     }
   }
-  
+
   const byteCharacters = atob(base64Data);
-  const byteNumbers = new Array(byteCharacters.length);
-  
+  const byteArray = new Uint8Array(byteCharacters.length);
   for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+    byteArray[i] = byteCharacters.charCodeAt(i);
   }
-  
-  const byteArray = new Uint8Array(byteNumbers);
+
   const blob = new Blob([byteArray], { type: mimeType });
-  
+
   // Determine file extension from mime type
   const ext = mimeType.split('/')[1] || 'jpg';
   const finalFilename = filename.includes('.') ? filename : `${filename}.${ext}`;
-  
+
   return new File([blob], finalFilename, { type: mimeType });
 }
 
 /**
- * Convert File to base64 data URL
- */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Custom hook for picking images from camera or gallery
- * Works on both native (Capacitor) and web platforms
+ * Custom hook for picking images from camera or gallery.
+ * Native uses the @capacitor/camera 8 API (takePhoto / chooseFromGallery); web uses a
+ * hidden file input. Every result is downscaled (longest edge `maxDimension`) and
+ * re-encoded as WebP before it is returned, so uploads and AI requests stay small.
  */
 export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePickerReturn {
-  const { quality = 80, maxWidth = 1920, maxHeight = 1920 } = options;
-  
+  const { quality = 80, maxDimension = PHOTO_MAX_DIMENSION } = options;
+  const encoderQuality = Math.min(1, Math.max(0.1, quality / 100));
+
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const isNative = Capacitor.isNativePlatform();
 
   const openPicker = useCallback(() => {
@@ -119,156 +119,95 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
     setError(null);
   }, []);
 
+  const toImageResult = useCallback(async (source: Blob, webPath?: string): Promise<ImageResult> => {
+    const processed = await processImage(source, {
+      maxDimension,
+      quality: encoderQuality,
+      fileName: `photo_${Date.now()}`,
+    });
+    return { base64: processed.base64, dataUrl: processed.dataUrl, file: processed.file, webPath };
+  }, [encoderQuality, maxDimension]);
+
+  const fromMediaResult = useCallback(async (media: MediaResult | undefined): Promise<ImageResult | null> => {
+    if (!media) return null;
+    if (media.webPath) {
+      return toImageResult(await fetchAsBlob(media.webPath), media.webPath);
+    }
+    if (media.thumbnail) {
+      return toImageResult(base64ToFile(media.thumbnail));
+    }
+    return null;
+  }, [toImageResult]);
+
+  const reportError = useCallback((err: unknown, fallback: string) => {
+    if (isCancellation(err)) return;
+    console.error(fallback, err);
+    setError(err instanceof Error && err.message ? err.message : fallback);
+  }, []);
+
   /**
    * Pick image from camera (native) or trigger file input with capture (web)
    */
   const pickFromCamera = useCallback(async (): Promise<ImageResult | null> => {
+    if (!isNative) {
+      // Web fallback: the result arrives through handleFileInputChange.
+      const input = fileInputRef.current;
+      if (input) {
+        input.setAttribute('capture', 'environment');
+        input.click();
+      }
+      return null;
+    }
+
     setIsLoading(true);
     setError(null);
-
     try {
-      if (isNative) {
-        // Use Capacitor Camera plugin
-        const image = await Camera.getPhoto({
-          quality,
-          allowEditing: false,
-          resultType: CameraResultType.Base64,
-          source: CameraSource.Camera,
-          width: maxWidth,
-          height: maxHeight,
-          correctOrientation: true,
-        });
-
-        if (image.base64String) {
-          const mimeType = image.format === 'png' ? 'image/png' : 'image/jpeg';
-          const dataUrl = `data:${mimeType};base64,${image.base64String}`;
-          const file = base64ToFile(dataUrl, `photo_${Date.now()}.${image.format || 'jpg'}`);
-          
-          return {
-            base64: image.base64String,
-            dataUrl,
-            file,
-            webPath: image.webPath,
-          };
-        }
-      } else {
-        // Web fallback: trigger file input with capture
-        if (fileInputRef.current) {
-          fileInputRef.current.setAttribute('capture', 'environment');
-          fileInputRef.current.click();
-          // The result will come through handleFileInputChange
-          return null;
-        }
-      }
-      } catch (err: unknown) {
-      // User cancelled is not an error
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      if (errorMessage?.includes('User cancelled') || errorMessage?.includes('canceled')) {
-        console.log('User cancelled camera');
-      } else {
-        console.error('Camera error:', err);
-        setError(errorMessage || 'Failed to access camera');
-      }
+      const media = await Camera.takePhoto({
+        quality,
+        correctOrientation: true,
+        saveToGallery: false,
+      });
+      return await fromMediaResult(media);
+    } catch (err: unknown) {
+      reportError(err, 'Failed to access camera');
+      return null;
     } finally {
       setIsLoading(false);
     }
-
-    return null;
-  }, [isNative, quality, maxWidth, maxHeight]);
+  }, [isNative, quality, fromMediaResult, reportError]);
 
   /**
    * Pick image from gallery (native) or trigger file input (web)
    */
   const pickFromGallery = useCallback(async (): Promise<ImageResult | null> => {
+    if (!isNative) {
+      // Web fallback: only open the input. Its onChange (handleFileInputChange) delivers
+      // the result; resolving here as well used to process and upload the image twice.
+      const input = fileInputRef.current;
+      if (input) {
+        input.removeAttribute('capture');
+        input.click();
+      }
+      return null;
+    }
+
     setIsLoading(true);
     setError(null);
-
     try {
-      if (isNative) {
-        // Use Capacitor Camera plugin with gallery source
-        const image = await Camera.getPhoto({
-          quality,
-          allowEditing: false,
-          resultType: CameraResultType.Base64,
-          source: CameraSource.Photos,
-          width: maxWidth,
-          height: maxHeight,
-          correctOrientation: true,
-        });
-
-        if (image.base64String) {
-          const mimeType = image.format === 'png' ? 'image/png' : 'image/jpeg';
-          const dataUrl = `data:${mimeType};base64,${image.base64String}`;
-          const file = base64ToFile(dataUrl, `photo_${Date.now()}.${image.format || 'jpg'}`);
-          
-          return {
-            base64: image.base64String,
-            dataUrl,
-            file,
-            webPath: image.webPath,
-          };
-        }
-      } else {
-        // Web fallback: trigger file input and wait for selection
-        if (fileInputRef.current) {
-          const input = fileInputRef.current;
-          input.removeAttribute('capture');
-
-          // Create promise that resolves when file is selected
-          const filePromise = new Promise<ImageResult | null>((resolve, reject) => {
-            const handleSelect = (e: Event) => {
-              input.removeEventListener('change', handleSelect);
-              const files = (e.target as HTMLInputElement).files;
-              if (files && files[0]) {
-                const file = files[0];
-                if (!file.type.startsWith('image/')) {
-                  setError('Please select an image file');
-                  reject(new Error('Invalid file type'));
-                  return;
-                }
-
-                fileToBase64(file)
-                  .then(dataUrl => {
-                    const base64 = dataUrl.split(',')[1] || '';
-                    resolve({
-                      base64,
-                      dataUrl,
-                      file,
-                    });
-                  })
-                  .catch(err => {
-                    console.error('File read error:', err);
-                    setError(err?.message || 'Failed to read file');
-                    reject(err);
-                  });
-              } else {
-                // User cancelled
-                resolve(null);
-              }
-            };
-
-            input.addEventListener('change', handleSelect);
-            input.click();
-          });
-
-          return filePromise;
-        }
-      }
-      } catch (err: unknown) {
-      // User cancelled is not an error
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      if (errorMessage?.includes('User cancelled') || errorMessage?.includes('canceled')) {
-        console.log('User cancelled gallery');
-      } else {
-        console.error('Gallery error:', err);
-        setError(errorMessage || 'Failed to access gallery');
-      }
+      const { results } = await Camera.chooseFromGallery({
+        mediaType: MediaTypeSelection.Photo,
+        allowMultipleSelection: false,
+        quality,
+        correctOrientation: true,
+      });
+      return await fromMediaResult(results[0]);
+    } catch (err: unknown) {
+      reportError(err, 'Failed to access gallery');
+      return null;
     } finally {
       setIsLoading(false);
     }
-
-    return null;
-  }, [isNative, quality, maxWidth, maxHeight]);
+  }, [isNative, quality, fromMediaResult, reportError]);
 
   /**
    * Handle file input change (for web fallback)
@@ -291,22 +230,14 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
     setError(null);
 
     try {
-      const dataUrl = await fileToBase64(file);
-      const base64 = dataUrl.split(',')[1] || '';
-      
-      return {
-        base64,
-        dataUrl,
-        file,
-      };
-      } catch (err: unknown) {
-        console.error('File read error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to read file');
-        return null;
+      return await toImageResult(file);
+    } catch (err: unknown) {
+      reportError(err, 'Failed to read file');
+      return null;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [toImageResult, reportError]);
 
   return {
     openPicker,

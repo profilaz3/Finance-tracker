@@ -11,6 +11,7 @@ import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
 import { useDialog } from '../hooks/useFocusTrap';
 import { isSupportedReceiptImageType, RECEIPT_IMAGE_ACCEPT } from '../utils/receiptImage';
+import { processImage } from '../utils/imageResize';
 
 interface ReceiptScanModalProps {
   isOpen: boolean;
@@ -138,20 +139,25 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
   }, [handleFileInputChange, handleImageResult, language, unsupportedFileMessage]);
 
-  // Legacy file select for drag and drop
-  const handleFileSelect = (file: File) => {
+  // Drag and drop: downscale to WebP like the picker paths before preview/scan.
+  const handleFileSelect = async (file: File) => {
     if (!isSupportedReceiptImageType(file.type)) {
       setError(unsupportedFileMessage);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-      setError(null);
+    setIsProcessingImage(true);
+    setError(null);
+    try {
+      const processed = await processImage(file, { fileName: 'receipt' });
+      setImagePreview(processed.dataUrl);
       setParsedReceipt(null);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Drop image error:', err);
+      setError(language === 'sr' ? 'Greska pri ucitavanju' : 'Failed to load image');
+    } finally {
+      setIsProcessingImage(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
