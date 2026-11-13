@@ -8,6 +8,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 - `npm run build` - Production build (outputs to `dist/`)
 - `npm run preview` - Preview production build
 - `npm test` - Run Vitest unit tests
+- `npm run test:integration` - RLS/constraint tests against a running Supabase stack (skipped unless `SUPABASE_TEST_URL` and `SUPABASE_TEST_ANON_KEY` are set)
 - `npm run analyze` - Bundle analysis with rollup-plugin-visualizer
 - `npm run build:android` - Build + Capacitor sync for Android
 - `npx tsc --noEmit` - Type-check (currently clean)
@@ -19,6 +20,19 @@ Required in `.env` (see `.env.example`; `.env.local` holds other local-only secr
 
 Required in Supabase Edge Function secrets:
 - `OPENAI_API_KEY` - Receipt scanning and AI insights
+
+Optional Edge Function secrets:
+- `OPENAI_MODEL` (default `gpt-4o`, receipt scanning) / `OPENAI_MODEL_FAST` (default `gpt-4o-mini`, parsing and insights)
+- `AI_DAILY_LIMIT_SCAN_RECEIPT` / `AI_DAILY_LIMIT_PARSE_TRANSACTION` / `AI_DAILY_LIMIT_GENERATE_INSIGHTS` - per-user daily caps (defaults 30 / 100 / 10), enforced by `public.consume_ai_quota`
+- `ALLOWED_ORIGINS` - extra comma-separated CORS origins
+
+## Database & Edge Functions
+
+- Schema lives in `supabase/migrations/` (baseline + hardening migrations). Never edit an applied migration; add a new timestamped file. `supabase/legacy/` holds the old hand-run SQL for reference only.
+- Local stack: `supabase start` (applies migrations + `supabase/seed.sql`: users `ci-owner@example.test` / `ci-guest@example.test`, password `CiPassword123`, with a shared "Bergamo" event). `supabase db reset` re-applies everything.
+- Remote: `supabase db push --project-ref <ref>` and `supabase functions deploy <fn> --project-ref <ref> --use-api`. CI does this on main when the `ENABLE_SUPABASE_DEPLOY` repo variable is `true`.
+- Edge functions share `supabase/functions/_shared/` (`http.ts` CORS/body limits/errors, `auth.ts` user check + AI quota, `openai.ts`, `input.ts`). `parse-transaction` and `scan-receipt` reuse validators from `utils/aiShared.ts`.
+- Every table is RLS-protected; events are shared by email (`shared_emails`), and guests may edit but not take over or reshare an event. Data CHECK constraints reject oversized or malformed rows (error `23514`).
 
 ## Architecture Overview
 
