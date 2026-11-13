@@ -1,5 +1,6 @@
 import { convertAmount } from '../services/currencyService';
 import { Account, AppState } from '../types';
+import { getCountedExpenseAmount, getCountedIncomeAmount } from '../domain/money';
 
 export const calculateTotalBalance = (state: AppState): number => {
   const transactionSum = Array.isArray(state.transactions)
@@ -19,42 +20,32 @@ export const calculateTotalBalance = (state: AppState): number => {
   return transactionSum + accountSum;
 };
 
+/**
+ * My own spending: split expenses count only my principal, fees count once
+ * (my share for splits, the outgoing leg for transfers), and transfers and
+ * debt repayments are excluded.
+ */
 export const calculateTotalExpense = (state: AppState): number => {
   if (!Array.isArray(state.transactions)) {
     return 0;
   }
 
-  return state.transactions.reduce((accumulator, transaction) => {
-    const effectiveAmount = transaction.splitDetails ? transaction.splitDetails.myPortion : transaction.amount;
-    const amount = convertAmount(effectiveAmount, transaction.currency, state.baseCurrency, state.rates);
-    const fees = transaction.fees ? convertAmount(transaction.fees, 'USD', state.baseCurrency, state.rates) : 0;
-    const isTransfer = transaction.categoryId === 'internal-transfer';
-
-    if (transaction.type === 'expense' && !isTransfer) {
-      return accumulator + amount + fees;
-    }
-
-    if (fees > 0 && !isTransfer) {
-      return accumulator + fees;
-    }
-
-    return accumulator;
-  }, 0);
+  return state.transactions.reduce(
+    (accumulator, transaction) => accumulator + getCountedExpenseAmount(transaction, state.baseCurrency, state.rates),
+    0,
+  );
 };
 
+/** Earned income: excludes transfers, debt repayments and reimbursements. */
 export const calculateTotalIncome = (state: AppState): number => {
   if (!Array.isArray(state.transactions)) {
     return 0;
   }
 
-  return state.transactions.reduce((accumulator, transaction) => {
-    const amount = convertAmount(transaction.amount, transaction.currency, state.baseCurrency, state.rates);
-    const isTransfer = transaction.categoryId === 'internal-transfer';
-    if (transaction.type === 'income' && transaction.categoryId !== 'c8' && transaction.categoryId !== 'reimbursement' && !isTransfer) {
-      return accumulator + amount;
-    }
-    return accumulator;
-  }, 0);
+  return state.transactions.reduce(
+    (accumulator, transaction) => accumulator + getCountedIncomeAmount(transaction, state.baseCurrency, state.rates),
+    0,
+  );
 };
 
 export const calculateAccountBalance = (state: AppState, account: Account): number => {

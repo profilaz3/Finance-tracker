@@ -1,6 +1,7 @@
 import React from 'react';
 import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction } from '../../types';
 import clsx from 'clsx';
+import { isTransferTransaction } from '../../domain/money';
 
 // ─── Public Props (same API as original Stats component) ────────────────────
 
@@ -120,8 +121,7 @@ export const buildAxisProps = (chartColors: ChartColors) => ({
 
 // ─── Shared Helper Functions ────────────────────────────────────────────────
 
-export const isTransfer = (tx: Transaction) =>
-  tx.categoryId === 'internal-transfer' || (tx.note && tx.note.startsWith('Transfer:'));
+export const isTransfer = (tx: Transaction) => isTransferTransaction(tx);
 
 export const formatCompactNumber = (value: number) => {
   const abs = Math.abs(value);

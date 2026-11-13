@@ -1,6 +1,15 @@
 import type { Category, Currency, ExchangeRates, RecurringTransaction, Transaction } from '../types';
 import { convertAmount } from '../services/currencyService';
 import { calculateNextDueDate } from './recurringUtils';
+import {
+  getCountedFee,
+  getExpensePrincipal,
+  isCountedExpense,
+  isCountedIncome,
+  isTransferTransaction,
+  NON_EARNING_INCOME_CATEGORY_IDS,
+  REPAYMENT_CATEGORY_IDS,
+} from '../domain/money';
 
 export type AnalyticsPeriod = 'month' | 'quarter' | 'year';
 export type AnalyticsForecastConfidence = 'low' | 'normal';
@@ -107,8 +116,6 @@ interface RangeAnalytics {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const TRANSFER_NOTE_PREFIX = 'Transfer:';
-const EXCLUDED_INCOME_CATEGORY_IDS = new Set(['c8', 'reimbursement', 'internal-transfer']);
 
 const round = (value: number): number => Number(value.toFixed(2));
 
@@ -244,12 +251,10 @@ const isInRange = (dateValue: string, start: Date, end: Date): boolean => {
   return time >= start.getTime() && time <= end.getTime();
 };
 
-const isTransfer = (item: Pick<Transaction | RecurringTransaction, 'categoryId' | 'note'>): boolean => (
-  item.categoryId === 'internal-transfer' || item.note?.startsWith(TRANSFER_NOTE_PREFIX) === true
-);
+const isTransfer = isTransferTransaction;
 
-const isExcludedIncome = (transaction: Transaction): boolean => (
-  EXCLUDED_INCOME_CATEGORY_IDS.has(transaction.categoryId) || isTransfer(transaction)
+const isExcludedRecurringIncome = (categoryId: string): boolean => (
+  NON_EARNING_INCOME_CATEGORY_IDS.has(categoryId) || REPAYMENT_CATEGORY_IDS.has(categoryId)
 );
 
 const convertToBase = (
@@ -259,43 +264,17 @@ const convertToBase = (
   rates: ExchangeRates,
 ): number => convertAmount(amount, currency, baseCurrency, rates);
 
-const getSplitFeeShare = (
-  transaction: Transaction,
-  baseCurrency: Currency,
-  rates: ExchangeRates,
-): number => {
-  if (!transaction.fees || !transaction.splitDetails) return 0;
-
-  const { myPortion, totalAmount } = transaction.splitDetails;
-  if (totalAmount <= 0) return convertToBase(transaction.fees, 'USD', baseCurrency, rates);
-
-  const feeShareRatio = clamp(myPortion / totalAmount, 0, 1);
-  return convertToBase(transaction.fees * feeShareRatio, 'USD', baseCurrency, rates);
-};
-
 const getTransactionExpenseAmount = (
   transaction: Transaction,
   baseCurrency: Currency,
   rates: ExchangeRates,
-): number => {
-  if (!transaction.splitDetails) {
-    return convertToBase(transaction.amount, transaction.currency, baseCurrency, rates);
-  }
-
-  const amountWithoutFees = convertToBase(transaction.splitDetails.myPortion, transaction.currency, baseCurrency, rates)
-    - getSplitFeeShare(transaction, baseCurrency, rates);
-  return round(Math.max(0, amountWithoutFees));
-};
+): number => getExpensePrincipal(transaction, baseCurrency, rates);
 
 const getTransactionFees = (
   transaction: Transaction,
   baseCurrency: Currency,
   rates: ExchangeRates,
-): number => {
-  if (!transaction.fees) return 0;
-  if (transaction.splitDetails) return getSplitFeeShare(transaction, baseCurrency, rates);
-  return convertToBase(transaction.fees, 'USD', baseCurrency, rates);
-};
+): number => getCountedFee(transaction, baseCurrency, rates);
 
 const calculateDelta = (current: number, previous: number): AnalyticsDelta => {
   const absolute = round(current - previous);
@@ -356,15 +335,14 @@ const analyzeRange = (
   transactions
     .filter(transaction => isInRange(transaction.date, start, end))
     .forEach(transaction => {
-      if (isTransfer(transaction)) return;
-
       const transactionFees = getTransactionFees(transaction, baseCurrency, rates);
 
-      if (transaction.type === 'income') {
+      if (!isCountedExpense(transaction)) {
+        // Fees are a real cost even on transfers, repayments and income.
         expense += transactionFees;
         fees += transactionFees;
 
-        if (isExcludedIncome(transaction)) {
+        if (!isCountedIncome(transaction)) {
           return;
         }
 
@@ -532,9 +510,9 @@ const buildForecast = (
       if (occurrences === 0) return;
 
       const amount = convertToBase(recurring.amount, recurring.currency, baseCurrency, rates);
-      if (recurring.type === 'income' && !EXCLUDED_INCOME_CATEGORY_IDS.has(recurring.categoryId)) {
+      if (recurring.type === 'income' && !isExcludedRecurringIncome(recurring.categoryId)) {
         recurringIncomeImpact += amount * occurrences;
-      } else if (recurring.type === 'expense') {
+      } else if (recurring.type === 'expense' && !REPAYMENT_CATEGORY_IDS.has(recurring.categoryId)) {
         recurringExpenseImpact += amount * occurrences;
       }
     });

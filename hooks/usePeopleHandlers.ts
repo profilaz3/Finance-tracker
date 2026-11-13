@@ -199,6 +199,21 @@ export function usePeopleHandlers({
       return;
     }
 
+    const { createdCategory } = settlement;
+    if (createdCategory) {
+      setState(prev => (
+        prev.categories.some(category => category.id === createdCategory.id)
+          ? prev
+          : { ...prev, categories: [...prev.categories, createdCategory] }
+      ));
+      try {
+        const syncManager = await getSyncManager();
+        await syncManager.syncCategory(createdCategory);
+      } catch (error) {
+        console.error('Failed to sync repayment category:', error);
+      }
+    }
+
     await addTransaction(settlement.transaction);
     setState(prev => ({
       ...prev,
