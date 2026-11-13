@@ -10,6 +10,19 @@ import { convertAmount } from '../services/currencyService';
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
+/**
+ * Splits `total` into `count` parts in integer cents so the parts always sum
+ * to the total. Leftover cents go to the first parts (index 0 is "me", the
+ * payer, so I absorb rounding first).
+ */
+export const splitEvenlyInCents = (total: number, count: number): number[] => {
+  if (count <= 0) return [];
+  const totalCents = Math.round(total * 100);
+  const base = Math.floor(totalCents / count);
+  const remainder = totalCents - base * count;
+  return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
+};
+
 export const calculateTotalSplitAmount = (
   amount: string,
   fees: string,
@@ -37,12 +50,13 @@ export const recalculateSplitShares = (
     }
 
     const totalParticipants = includedCount + 1;
-    const perPerson = round2(totalToSplit / totalParticipants);
+    const parts = splitEvenlyInCents(totalToSplit, totalParticipants);
     const percentage = round2(100 / totalParticipants);
+    let nextPart = 1; // parts[0] is my portion
 
     return shares.map(share => ({
       ...share,
-      amount: share.isIncluded ? perPerson : 0,
+      amount: share.isIncluded ? parts[nextPart++] : 0,
       percentage: share.isIncluded ? percentage : 0,
     }));
   }
@@ -204,19 +218,19 @@ const buildCalculatedShares = (
   const totalParticipants = includedShares.length + 1;
 
   if (splitMethod === 'equal') {
-    const perPerson = round2(totalAmount / totalParticipants);
+    const [myPortion, ...otherParts] = splitEvenlyInCents(totalAmount, totalParticipants);
     return {
-      myPortion: perPerson,
-      shares: includedShares.map(share => ({
+      myPortion,
+      shares: includedShares.map((share, index) => ({
         personId: share.personId,
-        amount: perPerson,
+        amount: otherParts[index],
         percentage: round2(100 / totalParticipants),
       })),
     };
   }
 
-  const othersTotal = includedShares.reduce((sum, share) => sum + share.amount, 0);
-  const myPortion = round2(totalAmount - othersTotal);
+  const othersTotalCents = includedShares.reduce((sum, share) => sum + Math.round(share.amount * 100), 0);
+  const myPortion = (Math.round(totalAmount * 100) - othersTotalCents) / 100;
 
   if (myPortion < 0) {
     return null;

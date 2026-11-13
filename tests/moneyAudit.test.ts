@@ -4,7 +4,7 @@ import { calculateBalanceOffset, getEffectivePersonBalances, selectPeopleWithBal
 import { buildSettlementDraft } from '../domain/people';
 import { buildAnalyticsStudioSummary } from '../utils/analyticsSelectors';
 import { calculateTotalExpense, calculateTotalIncome } from '../utils/financialSelectors';
-import { calculateIPaidSplitSubmission } from '../utils/splitExpenseCalculator';
+import { calculateIPaidSplitSubmission, recalculateSplitShares } from '../utils/splitExpenseCalculator';
 import type { AppState, ExchangeRates, Person, Transaction } from '../types';
 
 // Regression tests for the money-logic audit (inverted proof tests).
@@ -78,6 +78,38 @@ describe('M10 fees are counted once', () => {
 
     expect(total).toBe(50);
     expect(studio.totals.current.expense).toBe(50);
+  });
+});
+
+describe('M9 equal splits in integer cents', () => {
+  const split = (amount: string) => {
+    const r = calculateIPaidSplitSubmission({
+      amount, fees: '', currency: 'EUR', categoryId: 'c1', accountId: 'acc1', note: '',
+      transactionDate: '2026-01-01', splitMethod: 'equal',
+      shares: ['a', 'b'].map(id => ({ personId: id, amount: 0, isIncluded: true })), rates, language: 'en',
+    } as unknown as SplitInput);
+    const details = r.transaction!.splitDetails!;
+    const cents = Math.round(details.myPortion * 100) + details.shares.reduce((sum, s) => sum + Math.round(s.amount * 100), 0);
+    return { details, cents };
+  };
+
+  it('sums exactly to the total and distributes the remainder', () => {
+    const r1 = split('100');
+    expect(r1.cents).toBe(10000);
+    expect([r1.details.myPortion, ...r1.details.shares.map(s => s.amount)]).toEqual([33.34, 33.33, 33.33]);
+
+    const r2 = split('100.01');
+    expect(r2.cents).toBe(10001);
+    expect([r2.details.myPortion, ...r2.details.shares.map(s => s.amount)]).toEqual([33.34, 33.34, 33.33]);
+  });
+
+  it('keeps the live preview (recalculateSplitShares) consistent with the submission', () => {
+    const shares = recalculateSplitShares(
+      ['a', 'b'].map(id => ({ personId: id, amount: 0, isIncluded: true })),
+      'equal',
+      100.01,
+    );
+    expect(shares.map(s => s.amount)).toEqual([33.34, 33.33]);
   });
 });
 
