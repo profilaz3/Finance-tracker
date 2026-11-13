@@ -119,40 +119,44 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const round = (value: number): number => Number(value.toFixed(2));
 
-const startOfUtcDay = (date: Date): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+// Periods follow the user's local calendar: a purchase at 00:30 on the 1st
+// belongs to the new month even when that instant is still the previous
+// month in UTC.
+const startOfLocalDay = (date: Date): Date => (
+  new Date(date.getFullYear(), date.getMonth(), date.getDate())
 );
 
-const endOfUtcDay = (date: Date): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999))
+const endOfLocalDay = (date: Date): Date => (
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
 );
 
-const addUtcDays = (date: Date, days: number): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days))
+const addLocalDays = (date: Date, days: number): Date => (
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
 );
 
-const addUtcMonths = (date: Date, months: number): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()))
+const addLocalMonths = (date: Date, months: number): Date => (
+  new Date(date.getFullYear(), date.getMonth() + months, date.getDate())
 );
 
-const endOfUtcMonth = (year: number, month: number): Date => (
-  new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999))
+const endOfLocalMonth = (year: number, month: number): Date => (
+  new Date(year, month + 1, 0, 23, 59, 59, 999)
 );
 
+// Rounded so DST days (23h/25h) still count as one day.
 const getDaysInclusive = (start: Date, end: Date): number => (
-  Math.floor((startOfUtcDay(end).getTime() - startOfUtcDay(start).getTime()) / MS_PER_DAY) + 1
+  Math.round((startOfLocalDay(end).getTime() - startOfLocalDay(start).getTime()) / MS_PER_DAY) + 1
 );
 
 const formatMonthKey = (date: Date): string => {
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  return `${date.getUTCFullYear()}-${month}`;
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${date.getFullYear()}-${month}`;
 };
 
 const formatQuarterKey = (date: Date): string => (
-  `${date.getUTCFullYear()}-Q${Math.floor(date.getUTCMonth() / 3) + 1}`
+  `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`
 );
 
-const formatYearKey = (date: Date): string => String(date.getUTCFullYear());
+const formatYearKey = (date: Date): string => String(date.getFullYear());
 
 const clamp = (value: number, minimum: number, maximum: number): number => (
   Math.min(maximum, Math.max(minimum, value))
@@ -169,9 +173,9 @@ const buildPeriodRange = (
   now: Date,
 ): AnalyticsPeriodRange => {
   const totalDays = getDaysInclusive(currentStart, currentEnd);
-  const elapsedEnd = new Date(Math.min(endOfUtcDay(now).getTime(), currentEnd.getTime()));
+  const elapsedEnd = new Date(Math.min(endOfLocalDay(now).getTime(), currentEnd.getTime()));
   const elapsedDays = clamp(getDaysInclusive(currentStart, elapsedEnd), 0, totalDays);
-  const remainingStart = addUtcDays(startOfUtcDay(now), 1);
+  const remainingStart = addLocalDays(startOfLocalDay(now), 1);
 
   return {
     period,
@@ -189,14 +193,14 @@ const buildPeriodRange = (
 };
 
 export const resolveAnalyticsPeriod = (period: AnalyticsPeriod, now: Date): AnalyticsPeriodRange => {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
+  const year = now.getFullYear();
+  const month = now.getMonth();
 
   if (period === 'month') {
-    const currentStart = new Date(Date.UTC(year, month, 1));
-    const currentEnd = endOfUtcMonth(year, month);
-    const previousStart = addUtcMonths(currentStart, -1);
-    const previousEnd = endOfUtcMonth(previousStart.getUTCFullYear(), previousStart.getUTCMonth());
+    const currentStart = new Date(year, month, 1);
+    const currentEnd = endOfLocalMonth(year, month);
+    const previousStart = addLocalMonths(currentStart, -1);
+    const previousEnd = endOfLocalMonth(previousStart.getFullYear(), previousStart.getMonth());
 
     return buildPeriodRange(
       period,
@@ -212,10 +216,10 @@ export const resolveAnalyticsPeriod = (period: AnalyticsPeriod, now: Date): Anal
 
   if (period === 'quarter') {
     const quarterStartMonth = Math.floor(month / 3) * 3;
-    const currentStart = new Date(Date.UTC(year, quarterStartMonth, 1));
-    const currentEnd = endOfUtcMonth(year, quarterStartMonth + 2);
-    const previousStart = addUtcMonths(currentStart, -3);
-    const previousEnd = endOfUtcDay(addUtcDays(currentStart, -1));
+    const currentStart = new Date(year, quarterStartMonth, 1);
+    const currentEnd = endOfLocalMonth(year, quarterStartMonth + 2);
+    const previousStart = addLocalMonths(currentStart, -3);
+    const previousEnd = endOfLocalDay(addLocalDays(currentStart, -1));
 
     return buildPeriodRange(
       period,
@@ -229,10 +233,10 @@ export const resolveAnalyticsPeriod = (period: AnalyticsPeriod, now: Date): Anal
     );
   }
 
-  const currentStart = new Date(Date.UTC(year, 0, 1));
-  const currentEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
-  const previousStart = new Date(Date.UTC(year - 1, 0, 1));
-  const previousEnd = new Date(Date.UTC(year - 1, 11, 31, 23, 59, 59, 999));
+  const currentStart = new Date(year, 0, 1);
+  const currentEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+  const previousStart = new Date(year - 1, 0, 1);
+  const previousEnd = new Date(year - 1, 11, 31, 23, 59, 59, 999);
 
   return buildPeriodRange(
     period,
@@ -454,12 +458,15 @@ const buildAnomalies = (
   return anomalies;
 };
 
-const parseDateOnlyUtc = (value: string): Date => {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+// Recurring due dates are calendar days; compare them as local days.
+const parseDateOnlyLocal = (value: string): Date => {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return new Date(year, month - 1, day);
 };
 
-const formatDateOnlyUtc = (date: Date): string => date.toISOString().split('T')[0];
+const formatDateOnlyLocal = (date: Date): string => (
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+);
 
 const countRecurringOccurrencesInRemainingPeriod = (
   recurring: RecurringTransaction,
@@ -470,25 +477,25 @@ const countRecurringOccurrencesInRemainingPeriod = (
 
   let occurrenceEnd = currentEnd;
   if (recurring.endDate) {
-    const endDate = new Date(`${recurring.endDate}T23:59:59.999Z`);
+    const endDate = endOfLocalDay(parseDateOnlyLocal(recurring.endDate));
     if (endDate.getTime() < remainingStart.getTime()) return 0;
     occurrenceEnd = new Date(Math.min(occurrenceEnd.getTime(), endDate.getTime()));
   }
 
   let nextDue = recurring.nextDue;
-  let due = parseDateOnlyUtc(nextDue);
-  const remainingStartDay = startOfUtcDay(remainingStart);
+  let due = parseDateOnlyLocal(nextDue);
+  const remainingStartDay = startOfLocalDay(remainingStart);
 
   while (due.getTime() < remainingStartDay.getTime()) {
     nextDue = calculateNextDueDate(nextDue, recurring.frequency, recurring.startDate);
-    due = parseDateOnlyUtc(nextDue);
+    due = parseDateOnlyLocal(nextDue);
   }
 
   let occurrences = 0;
   while (due.getTime() <= occurrenceEnd.getTime()) {
     occurrences += 1;
-    nextDue = calculateNextDueDate(formatDateOnlyUtc(due), recurring.frequency, recurring.startDate);
-    due = parseDateOnlyUtc(nextDue);
+    nextDue = calculateNextDueDate(formatDateOnlyLocal(due), recurring.frequency, recurring.startDate);
+    due = parseDateOnlyLocal(nextDue);
   }
 
   return occurrences;
@@ -544,7 +551,6 @@ const getPeriodLabel = (period: AnalyticsPeriodRange): string => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'long',
       year: 'numeric',
-      timeZone: 'UTC',
     }).format(period.currentStart);
   }
 

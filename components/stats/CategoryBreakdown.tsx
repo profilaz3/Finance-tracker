@@ -71,7 +71,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
   const volatilityData = useMemo(() => {
     const monthsBack = 12;
     const endDate = new Date();
-    const startDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() - (monthsBack - 1), 1));
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - (monthsBack - 1), 1);
     const monthKeys = getMonthRange(startDate, endDate);
     const monthIndex = new Map(monthKeys.map((key, index) => [key, index]));
     const totalsByCategory: Record<string, number[]> = {};

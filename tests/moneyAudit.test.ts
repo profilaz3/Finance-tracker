@@ -5,6 +5,7 @@ import { buildSettlementDraft } from '../domain/people';
 import { buildAnalyticsStudioSummary } from '../utils/analyticsSelectors';
 import { calculateTotalExpense, calculateTotalIncome } from '../utils/financialSelectors';
 import { calculateIPaidSplitSubmission, recalculateSplitShares } from '../utils/splitExpenseCalculator';
+import { getGroupKey, getMonthKey } from '../components/stats/types';
 import type { AppState, ExchangeRates, Person, Transaction } from '../types';
 
 // Regression tests for the money-logic audit (inverted proof tests).
@@ -152,5 +153,25 @@ describe('H4 derived person balances', () => {
   it('computes the offset needed for a manual balance correction', () => {
     expect(calculateBalanceOffset(person, transactions, 'EUR', 0)).toBe(-24.9);
     expect(getEffectivePersonBalances({ ...person, balances: { EUR: -24.9, USD: 0, RSD: 0 } }, transactions).EUR).toBe(0);
+  });
+});
+
+describe('M11 analytics periods use local time', () => {
+  it('counts a purchase at local 00:30 on the 1st in the new month', () => {
+    const tx: Transaction = {
+      id: 'early', date: new Date(2026, 10, 1, 0, 30).toISOString(), amount: 100, currency: 'EUR',
+      categoryId: 'c1', accountId: 'a', type: 'expense',
+    };
+    const studio = buildAnalyticsStudioSummary({
+      transactions: [tx], categories: INITIAL_CATEGORIES, recurringTransactions: [], rates,
+      baseCurrency: 'EUR', period: 'month', now: new Date(2026, 10, 13, 12),
+    });
+    expect(studio.totals.current.expense).toBe(100);
+    expect(studio.totals.previous.expense).toBe(0);
+  });
+
+  it('buckets chart months by local calendar month', () => {
+    expect(getMonthKey(new Date(2026, 10, 1, 0, 30))).toBe('2026-11');
+    expect(getGroupKey(new Date(2026, 10, 1, 0, 30).toISOString(), 'daily')).toBe('2026-11-01');
   });
 });
