@@ -107,7 +107,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {selectedPerson && (
         <PersonDetail
-          person={selectedPerson}
+          person={state.people.find(person => person.id === selectedPerson.id) ?? selectedPerson}
           transactions={state.transactions}
           categories={state.categories}
           baseCurrency={state.baseCurrency}

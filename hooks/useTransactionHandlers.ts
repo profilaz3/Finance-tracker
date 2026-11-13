@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
@@ -32,8 +32,6 @@ export function useTransactionHandlers({
   closeEditModal,
   closeReceiptModal,
 }: UseTransactionHandlersOptions) {
-  const [deletedTransaction, setDeletedTransaction] = useState<Transaction | null>(null);
-
   const addTransaction = useCallback(async (transaction: Transaction) => {
     let finalTransaction = { ...transaction };
 
@@ -66,60 +64,35 @@ export function useTransactionHandlers({
     addToast('Transaction added successfully', 'success');
   }, [addToast, setState]);
 
-  const undoDelete = useCallback(() => {
-    if (!deletedTransaction) {
+  /**
+   * Puts deleted transactions back and re-syncs them (upsert). Person balances
+   * are derived from transactions, so restoring the rows restores their
+   * balance effects too. Uses functional state so it is safe to call from a
+   * toast created several renders ago.
+   */
+  const restoreTransactions = useCallback(async (restored: Transaction[], message: string) => {
+    if (restored.length === 0) {
       return;
     }
 
     setState(prev => {
-      const transactions = [deletedTransaction, ...prev.transactions];
-      let updatedPeople = [...prev.people];
-
-      if (deletedTransaction.splitDetails) {
-        deletedTransaction.splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = deletedTransaction.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) + share.amount) * 100) / 100,
-              },
-            };
-          }
-        });
-      }
-
-      return { ...prev, transactions, people: updatedPeople };
+      const existingIds = new Set(prev.transactions.map(transaction => transaction.id));
+      const missing = restored.filter(transaction => !existingIds.has(transaction.id));
+      return missing.length === 0 ? prev : { ...prev, transactions: [...missing, ...prev.transactions] };
     });
 
-    if (deletedTransaction.splitDetails) {
-      deletedTransaction.splitDetails.shares.forEach(async share => {
-        const person = state.people.find(entry => entry.id === share.personId);
-        if (!person) {
-          return;
-        }
-
-        try {
-          const currency = deletedTransaction.currency;
-          await withSyncManager(syncManager => syncManager.syncPerson({
-            ...person,
-            balances: {
-              ...person.balances,
-              [currency]: Math.round(((person.balances[currency] || 0) + share.amount) * 100) / 100,
-            },
-          }));
-        } catch (error) {
-          console.error('Failed to sync person balance after undo:', error);
-        }
-      });
+    try {
+      await withSyncManager(syncManager =>
+        Promise.all(restored.map(transaction => syncManager.syncTransaction(transaction))).then(() => undefined)
+      );
+    } catch (error) {
+      console.error('Failed to sync restored transactions:', error);
+      addToast('Restored locally, but sync failed', 'error');
+      return;
     }
 
-    setDeletedTransaction(null);
-    addToast('Transaction restored', 'success');
-  }, [addToast, deletedTransaction, setState, state.people]);
+    addToast(message, 'success');
+  }, [addToast, setState]);
 
   const deleteTransaction = useCallback(async (id: string) => {
     const transaction = state.transactions.find(entry => entry.id === id);
@@ -127,53 +100,15 @@ export function useTransactionHandlers({
       return;
     }
 
-    setDeletedTransaction(transaction);
-    setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => entry.id !== id) }));
-
-    const splitDetails = transaction.splitDetails;
-    if (splitDetails) {
-      setState(prev => {
-        const updatedPeople = [...prev.people];
-        splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = transaction.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) - share.amount) * 100) / 100,
-              },
-            };
-          }
-        });
-        return { ...prev, people: updatedPeople };
-      });
-
-      splitDetails.shares.forEach(async share => {
-        const person = state.people.find(entry => entry.id === share.personId);
-        if (!person) {
-          return;
-        }
-
-        try {
-          const currency = transaction.currency;
-          await withSyncManager(syncManager => syncManager.syncPerson({
-            ...person,
-            balances: {
-              ...person.balances,
-              [currency]: Math.round(((person.balances[currency] || 0) - share.amount) * 100) / 100,
-            },
-          }));
-        } catch (error) {
-          console.error('Failed to sync person balance after delete:', error);
-        }
-      });
-    }
+    // Captured per deletion: each toast's undo restores exactly what it deleted.
+    const deleted = [transaction];
+    const deletedIds = new Set(deleted.map(entry => entry.id));
+    setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => !deletedIds.has(entry.id)) }));
 
     try {
-      await withSyncManager(syncManager => syncManager.deleteTransaction(id));
+      await withSyncManager(syncManager =>
+        Promise.all(deleted.map(entry => syncManager.deleteTransaction(entry.id))).then(() => undefined)
+      );
     } catch (error) {
       console.error('Failed to delete transaction from Supabase:', error);
       addToast('Transaction deleted locally, but sync failed', 'error');
@@ -182,38 +117,15 @@ export function useTransactionHandlers({
     vibrate(HAPTIC_PATTERNS.success);
     addToast('Transaction deleted', 'info', {
       label: 'Undo',
-      onClick: undoDelete,
+      onClick: () => {
+        void restoreTransactions(deleted, 'Transaction restored');
+      },
     });
-  }, [addToast, setState, state.people, state.transactions, undoDelete]);
-
-  const restoreBatchDeletedTransactions = useCallback(async (transactions: Transaction[]) => {
-    if (transactions.length === 0) {
-      return;
-    }
-
-    setState(prev => ({
-      ...prev,
-      transactions: [...transactions, ...prev.transactions],
-    }));
-
-    try {
-      await withSyncManager(syncManager =>
-        Promise.all(transactions.map(transaction => syncManager.syncTransaction(transaction))).then(() => undefined)
-      );
-    } catch (error) {
-      console.error('Failed to sync batch restore:', error);
-      addToast('Transactions restored locally, but sync failed', 'error');
-    }
-
-    addToast('Batch restored', 'success');
-  }, [addToast, setState]);
+  }, [addToast, restoreTransactions, setState, state.transactions]);
 
   const batchDeleteTransactions = useCallback(async (ids: string[]) => {
     const idSet = new Set(ids);
     const deletedTransactions = state.transactions.filter(transaction => idSet.has(transaction.id));
-    const canUndoBatchDelete = deletedTransactions.length > 0 && deletedTransactions.every(transaction => (
-      !transaction.personId && !transaction.splitDetails
-    ));
 
     setState(prev => ({
       ...prev,
@@ -231,117 +143,33 @@ export function useTransactionHandlers({
 
     vibrate(HAPTIC_PATTERNS.success);
 
-    if (canUndoBatchDelete) {
-      addToast(`${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`, 'info', {
-        label: state.language === 'sr' ? 'Vrati' : 'Undo',
-        onClick: () => {
-          void restoreBatchDeletedTransactions(deletedTransactions);
-        },
-      });
+    const message = `${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`;
+    if (deletedTransactions.length === 0) {
+      addToast(message, 'success');
       return;
     }
 
-    addToast(`${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`, 'success');
-  }, [addToast, restoreBatchDeletedTransactions, setState, state.language, state.transactions]);
+    // Balances are derived from transactions, so every batch can be undone safely.
+    addToast(message, 'info', {
+      label: state.language === 'sr' ? 'Vrati' : 'Undo',
+      onClick: () => {
+        void restoreTransactions(deletedTransactions, 'Batch restored');
+      },
+    });
+  }, [addToast, restoreTransactions, setState, state.language, state.transactions]);
 
   const updateTransaction = useCallback(async (updated: Transaction, targetAccountId?: string) => {
     const isNewTransaction = !state.transactions.find(transaction => transaction.id === updated.id);
 
+    // Person balances follow from the transaction itself (see domain/balances.ts),
+    // so editing only replaces the row: no balance bookkeeping, no currency drift.
     setState(prev => {
-      const oldTx = prev.transactions.find(transaction => transaction.id === updated.id);
-      const transactions = prev.transactions.map(transaction => transaction.id === updated.id ? updated : transaction);
-      const finalTransactions = oldTx ? transactions : [...prev.transactions, updated];
-
-      let updatedPeople = [...prev.people];
-      const peopleToSyncSet = new Set<string>();
-
-      if (oldTx?.personId) {
-        const personIndex = updatedPeople.findIndex(person => person.id === oldTx.personId);
-        if (personIndex !== -1) {
-          const person = updatedPeople[personIndex];
-          const oldAmount = convertAmount(oldTx.amount, oldTx.currency, person.defaultCurrency, prev.rates);
-          const balanceChange = oldTx.type === 'expense' ? oldAmount : -oldAmount;
-          updatedPeople[personIndex] = {
-            ...person,
-            balances: {
-              ...person.balances,
-              [person.defaultCurrency]: Math.round(((person.balances[person.defaultCurrency] || 0) - balanceChange) * 100) / 100,
-            },
-          };
-          peopleToSyncSet.add(person.id);
-        }
-      }
-
-      if (oldTx?.splitDetails) {
-        oldTx.splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = oldTx.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) - share.amount) * 100) / 100,
-              },
-            };
-            peopleToSyncSet.add(person.id);
-          }
-        });
-      }
-
-      if (updated.personId) {
-        const personIndex = updatedPeople.findIndex(person => person.id === updated.personId);
-        if (personIndex !== -1) {
-          const person = updatedPeople[personIndex];
-          const newAmount = convertAmount(updated.amount, updated.currency, person.defaultCurrency, prev.rates);
-          const balanceChange = updated.type === 'expense' ? newAmount : -newAmount;
-          updatedPeople[personIndex] = {
-            ...person,
-            balances: {
-              ...person.balances,
-              [person.defaultCurrency]: Math.round(((person.balances[person.defaultCurrency] || 0) + balanceChange) * 100) / 100,
-            },
-          };
-          peopleToSyncSet.add(person.id);
-        }
-      }
-
-      if (updated.splitDetails) {
-        updated.splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = updated.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) + share.amount) * 100) / 100,
-              },
-            };
-            peopleToSyncSet.add(person.id);
-          }
-        });
-      }
-
-      peopleToSyncSet.forEach(async personId => {
-        const person = updatedPeople.find(entry => entry.id === personId);
-        if (!person) {
-          return;
-        }
-
-        try {
-          await withSyncManager(syncManager => syncManager.syncPerson(person));
-        } catch (error) {
-          console.error('Failed to sync person balance after update:', error);
-        }
-      });
-
+      const exists = prev.transactions.some(transaction => transaction.id === updated.id);
       return {
         ...prev,
-        transactions: finalTransactions,
-        people: updatedPeople,
+        transactions: exists
+          ? prev.transactions.map(transaction => transaction.id === updated.id ? updated : transaction)
+          : [...prev.transactions, updated],
       };
     });
 
@@ -368,11 +196,8 @@ export function useTransactionHandlers({
 
       const targetAccount = state.accounts.find(account => account.id === targetAccountId);
       if (targetAccount) {
-        const toRate = state.rates.rates[targetAccount.currency];
-        const fromRate = state.rates.rates[updated.currency];
-        const rate = (toRate && fromRate && fromRate !== 0) ? toRate / fromRate : 1;
-        const rawAmount = updated.amount * rate;
-        const convertedAmount = Number.isFinite(rawAmount) ? parseFloat(rawAmount.toFixed(2)) : updated.amount;
+        const rawAmount = convertAmount(updated.amount, updated.currency, targetAccount.currency, state.rates);
+        const convertedAmount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : updated.amount;
 
         const inflowTx: Transaction = {
           id: createId(),

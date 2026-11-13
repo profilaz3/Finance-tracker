@@ -13,6 +13,7 @@ import {
   updatePersonInCollection,
 } from '../domain/people';
 import { LEGACY_USER_PROFILE_ID, normalizeUserProfileId } from '../utils/remotePeople';
+import { calculateBalanceOffset, getEffectivePersonBalances } from '../domain/balances';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -51,7 +52,10 @@ export function usePeopleHandlers({
     }
   }, [addToast, createId, setState]);
 
-  const updatePerson = useCallback(async (id: string, updates: Partial<Person>) => {
+  const updatePerson = useCallback(async (id: string, rawUpdates: Partial<Person>) => {
+    // Balances are derived (domain/balances.ts); profile edits must not overwrite
+    // the stored offsets with displayed (effective) balances.
+    const { balances: _ignoredBalances, ...updates } = rawUpdates;
     const updatedPeople = updatePersonInCollection(state.people, id, updates);
     const updatedPerson = updatedPeople.find(person => person.id === id);
 
@@ -105,19 +109,18 @@ export function usePeopleHandlers({
       return;
     }
 
-    const { people, updatedPerson } = updatePersonBalanceInCollection(state.people, personId, currency, newBalance);
+    // `newBalance` is the balance the user wants to see. Only the manual offset is
+    // stored; transaction effects keep being derived on top of it.
+    const offset = calculateBalanceOffset(person, state.transactions, currency, newBalance);
+    const { updatedPerson } = updatePersonBalanceInCollection(state.people, personId, currency, offset);
     if (!updatedPerson) {
       return;
     }
 
     setState(prev => ({
       ...prev,
-      people: updatePersonBalanceInCollection(prev.people, personId, currency, newBalance).people,
+      people: updatePersonBalanceInCollection(prev.people, personId, currency, offset).people,
     }));
-
-    if (selectedPerson?.id === personId) {
-      setSelectedPerson(updatedPerson);
-    }
 
     try {
       const syncManager = await getSyncManager();
@@ -127,7 +130,7 @@ export function usePeopleHandlers({
       console.error('Failed to sync person balance:', error);
       addToast('Balance updated locally, but sync failed', 'error');
     }
-  }, [addToast, selectedPerson?.id, setSelectedPerson, setState, state.people]);
+  }, [addToast, setState, state.people, state.transactions]);
 
   const deletePerson = useCallback(async (id: string) => {
     setState(prev => ({ ...prev, people: removePersonFromCollection(prev.people, id) }));
@@ -188,7 +191,7 @@ export function usePeopleHandlers({
 
     const settlement = buildSettlementDraft({
       createId,
-      person,
+      person: { ...person, balances: getEffectivePersonBalances(person, state.transactions) },
       currency,
       categories: state.categories,
       defaultAccountId,
@@ -214,21 +217,11 @@ export function usePeopleHandlers({
       }
     }
 
+    // The settlement transaction itself moves the derived balance; nothing else to write.
     await addTransaction(settlement.transaction);
-    setState(prev => ({
-      ...prev,
-      people: updatePersonInCollection(prev.people, personId, { balances: settlement.updatedPerson.balances }),
-    }));
-
-    try {
-      const syncManager = await getSyncManager();
-      await syncManager.syncPerson(settlement.updatedPerson);
-    } catch (error) {
-      console.error('Failed to sync person settlement:', error);
-    }
 
     addToast(settlement.isPartial ? 'Partial settlement recorded' : 'Debt settled', 'success');
-  }, [addToast, addTransaction, createId, setState, state.accounts, state.categories, state.people]);
+  }, [addToast, addTransaction, createId, setState, state.accounts, state.categories, state.people, state.transactions]);
 
   const handleAddCategory = useCallback(async (category: Category) => {
     setState(prev => ({ ...prev, categories: [...prev.categories, category] }));

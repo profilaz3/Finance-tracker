@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { INITIAL_CATEGORIES } from '../constants';
+import { calculateBalanceOffset, getEffectivePersonBalances, selectPeopleWithBalances } from '../domain/balances';
 import { buildSettlementDraft } from '../domain/people';
 import { buildAnalyticsStudioSummary } from '../utils/analyticsSelectors';
 import { calculateTotalExpense, calculateTotalIncome } from '../utils/financialSelectors';
@@ -77,5 +78,47 @@ describe('M10 fees are counted once', () => {
 
     expect(total).toBe(50);
     expect(studio.totals.current.expense).toBe(50);
+  });
+});
+
+describe('M8 split currency change', () => {
+  it('reverses the old-currency shares and applies the new ones', () => {
+    const old = {
+      id: 't1', currency: 'EUR',
+      splitDetails: { totalAmount: 100, myPortion: 50, splitMethod: 'equal', shares: [{ personId: 'a', amount: 50 }] },
+    } as unknown as Transaction;
+    const r = calculateIPaidSplitSubmission({
+      amount: '11700', fees: '', currency: 'RSD', categoryId: 'c1', accountId: 'acc1', note: '',
+      transactionDate: '2026-01-01', splitMethod: 'equal', shares: [{ personId: 'a', amount: 0, isIncluded: true }],
+      rates, transaction: old, language: 'en',
+    } as unknown as SplitInput);
+
+    expect(r.balanceUpdates).toEqual(expect.arrayContaining([
+      { personId: 'a', currency: 'EUR', delta: -50 },
+      { personId: 'a', currency: 'RSD', delta: 5850 },
+    ]));
+    expect(r.balanceUpdates).toHaveLength(2);
+  });
+});
+
+describe('H4 derived person balances', () => {
+  const person: Person = { id: 'p', name: 'P', color: '', defaultCurrency: 'EUR', balances: { EUR: 5, USD: 0, RSD: 0 } };
+  const transactions: Transaction[] = [
+    { id: 'lend', date: '2026-11-01', amount: 40, currency: 'EUR', categoryId: 'c1', accountId: 'a', type: 'expense', personId: 'p' },
+    { id: 'back', date: '2026-11-02', amount: 15.1, currency: 'EUR', categoryId: 'debt-repayment', accountId: 'a', type: 'income', personId: 'p' },
+    {
+      id: 'split', date: '2026-11-03', amount: 0.3, currency: 'USD', categoryId: 'c1', accountId: 'a', type: 'expense',
+      splitDetails: { totalAmount: 0.3, myPortion: 0.1, splitMethod: 'equal', shares: [{ personId: 'p', amount: 0.1 }, { personId: 'q', amount: 0.1 }] },
+    },
+  ];
+
+  it('adds transaction effects to the stored manual offsets', () => {
+    const [withBalances] = selectPeopleWithBalances([person], transactions);
+    expect(withBalances.balances).toEqual({ EUR: 29.9, USD: 0.1, RSD: 0 });
+  });
+
+  it('computes the offset needed for a manual balance correction', () => {
+    expect(calculateBalanceOffset(person, transactions, 'EUR', 0)).toBe(-24.9);
+    expect(getEffectivePersonBalances({ ...person, balances: { EUR: -24.9, USD: 0, RSD: 0 } }, transactions).EUR).toBe(0);
   });
 });

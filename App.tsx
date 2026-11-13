@@ -262,6 +262,7 @@ const App: React.FC = () => {
     totalExpense,
     totalIncome,
     getAccountBalance,
+    viewState,
   } = useFinancialSelectors(state);
 
   // Handler for AI parsed transactions
@@ -480,7 +481,7 @@ const App: React.FC = () => {
             <Suspense fallback={viewSkeleton[currentView] || <DashboardSkeleton />}>
               <AppViewRouter
                 currentView={currentView}
-                state={state}
+                state={viewState}
                 dashboardTab={dashboardTab}
                 setDashboardTab={setDashboardTab}
                 selectedEvent={selectedEvent}
@@ -542,7 +543,7 @@ const App: React.FC = () => {
 
       <AppModals
         modals={modals}
-        state={state}
+        state={viewState}
         selectedTransaction={selectedTransaction}
         selectedPerson={selectedPerson}
         personToEdit={personToEdit}
