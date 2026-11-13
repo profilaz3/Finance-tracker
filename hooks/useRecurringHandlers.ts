@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { AppState, RecurringTransaction, Transaction } from '../types';
 import { getSyncManager } from '../services/runtimeServices';
-import { isDue, calculateNextDueDate } from '../utils/recurringUtils';
+import { getDueOccurrences, getOccurrenceTimestamp, isDue } from '../utils/recurringUtils';
 import { buildRecurringOccurrenceId } from '../utils/recurringOccurrence';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -94,36 +94,47 @@ export function useRecurringHandlers({
   const processRecurringTransactions = useCallback((dueRecurrings = state.recurringTransactions.filter(recurring => isDue(recurring))) => {
     if (dueRecurrings.length === 0) return;
 
+    const now = new Date();
+    let generatedCount = 0;
+
     dueRecurrings.forEach(recurring => {
-      // Same id for the same occurrence everywhere, so another tab/device cannot duplicate it.
-      const occurrenceId = buildRecurringOccurrenceId(recurring.id, recurring.nextDue);
-      const newTransaction: Transaction = {
-        id: occurrenceId,
-        date: new Date().toISOString(),
-        amount: recurring.amount,
-        currency: recurring.currency,
-        categoryId: recurring.categoryId,
-        accountId: recurring.accountId,
-        type: recurring.type,
-        note: recurring.note || `[Auto] ${recurring.name}`,
-        subcategory: recurring.subcategory,
-      };
+      // One transaction per missed occurrence, each dated on its own due date.
+      const { dueDates, nextDue } = getDueOccurrences(recurring, now);
+      if (dueDates.length === 0) return;
 
-      if (!state.transactions.some(transaction => transaction.id === occurrenceId)) {
+      dueDates.forEach(dueDate => {
+        // Same id for the same occurrence everywhere, so another tab/device cannot duplicate it.
+        const occurrenceId = buildRecurringOccurrenceId(recurring.id, dueDate);
+        if (state.transactions.some(transaction => transaction.id === occurrenceId)) return;
+
+        const newTransaction: Transaction = {
+          id: occurrenceId,
+          date: getOccurrenceTimestamp(dueDate, now),
+          amount: recurring.amount,
+          currency: recurring.currency,
+          categoryId: recurring.categoryId,
+          accountId: recurring.accountId,
+          type: recurring.type,
+          note: recurring.note || `[Auto] ${recurring.name}`,
+          subcategory: recurring.subcategory,
+        };
+
         addTransaction(newTransaction);
-      }
+        generatedCount += 1;
+      });
 
-      const newNextDue = calculateNextDueDate(recurring.nextDue, recurring.frequency);
       handleUpdateRecurring(recurring.id, {
-        lastGenerated: new Date().toISOString(),
-        nextDue: newNextDue,
+        lastGenerated: now.toISOString(),
+        nextDue,
       });
     });
 
+    if (generatedCount === 0) return;
+
     addToast(
       state.language === 'sr'
-        ? `${dueRecurrings.length} ponavljajuca transakcija generisana`
-        : `${dueRecurrings.length} recurring transaction${dueRecurrings.length > 1 ? 's' : ''} generated`,
+        ? `${generatedCount} ponavljajuca transakcija generisana`
+        : `${generatedCount} recurring transaction${generatedCount > 1 ? 's' : ''} generated`,
       'success'
     );
   }, [addToast, addTransaction, handleUpdateRecurring, state.language, state.recurringTransactions, state.transactions]);

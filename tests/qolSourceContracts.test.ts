@@ -42,8 +42,7 @@ describe('QOL source contracts', () => {
     expect(transactionsView).toContain('safeToUndoCount');
     expect(transactionsView).toContain('unsafeCount');
 
-    expect(handlers).toContain('restoreBatchDeletedTransactions');
-    expect(handlers).toContain('canUndoBatchDelete');
+    expect(handlers).toContain('restoreTransactions(deletedTransactions');
     expect(handlers).toContain('Batch restored');
   });
 });

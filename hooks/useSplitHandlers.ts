@@ -122,14 +122,7 @@ export function useSplitHandlers({
       };
     }
 
-    const balanceUpdates = type === 'person' && newTransaction.personId
-      ? [{
-          personId: newTransaction.personId,
-          currency: newTransaction.currency,
-          delta: newTransaction.type === 'expense' ? newTransaction.amount : -newTransaction.amount,
-        }]
-      : [];
-
+    // The new person transaction carries the debt (personId); balances are derived from it.
     setState(prev => {
       return {
         ...prev,
@@ -139,7 +132,6 @@ export function useSplitHandlers({
             ? prev.transactions.map(transaction => transaction.id === originalId ? updatedOriginalTx! : transaction)
             : prev.transactions),
         ],
-        people: applyPersonBalanceUpdates(prev.people, balanceUpdates),
       };
     });
 
@@ -149,7 +141,6 @@ export function useSplitHandlers({
       if (updatedOriginalTx) {
         await syncManager.syncTransaction(updatedOriginalTx);
       }
-      await syncPersonBalanceUpdates(balanceUpdates, state.people);
     } catch (error) {
       console.error('Failed to sync split transaction:', error);
       addToast('Split saved locally, but sync failed', 'error');
@@ -157,7 +148,7 @@ export function useSplitHandlers({
 
     closeSplitModal();
     setSelectedTransaction(null);
-  }, [addToast, closeSplitModal, createId, selectedTransaction, setSelectedTransaction, setState, state.categories, state.people, state.rates, syncPersonBalanceUpdates]);
+  }, [addToast, closeSplitModal, createId, selectedTransaction, setSelectedTransaction, setState, state.categories, state.rates]);
 
   const handleUnifiedSplit = useCallback(async (result: UnifiedSplitResult) => {
     for (const transaction of result.transactions) {
@@ -180,8 +171,14 @@ export function useSplitHandlers({
       }
     }
 
-    setState(prev => ({ ...prev, people: applyPersonBalanceUpdates(prev.people, result.balanceUpdates) }));
-    await syncPersonBalanceUpdates(result.balanceUpdates, state.people);
+    // "I paid" splits: shares live in splitDetails and balances are derived from them,
+    // so the informational balanceUpdates must not be written as well.
+    // "They paid" debts have no transaction, so they are stored as manual offsets.
+    const offsetUpdates = result.transactions.length === 0 ? result.balanceUpdates : [];
+    if (offsetUpdates.length > 0) {
+      setState(prev => ({ ...prev, people: applyPersonBalanceUpdates(prev.people, offsetUpdates) }));
+      await syncPersonBalanceUpdates(offsetUpdates, state.people);
+    }
 
     vibrate(HAPTIC_PATTERNS.success);
     const wasEditing = result.transactions.some(transaction =>

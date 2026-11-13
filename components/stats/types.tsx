@@ -1,6 +1,7 @@
 import React from 'react';
 import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction } from '../../types';
 import clsx from 'clsx';
+import { isTransferTransaction } from '../../domain/money';
 
 // ─── Public Props (same API as original Stats component) ────────────────────
 
@@ -120,8 +121,7 @@ export const buildAxisProps = (chartColors: ChartColors) => ({
 
 // ─── Shared Helper Functions ────────────────────────────────────────────────
 
-export const isTransfer = (tx: Transaction) =>
-  tx.categoryId === 'internal-transfer' || (tx.note && tx.note.startsWith('Transfer:'));
+export const isTransfer = (tx: Transaction) => isTransferTransaction(tx);
 
 export const formatCompactNumber = (value: number) => {
   const abs = Math.abs(value);
@@ -129,40 +129,45 @@ export const formatCompactNumber = (value: number) => {
   return value.toFixed(0);
 };
 
-export const getMonthKey = (date: Date) => date.toISOString().slice(0, 7);
+// Buckets follow the user's local calendar (a purchase at 00:30 on the 1st
+// belongs to the new month even if it is still the previous month in UTC).
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+export const getMonthKey = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+
+const getDayKey = (date: Date) => `${getMonthKey(date)}-${pad2(date.getDate())}`;
 
 export const getMonthRange = (start: Date, end: Date) => {
-  const startMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
-  const endMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+  const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
   const months: string[] = [];
-  const cursor = new Date(startMonth);
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
 
   while (cursor <= endMonth) {
     months.push(getMonthKey(cursor));
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    cursor.setMonth(cursor.getMonth() + 1);
   }
 
   return months;
 };
 
 export const getWeekStart = (date: Date) => {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() - (dayNum - 1));
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayNum = d.getDay() || 7;
+  d.setDate(d.getDate() - (dayNum - 1));
   return d;
 };
 
 export const getQuarterStart = (date: Date) => {
-  const month = date.getUTCMonth();
-  const quarterStartMonth = Math.floor(month / 3) * 3;
-  return new Date(Date.UTC(date.getUTCFullYear(), quarterStartMonth, 1));
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  return new Date(date.getFullYear(), quarterStartMonth, 1);
 };
 
 export const getGroupKey = (dateStr: string, tf: string): string => {
   const date = new Date(dateStr);
   if (tf === 'daily') {
-    return date.toISOString().split('T')[0]; // YYYY-MM-DD
+    return getDayKey(date); // YYYY-MM-DD (local)
   } else if (tf === 'weekly') {
+    // ISO week of the local calendar day, computed on a UTC copy to avoid DST.
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
@@ -170,7 +175,7 @@ export const getGroupKey = (dateStr: string, tf: string): string => {
     const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
     return `${d.getUTCFullYear()}-W${weekNo}`;
   } else if (tf === 'monthly') {
-    return date.toISOString().slice(0, 7); // YYYY-MM
+    return getMonthKey(date); // YYYY-MM (local)
   } else if (tf === 'quarterly') {
     const month = date.getMonth();
     const quarter = Math.floor(month / 3) + 1;
@@ -180,10 +185,15 @@ export const getGroupKey = (dateStr: string, tf: string): string => {
   }
 };
 
+const parseLocalKey = (dateKey: string) => {
+  const [year, month, day = 1] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export const formatLabel = (dateKey: string, tf: string, language: 'en' | 'sr') => {
-  if (tf === 'daily') return new Date(dateKey).toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', { month: 'short', day: 'numeric' });
+  if (tf === 'daily') return parseLocalKey(dateKey).toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', { month: 'short', day: 'numeric' });
   if (tf === 'weekly') return dateKey; // Keep Wxx format or improve
-  if (tf === 'monthly') return new Date(dateKey + '-01').toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', { month: 'short', year: '2-digit' });
+  if (tf === 'monthly') return parseLocalKey(dateKey).toLocaleDateString(language === 'sr' ? 'sr-RS' : 'en-US', { month: 'short', year: '2-digit' });
   if (tf === 'quarterly') return dateKey;
   if (tf === 'yearly') return dateKey;
   return dateKey;
@@ -201,7 +211,7 @@ export const getCutoffDate = (tf: string, now: Date) => {
 
 export const getAlignedStartDate = (tf: NetWorthTimeFrame, date: Date) => {
   if (tf === 'weekly') return getWeekStart(date);
-  if (tf === 'monthly') return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  if (tf === 'monthly') return new Date(date.getFullYear(), date.getMonth(), 1);
   return getQuarterStart(date);
 };
 
@@ -214,7 +224,7 @@ export const getTimeBuckets = (tf: NetWorthTimeFrame, startDate: Date, endDate: 
     while (cursor <= end) {
       const key = getGroupKey(cursor.toISOString(), 'weekly');
       buckets.push({ key, label: formatLabel(key, 'weekly', language) });
-      cursor.setUTCDate(cursor.getUTCDate() + 7);
+      cursor.setDate(cursor.getDate() + 7);
     }
     return buckets;
   }
@@ -230,7 +240,7 @@ export const getTimeBuckets = (tf: NetWorthTimeFrame, startDate: Date, endDate: 
   while (cursor <= end) {
     const key = getGroupKey(cursor.toISOString(), 'quarterly');
     buckets.push({ key, label: formatLabel(key, 'quarterly', language) });
-    cursor.setUTCMonth(cursor.getUTCMonth() + 3);
+    cursor.setMonth(cursor.getMonth() + 3);
   }
   return buckets;
 };

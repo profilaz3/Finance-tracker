@@ -50,6 +50,8 @@ export interface Transaction {
   };
   fees?: number;
   eventId?: string;
+  /** Shared by both legs of an account-to-account transfer. */
+  transferId?: string;
   splitDetails?: {
     totalAmount: number;
     myPortion: number;

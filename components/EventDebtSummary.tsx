@@ -1,102 +1,35 @@
 import React, { useMemo } from 'react';
 import { ArrowRight, Wallet } from 'lucide-react';
-import { Person, SharedExpense, Currency, EventDebt } from '../types';
+import { Person, SharedExpense, Currency, ExchangeRates } from '../types';
 import { formatCurrency } from '../utils/currencyUtils';
+import { calculateEventSettlement } from '../domain/events';
 
 interface EventDebtSummaryProps {
     expenses: SharedExpense[];
     people: Person[];
     baseCurrency: Currency;
+    /** With rates, all currencies are netted into `baseCurrency`. */
+    rates?: ExchangeRates;
+    /** Id used for the current user in `expenses` (shown as "You" when not in `people`). */
+    selfId?: string;
 }
 
-export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({ expenses = [], people = [], baseCurrency }) => {
-    const debts = useMemo(() => {
-        if (!expenses || !people) return [];
-        // 1. Calculate net balances per person per currency
-        const balances: Record<string, Record<string, number>> = {};
+const SELF_FALLBACK_ID = 'self';
+const FALLBACK_COLOR = '#9E9E9E';
 
-        expenses.forEach(expense => {
-            const { paidBy, amount, currency, sharedWith, splitType, splitDetails } = expense;
-            if (!sharedWith || sharedWith.length === 0) return;
+export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({ expenses = [], people = [], baseCurrency, rates, selfId }) => {
+    const debts = useMemo(
+        () => calculateEventSettlement(expenses || [], { currency: baseCurrency, rates }),
+        [expenses, baseCurrency, rates],
+    );
 
-            // Payer paid +amount
-            if (!balances[paidBy]) balances[paidBy] = {};
-            if (!balances[paidBy][currency]) balances[paidBy][currency] = 0;
-            balances[paidBy][currency] += amount;
-
-            // Calculate consumption (negative balance)
-            if (splitType === 'exact' && splitDetails) {
-                // Exact split
-                sharedWith.forEach(personId => {
-                    const personAmount = splitDetails[personId] || 0;
-                    if (!balances[personId]) balances[personId] = {};
-                    if (!balances[personId][currency]) balances[personId][currency] = 0;
-                    balances[personId][currency] -= personAmount;
-                });
-            } else {
-                // Equal split (default)
-                const splitAmount = amount / sharedWith.length;
-                sharedWith.forEach(personId => {
-                    if (!balances[personId]) balances[personId] = {};
-                    if (!balances[personId][currency]) balances[personId][currency] = 0;
-                    balances[personId][currency] -= splitAmount;
-                });
-            }
-        });
-
-        // 2. Resolve debts
-        const calculatedDebts: EventDebt[] = [];
-
-        // Process each currency separately
-        const currencies = new Set<string>();
-        Object.values(balances).forEach(b => Object.keys(b).forEach(c => currencies.add(c)));
-
-        currencies.forEach(currency => {
-            let debtors: { id: string; amount: number }[] = [];
-            let creditors: { id: string; amount: number }[] = [];
-
-            Object.entries(balances).forEach(([personId, curBalances]) => {
-                const balance = curBalances[currency] || 0;
-                // Round to 2 decimals to avoid floating point issues
-                const roundedBalance = Math.round(balance * 100) / 100;
-
-                if (roundedBalance < -0.01) {
-                    debtors.push({ id: personId, amount: -roundedBalance });
-                } else if (roundedBalance > 0.01) {
-                    creditors.push({ id: personId, amount: roundedBalance });
-                }
-            });
-
-            // Match debtors to creditors
-            // Simple greedy approach
-            let i = 0; // debtor index
-            let j = 0; // creditor index
-
-            while (i < debtors.length && j < creditors.length) {
-                const debtor = debtors[i];
-                const creditor = creditors[j];
-
-                const amount = Math.min(debtor.amount, creditor.amount);
-
-                if (amount > 0) {
-                    calculatedDebts.push({
-                        from: debtor.id,
-                        to: creditor.id,
-                        amount,
-                        currency: currency as Currency
-                    });
-                }
-
-                debtor.amount -= amount;
-                creditor.amount -= amount;
-
-                if (debtor.amount < 0.01) i++;
-                if (creditor.amount < 0.01) j++;
-            }
-        });
-
-        return calculatedDebts;
-    }, [expenses]);
+    // Debts to participants that are not in `people` are still shown.
+    const resolvePerson = (id: string): Pick<Person, 'name' | 'color' | 'avatar'> => {
+        const person = people.find(p => p.id === id);
+        if (person) return person;
+        const isSelf = id === SELF_FALLBACK_ID || (!!selfId && id === selfId);
+        return { name: isSelf ? 'You' : 'Unknown', color: FALLBACK_COLOR };
+    };
 
     if (debts.length === 0) {
         return (
@@ -112,10 +45,8 @@ export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({ expenses = [
             <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">Who Owes Who</h3>
             <div className="grid gap-2">
                 {debts.map((debt, index) => {
-                    const fromPerson = people.find(p => p.id === debt.from);
-                    const toPerson = people.find(p => p.id === debt.to);
-
-                    if (!fromPerson || !toPerson) return null;
+                    const fromPerson = resolvePerson(debt.from);
+                    const toPerson = resolvePerson(debt.to);
 
                     return (
                         <div key={`${debt.from}-${debt.to}-${debt.currency}-${index}`} className="flex items-center justify-between p-3 bg-surface-container rounded-xl border border-outline/10">

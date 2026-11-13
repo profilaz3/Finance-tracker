@@ -1,6 +1,15 @@
 import type { Category, Currency, ExchangeRates, RecurringTransaction, Transaction } from '../types';
 import { convertAmount } from '../services/currencyService';
 import { calculateNextDueDate } from './recurringUtils';
+import {
+  getCountedFee,
+  getExpensePrincipal,
+  isCountedExpense,
+  isCountedIncome,
+  isTransferTransaction,
+  NON_EARNING_INCOME_CATEGORY_IDS,
+  REPAYMENT_CATEGORY_IDS,
+} from '../domain/money';
 
 export type AnalyticsPeriod = 'month' | 'quarter' | 'year';
 export type AnalyticsForecastConfidence = 'low' | 'normal';
@@ -107,45 +116,47 @@ interface RangeAnalytics {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const TRANSFER_NOTE_PREFIX = 'Transfer:';
-const EXCLUDED_INCOME_CATEGORY_IDS = new Set(['c8', 'reimbursement', 'internal-transfer']);
 
 const round = (value: number): number => Number(value.toFixed(2));
 
-const startOfUtcDay = (date: Date): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+// Periods follow the user's local calendar: a purchase at 00:30 on the 1st
+// belongs to the new month even when that instant is still the previous
+// month in UTC.
+const startOfLocalDay = (date: Date): Date => (
+  new Date(date.getFullYear(), date.getMonth(), date.getDate())
 );
 
-const endOfUtcDay = (date: Date): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999))
+const endOfLocalDay = (date: Date): Date => (
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
 );
 
-const addUtcDays = (date: Date, days: number): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days))
+const addLocalDays = (date: Date, days: number): Date => (
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
 );
 
-const addUtcMonths = (date: Date, months: number): Date => (
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()))
+const addLocalMonths = (date: Date, months: number): Date => (
+  new Date(date.getFullYear(), date.getMonth() + months, date.getDate())
 );
 
-const endOfUtcMonth = (year: number, month: number): Date => (
-  new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999))
+const endOfLocalMonth = (year: number, month: number): Date => (
+  new Date(year, month + 1, 0, 23, 59, 59, 999)
 );
 
+// Rounded so DST days (23h/25h) still count as one day.
 const getDaysInclusive = (start: Date, end: Date): number => (
-  Math.floor((startOfUtcDay(end).getTime() - startOfUtcDay(start).getTime()) / MS_PER_DAY) + 1
+  Math.round((startOfLocalDay(end).getTime() - startOfLocalDay(start).getTime()) / MS_PER_DAY) + 1
 );
 
 const formatMonthKey = (date: Date): string => {
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  return `${date.getUTCFullYear()}-${month}`;
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${date.getFullYear()}-${month}`;
 };
 
 const formatQuarterKey = (date: Date): string => (
-  `${date.getUTCFullYear()}-Q${Math.floor(date.getUTCMonth() / 3) + 1}`
+  `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`
 );
 
-const formatYearKey = (date: Date): string => String(date.getUTCFullYear());
+const formatYearKey = (date: Date): string => String(date.getFullYear());
 
 const clamp = (value: number, minimum: number, maximum: number): number => (
   Math.min(maximum, Math.max(minimum, value))
@@ -162,9 +173,9 @@ const buildPeriodRange = (
   now: Date,
 ): AnalyticsPeriodRange => {
   const totalDays = getDaysInclusive(currentStart, currentEnd);
-  const elapsedEnd = new Date(Math.min(endOfUtcDay(now).getTime(), currentEnd.getTime()));
+  const elapsedEnd = new Date(Math.min(endOfLocalDay(now).getTime(), currentEnd.getTime()));
   const elapsedDays = clamp(getDaysInclusive(currentStart, elapsedEnd), 0, totalDays);
-  const remainingStart = addUtcDays(startOfUtcDay(now), 1);
+  const remainingStart = addLocalDays(startOfLocalDay(now), 1);
 
   return {
     period,
@@ -182,14 +193,14 @@ const buildPeriodRange = (
 };
 
 export const resolveAnalyticsPeriod = (period: AnalyticsPeriod, now: Date): AnalyticsPeriodRange => {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
+  const year = now.getFullYear();
+  const month = now.getMonth();
 
   if (period === 'month') {
-    const currentStart = new Date(Date.UTC(year, month, 1));
-    const currentEnd = endOfUtcMonth(year, month);
-    const previousStart = addUtcMonths(currentStart, -1);
-    const previousEnd = endOfUtcMonth(previousStart.getUTCFullYear(), previousStart.getUTCMonth());
+    const currentStart = new Date(year, month, 1);
+    const currentEnd = endOfLocalMonth(year, month);
+    const previousStart = addLocalMonths(currentStart, -1);
+    const previousEnd = endOfLocalMonth(previousStart.getFullYear(), previousStart.getMonth());
 
     return buildPeriodRange(
       period,
@@ -205,10 +216,10 @@ export const resolveAnalyticsPeriod = (period: AnalyticsPeriod, now: Date): Anal
 
   if (period === 'quarter') {
     const quarterStartMonth = Math.floor(month / 3) * 3;
-    const currentStart = new Date(Date.UTC(year, quarterStartMonth, 1));
-    const currentEnd = endOfUtcMonth(year, quarterStartMonth + 2);
-    const previousStart = addUtcMonths(currentStart, -3);
-    const previousEnd = endOfUtcDay(addUtcDays(currentStart, -1));
+    const currentStart = new Date(year, quarterStartMonth, 1);
+    const currentEnd = endOfLocalMonth(year, quarterStartMonth + 2);
+    const previousStart = addLocalMonths(currentStart, -3);
+    const previousEnd = endOfLocalDay(addLocalDays(currentStart, -1));
 
     return buildPeriodRange(
       period,
@@ -222,10 +233,10 @@ export const resolveAnalyticsPeriod = (period: AnalyticsPeriod, now: Date): Anal
     );
   }
 
-  const currentStart = new Date(Date.UTC(year, 0, 1));
-  const currentEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
-  const previousStart = new Date(Date.UTC(year - 1, 0, 1));
-  const previousEnd = new Date(Date.UTC(year - 1, 11, 31, 23, 59, 59, 999));
+  const currentStart = new Date(year, 0, 1);
+  const currentEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+  const previousStart = new Date(year - 1, 0, 1);
+  const previousEnd = new Date(year - 1, 11, 31, 23, 59, 59, 999);
 
   return buildPeriodRange(
     period,
@@ -244,12 +255,10 @@ const isInRange = (dateValue: string, start: Date, end: Date): boolean => {
   return time >= start.getTime() && time <= end.getTime();
 };
 
-const isTransfer = (item: Pick<Transaction | RecurringTransaction, 'categoryId' | 'note'>): boolean => (
-  item.categoryId === 'internal-transfer' || item.note?.startsWith(TRANSFER_NOTE_PREFIX) === true
-);
+const isTransfer = isTransferTransaction;
 
-const isExcludedIncome = (transaction: Transaction): boolean => (
-  EXCLUDED_INCOME_CATEGORY_IDS.has(transaction.categoryId) || isTransfer(transaction)
+const isExcludedRecurringIncome = (categoryId: string): boolean => (
+  NON_EARNING_INCOME_CATEGORY_IDS.has(categoryId) || REPAYMENT_CATEGORY_IDS.has(categoryId)
 );
 
 const convertToBase = (
@@ -259,43 +268,17 @@ const convertToBase = (
   rates: ExchangeRates,
 ): number => convertAmount(amount, currency, baseCurrency, rates);
 
-const getSplitFeeShare = (
-  transaction: Transaction,
-  baseCurrency: Currency,
-  rates: ExchangeRates,
-): number => {
-  if (!transaction.fees || !transaction.splitDetails) return 0;
-
-  const { myPortion, totalAmount } = transaction.splitDetails;
-  if (totalAmount <= 0) return convertToBase(transaction.fees, 'USD', baseCurrency, rates);
-
-  const feeShareRatio = clamp(myPortion / totalAmount, 0, 1);
-  return convertToBase(transaction.fees * feeShareRatio, 'USD', baseCurrency, rates);
-};
-
 const getTransactionExpenseAmount = (
   transaction: Transaction,
   baseCurrency: Currency,
   rates: ExchangeRates,
-): number => {
-  if (!transaction.splitDetails) {
-    return convertToBase(transaction.amount, transaction.currency, baseCurrency, rates);
-  }
-
-  const amountWithoutFees = convertToBase(transaction.splitDetails.myPortion, transaction.currency, baseCurrency, rates)
-    - getSplitFeeShare(transaction, baseCurrency, rates);
-  return round(Math.max(0, amountWithoutFees));
-};
+): number => getExpensePrincipal(transaction, baseCurrency, rates);
 
 const getTransactionFees = (
   transaction: Transaction,
   baseCurrency: Currency,
   rates: ExchangeRates,
-): number => {
-  if (!transaction.fees) return 0;
-  if (transaction.splitDetails) return getSplitFeeShare(transaction, baseCurrency, rates);
-  return convertToBase(transaction.fees, 'USD', baseCurrency, rates);
-};
+): number => getCountedFee(transaction, baseCurrency, rates);
 
 const calculateDelta = (current: number, previous: number): AnalyticsDelta => {
   const absolute = round(current - previous);
@@ -356,15 +339,14 @@ const analyzeRange = (
   transactions
     .filter(transaction => isInRange(transaction.date, start, end))
     .forEach(transaction => {
-      if (isTransfer(transaction)) return;
-
       const transactionFees = getTransactionFees(transaction, baseCurrency, rates);
 
-      if (transaction.type === 'income') {
+      if (!isCountedExpense(transaction)) {
+        // Fees are a real cost even on transfers, repayments and income.
         expense += transactionFees;
         fees += transactionFees;
 
-        if (isExcludedIncome(transaction)) {
+        if (!isCountedIncome(transaction)) {
           return;
         }
 
@@ -476,12 +458,15 @@ const buildAnomalies = (
   return anomalies;
 };
 
-const parseDateOnlyUtc = (value: string): Date => {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+// Recurring due dates are calendar days; compare them as local days.
+const parseDateOnlyLocal = (value: string): Date => {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return new Date(year, month - 1, day);
 };
 
-const formatDateOnlyUtc = (date: Date): string => date.toISOString().split('T')[0];
+const formatDateOnlyLocal = (date: Date): string => (
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+);
 
 const countRecurringOccurrencesInRemainingPeriod = (
   recurring: RecurringTransaction,
@@ -492,28 +477,76 @@ const countRecurringOccurrencesInRemainingPeriod = (
 
   let occurrenceEnd = currentEnd;
   if (recurring.endDate) {
-    const endDate = new Date(`${recurring.endDate}T23:59:59.999Z`);
+    const endDate = endOfLocalDay(parseDateOnlyLocal(recurring.endDate));
     if (endDate.getTime() < remainingStart.getTime()) return 0;
     occurrenceEnd = new Date(Math.min(occurrenceEnd.getTime(), endDate.getTime()));
   }
 
   let nextDue = recurring.nextDue;
-  let due = parseDateOnlyUtc(nextDue);
-  const remainingStartDay = startOfUtcDay(remainingStart);
+  let due = parseDateOnlyLocal(nextDue);
+  const remainingStartDay = startOfLocalDay(remainingStart);
 
   while (due.getTime() < remainingStartDay.getTime()) {
-    nextDue = calculateNextDueDate(nextDue, recurring.frequency);
-    due = parseDateOnlyUtc(nextDue);
+    nextDue = calculateNextDueDate(nextDue, recurring.frequency, recurring.startDate);
+    due = parseDateOnlyLocal(nextDue);
   }
 
   let occurrences = 0;
   while (due.getTime() <= occurrenceEnd.getTime()) {
     occurrences += 1;
-    nextDue = calculateNextDueDate(formatDateOnlyUtc(due), recurring.frequency);
-    due = parseDateOnlyUtc(nextDue);
+    nextDue = calculateNextDueDate(formatDateOnlyLocal(due), recurring.frequency, recurring.startDate);
+    due = parseDateOnlyLocal(nextDue);
   }
 
   return occurrences;
+};
+
+const AUTO_NOTE_PREFIX = '[Auto]';
+const LARGE_ONE_OFF_MEDIAN_MULTIPLIER = 3;
+const LARGE_ONE_OFF_SHARE = 0.25;
+
+const getMedian = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+};
+
+/**
+ * Splits counted amounts into a fixed part (recurring-generated transactions
+ * and large one-offs) that is NOT extrapolated, and a variable part that is.
+ * Extrapolating a rent payment from day 10 of a month would triple it.
+ */
+const splitFixedAndVariable = (
+  entries: { amount: number; isRecurring: boolean }[],
+): { fixed: number; variable: number } => {
+  let fixed = 0;
+  const variableAmounts: number[] = [];
+
+  entries.forEach(entry => {
+    if (entry.isRecurring) {
+      fixed += entry.amount;
+    } else {
+      variableAmounts.push(entry.amount);
+    }
+  });
+
+  const variableTotal = variableAmounts.reduce((sum, amount) => sum + amount, 0);
+  const median = getMedian(variableAmounts);
+  let variable = 0;
+
+  variableAmounts.forEach(amount => {
+    const isLargeOneOff = variableAmounts.length > 1
+      && amount > median * LARGE_ONE_OFF_MEDIAN_MULTIPLIER
+      && amount >= variableTotal * LARGE_ONE_OFF_SHARE;
+    if (isLargeOneOff) {
+      fixed += amount;
+    } else {
+      variable += amount;
+    }
+  });
+
+  return { fixed, variable };
 };
 
 const buildForecast = (
@@ -526,22 +559,52 @@ const buildForecast = (
   let recurringIncomeImpact = 0;
   let recurringExpenseImpact = 0;
 
+  const activeRecurring = recurringTransactions.filter(recurring => recurring.isActive);
+  const isRecurringGenerated = (transaction: Transaction): boolean => (
+    (transaction.note ?? '').startsWith(AUTO_NOTE_PREFIX)
+    || activeRecurring.some(recurring => (
+      recurring.type === transaction.type
+      && recurring.categoryId === transaction.categoryId
+      && recurring.currency === transaction.currency
+      && Math.abs(recurring.amount - transaction.amount) < 0.005
+    ))
+  );
+
+  const expenseEntries: { amount: number; isRecurring: boolean }[] = [];
+  const incomeEntries: { amount: number; isRecurring: boolean }[] = [];
+  current.countedTransactions.forEach(transaction => {
+    const isRecurring = isRecurringGenerated(transaction);
+    if (transaction.type === 'expense') {
+      expenseEntries.push({ amount: getTransactionExpenseAmount(transaction, baseCurrency, rates), isRecurring });
+    } else {
+      incomeEntries.push({ amount: convertToBase(transaction.amount, transaction.currency, baseCurrency, rates), isRecurring });
+    }
+  });
+
+  const expenseSplit = splitFixedAndVariable(expenseEntries);
+  const incomeSplit = splitFixedAndVariable(incomeEntries);
+  // Fees stay in the variable part (current.totals.expense includes them).
+  const variableExpense = Math.max(0, current.totals.expense - expenseSplit.fixed);
+  const variableIncome = Math.max(0, current.totals.income - incomeSplit.fixed);
+
   recurringTransactions
     .forEach(recurring => {
       const occurrences = countRecurringOccurrencesInRemainingPeriod(recurring, period.remainingStart, period.currentEnd);
       if (occurrences === 0) return;
 
       const amount = convertToBase(recurring.amount, recurring.currency, baseCurrency, rates);
-      if (recurring.type === 'income' && !EXCLUDED_INCOME_CATEGORY_IDS.has(recurring.categoryId)) {
+      if (recurring.type === 'income' && !isExcludedRecurringIncome(recurring.categoryId)) {
         recurringIncomeImpact += amount * occurrences;
-      } else if (recurring.type === 'expense') {
+      } else if (recurring.type === 'expense' && !REPAYMENT_CATEGORY_IDS.has(recurring.categoryId)) {
         recurringExpenseImpact += amount * occurrences;
       }
     });
 
+  // Only variable activity is extrapolated; recurring items still to come are
+  // added from the schedule instead.
   const paceRatio = period.elapsedRatio > 0 ? period.elapsedRatio : 1;
-  const projectedIncome = round(current.totals.income / paceRatio + recurringIncomeImpact);
-  const projectedExpense = round(current.totals.expense / paceRatio + recurringExpenseImpact);
+  const projectedIncome = round(incomeSplit.fixed + variableIncome / paceRatio + recurringIncomeImpact);
+  const projectedExpense = round(expenseSplit.fixed + variableExpense / paceRatio + recurringExpenseImpact);
   const recurringImpact = round(recurringIncomeImpact - recurringExpenseImpact);
   const confidence: AnalyticsForecastConfidence = current.totals.transactionCount < 3 || period.elapsedRatio < 0.15
     ? 'low'
@@ -557,7 +620,7 @@ const buildForecast = (
     confidence,
     reason: confidence === 'low'
       ? 'Limited current-period activity.'
-      : 'Based on current pace and remaining recurring transactions.',
+      : 'Based on the pace of variable activity plus remaining scheduled recurring transactions.',
   };
 };
 
@@ -566,7 +629,6 @@ const getPeriodLabel = (period: AnalyticsPeriodRange): string => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'long',
       year: 'numeric',
-      timeZone: 'UTC',
     }).format(period.currentStart);
   }
 

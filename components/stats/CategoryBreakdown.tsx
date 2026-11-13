@@ -4,6 +4,7 @@ import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { Category, Currency, ExchangeRates, Transaction } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getExpensePrincipal, isCountedExpense } from '../../domain/money';
 import {
   CategoryTimeFrame,
   ChartColors,
@@ -12,7 +13,6 @@ import {
   getCutoffDate,
   getMonthKey,
   getMonthRange,
-  isTransfer,
 } from './types';
 import { DonutChart, HorizontalBarChart } from './lightCharts';
 
@@ -50,10 +50,9 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
     const totals: Record<string, number> = {};
 
     transactions
-      .filter((transaction) => new Date(transaction.date) >= cutoff && transaction.type === 'expense' && !isTransfer(transaction))
+      .filter((transaction) => new Date(transaction.date) >= cutoff && isCountedExpense(transaction))
       .forEach((transaction) => {
-        const effectiveAmount = transaction.splitDetails ? transaction.splitDetails.myPortion : transaction.amount;
-        const amount = convertAmount(effectiveAmount, transaction.currency, baseCurrency, rates);
+        const amount = getExpensePrincipal(transaction, baseCurrency, rates);
         totals[transaction.categoryId] = (totals[transaction.categoryId] || 0) + amount;
       });
 
@@ -72,7 +71,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
   const volatilityData = useMemo(() => {
     const monthsBack = 12;
     const endDate = new Date();
-    const startDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() - (monthsBack - 1), 1));
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - (monthsBack - 1), 1);
     const monthKeys = getMonthRange(startDate, endDate);
     const monthIndex = new Map(monthKeys.map((key, index) => [key, index]));
     const totalsByCategory: Record<string, number[]> = {};
@@ -82,7 +81,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
     });
 
     transactions.forEach((transaction) => {
-      if (transaction.type !== 'expense' || isTransfer(transaction)) {
+      if (!isCountedExpense(transaction)) {
         return;
       }
 
@@ -91,8 +90,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         return;
       }
 
-      const effectiveAmount = transaction.splitDetails ? transaction.splitDetails.myPortion : transaction.amount;
-      const amount = convertAmount(effectiveAmount, transaction.currency, baseCurrency, rates);
+      const amount = getExpensePrincipal(transaction, baseCurrency, rates);
 
       if (!totalsByCategory[transaction.categoryId]) {
         totalsByCategory[transaction.categoryId] = Array(monthKeys.length).fill(0);

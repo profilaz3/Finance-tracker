@@ -361,7 +361,9 @@ export class SupabaseService {
             receipt_data: transaction.receiptData,
             fees: transaction.fees,
             split_details: transaction.splitDetails || null,
-            event_id: transaction.eventId || null
+            event_id: transaction.eventId || null,
+            // Only sent when set, so non-transfer rows work before the column exists.
+            ...(transaction.transferId ? { transfer_id: transaction.transferId } : {})
         });
 
         if (error) throw toSyncError(error, status);

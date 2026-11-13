@@ -80,7 +80,7 @@ describe('people domain helpers', () => {
       amount: 4.56,
       currency: 'RSD',
       accountId: 'acc-1',
-      categoryId: 'income-1',
+      categoryId: 'debt-repayment',
       type: 'income',
       personId: 'person-1',
       subcategory: 'Settlement',
@@ -88,6 +88,25 @@ describe('people domain helpers', () => {
     });
     expect(settlement?.updatedPerson.balances.RSD).toBe(40);
     expect(settlement?.isPartial).toBe(true);
+    // The repayment category was missing, so the draft asks for it to be created.
+    expect(settlement?.createdCategory).toMatchObject({ id: 'debt-repayment', type: 'income' });
+  });
+
+  it('records settlements under the existing repayment categories, never the first income/expense category', () => {
+    const categories: Category[] = [
+      { id: 'c1', name: 'Food', type: 'expense', subcategories: [], color: '#000' },
+      { id: 'c4', name: 'Salary', type: 'income', subcategories: [], color: '#fff' },
+      { id: 'debt-repayment', name: 'Incoming', type: 'income', subcategories: [], color: '#0f0' },
+      { id: 'loan-repayment', name: 'Outgoing', type: 'expense', subcategories: [], color: '#f00' },
+    ];
+    const person: Person = { id: 'p', name: 'P', defaultCurrency: 'EUR', color: '#111', balances: { EUR: 25, USD: 0, RSD: -300 } };
+
+    const incoming = buildSettlementDraft({ createId: () => 'a', person, currency: 'EUR', categories, defaultAccountId: 'acc' });
+    expect(incoming?.transaction).toMatchObject({ type: 'income', categoryId: 'debt-repayment', amount: 25 });
+    expect(incoming?.createdCategory).toBeNull();
+
+    const outgoing = buildSettlementDraft({ createId: () => 'b', person, currency: 'RSD', categories, defaultAccountId: 'acc' });
+    expect(outgoing?.transaction).toMatchObject({ type: 'expense', categoryId: 'loan-repayment', amount: 300 });
   });
 
   it('builds user profiles and account collection updates', () => {

@@ -1,4 +1,5 @@
 import { Account, Category, Currency, Person, Transaction } from '../types';
+import { resolveRepaymentCategory } from './money';
 
 interface BuildPersonInput {
   createId: () => string;
@@ -105,7 +106,13 @@ export const buildSettlementDraft = ({
   defaultAccountId,
   settleAmount,
   nowIso,
-}: BuildSettlementDraftInput): { transaction: Transaction; updatedPerson: Person; isPartial: boolean } | null => {
+}: BuildSettlementDraftInput): {
+  transaction: Transaction;
+  updatedPerson: Person;
+  isPartial: boolean;
+  /** Set when the repayment category was missing and must be added to state. */
+  createdCategory: Category | null;
+} | null => {
   const balance = person.balances[currency];
   if (!balance) {
     return null;
@@ -114,11 +121,14 @@ export const buildSettlementDraft = ({
   const type = balance > 0 ? 'income' : 'expense';
   const amount = settleAmount !== undefined ? settleAmount : Math.abs(balance);
   const newBalance = balance > 0 ? balance - amount : balance + amount;
-  const category = categories.find(item => item.type === type) || categories[0];
+  // Settlements are debt movements, not income or spending: always record them
+  // under the repayment categories (which analytics exclude).
+  const { category, created } = resolveRepaymentCategory(categories, type);
   const isPartial = settleAmount !== undefined && settleAmount < Math.abs(balance);
 
   return {
     isPartial,
+    createdCategory: created ? category : null,
     updatedPerson: {
       ...person,
       balances: {

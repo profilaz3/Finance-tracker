@@ -10,6 +10,19 @@ import { convertAmount } from '../services/currencyService';
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
+/**
+ * Splits `total` into `count` parts in integer cents so the parts always sum
+ * to the total. Leftover cents go to the first parts (index 0 is "me", the
+ * payer, so I absorb rounding first).
+ */
+export const splitEvenlyInCents = (total: number, count: number): number[] => {
+  if (count <= 0) return [];
+  const totalCents = Math.round(total * 100);
+  const base = Math.floor(totalCents / count);
+  const remainder = totalCents - base * count;
+  return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
+};
+
 export const calculateTotalSplitAmount = (
   amount: string,
   fees: string,
@@ -37,12 +50,13 @@ export const recalculateSplitShares = (
     }
 
     const totalParticipants = includedCount + 1;
-    const perPerson = round2(totalToSplit / totalParticipants);
+    const parts = splitEvenlyInCents(totalToSplit, totalParticipants);
     const percentage = round2(100 / totalParticipants);
+    let nextPart = 1; // parts[0] is my portion
 
     return shares.map(share => ({
       ...share,
-      amount: share.isIncluded ? perPerson : 0,
+      amount: share.isIncluded ? parts[nextPart++] : 0,
       percentage: share.isIncluded ? percentage : 0,
     }));
   }
@@ -204,19 +218,19 @@ const buildCalculatedShares = (
   const totalParticipants = includedShares.length + 1;
 
   if (splitMethod === 'equal') {
-    const perPerson = round2(totalAmount / totalParticipants);
+    const [myPortion, ...otherParts] = splitEvenlyInCents(totalAmount, totalParticipants);
     return {
-      myPortion: perPerson,
-      shares: includedShares.map(share => ({
+      myPortion,
+      shares: includedShares.map((share, index) => ({
         personId: share.personId,
-        amount: perPerson,
+        amount: otherParts[index],
         percentage: round2(100 / totalParticipants),
       })),
     };
   }
 
-  const othersTotal = includedShares.reduce((sum, share) => sum + share.amount, 0);
-  const myPortion = round2(totalAmount - othersTotal);
+  const othersTotalCents = includedShares.reduce((sum, share) => sum + Math.round(share.amount * 100), 0);
+  const myPortion = (Math.round(totalAmount * 100) - othersTotalCents) / 100;
 
   if (myPortion < 0) {
     return null;
@@ -232,40 +246,33 @@ const buildCalculatedShares = (
   };
 };
 
+/**
+ * Net balance change per person and currency caused by creating or editing a
+ * split. When editing, the old shares are reversed in the OLD transaction
+ * currency and the new shares applied in the new one, so a currency change
+ * never leaves the old-currency balance behind. Computed in integer cents.
+ */
 const buildBalanceUpdates = (
   currency: Currency,
   calculatedShares: Array<{ personId: string; amount: number; percentage?: number }>,
   transaction?: Transaction
 ): { personId: string; currency: Currency; delta: number }[] => {
-  if (transaction?.splitDetails?.shares) {
-    const deltas = calculatedShares.map(share => {
-      const oldShare = transaction.splitDetails!.shares.find(existingShare => existingShare.personId === share.personId);
-      const oldAmount = oldShare?.amount || 0;
-      return {
-        personId: share.personId,
-        currency,
-        delta: round2(share.amount - oldAmount),
-      };
-    });
+  const deltas = new Map<string, { personId: string; currency: Currency; cents: number }>();
+  const add = (personId: string, entryCurrency: Currency, amount: number) => {
+    const key = `${personId}|${entryCurrency}`;
+    const entry = deltas.get(key) ?? { personId, currency: entryCurrency, cents: 0 };
+    entry.cents += Math.round(amount * 100);
+    deltas.set(key, entry);
+  };
 
-    transaction.splitDetails.shares.forEach(oldShare => {
-      if (!calculatedShares.find(share => share.personId === oldShare.personId)) {
-        deltas.push({
-          personId: oldShare.personId,
-          currency,
-          delta: round2(-oldShare.amount),
-        });
-      }
-    });
+  calculatedShares.forEach(share => add(share.personId, currency, share.amount));
 
-    return deltas;
-  }
+  const oldCurrency = transaction?.currency ?? currency;
+  transaction?.splitDetails?.shares.forEach(oldShare => add(oldShare.personId, oldCurrency, -oldShare.amount));
 
-  return calculatedShares.map(share => ({
-    personId: share.personId,
-    currency,
-    delta: round2(share.amount),
-  }));
+  return Array.from(deltas.values())
+    .filter(entry => entry.cents !== 0)
+    .map(entry => ({ personId: entry.personId, currency: entry.currency, delta: entry.cents / 100 }));
 };
 
 export const calculateIPaidSplitSubmission = ({

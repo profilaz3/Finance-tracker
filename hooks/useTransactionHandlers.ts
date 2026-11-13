@@ -1,9 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
-import { AppState, Transaction } from '../types';
+import { AppState, Currency, ExchangeRates, Transaction } from '../types';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -20,6 +20,44 @@ interface UseTransactionHandlersOptions {
 
 type SyncManagerInstance = Awaited<ReturnType<typeof getSyncManager>>;
 
+/**
+ * Records a plain transaction in its account's currency at today's rate (the
+ * amount the account is actually charged). Debts and splits keep the currency
+ * they were agreed in, because person balances are kept per currency.
+ */
+const convertToAccountCurrency = (
+  transaction: Transaction,
+  accountCurrency: Currency | undefined,
+  rates: ExchangeRates,
+): Transaction => {
+  if (!accountCurrency || transaction.currency === accountCurrency || transaction.personId || transaction.splitDetails) {
+    return transaction;
+  }
+  const fromRate = rates.rates[transaction.currency];
+  const toRate = rates.rates[accountCurrency];
+  if (!fromRate || !toRate) {
+    return transaction;
+  }
+  const converted = convertAmount(transaction.amount, transaction.currency, accountCurrency, rates);
+  if (!Number.isFinite(converted)) {
+    return transaction;
+  }
+  return { ...transaction, amount: Math.round(converted * 100) / 100, currency: accountCurrency };
+};
+
+/** The transaction plus the other leg(s) of its transfer, if it has a transferId. */
+const withTransferLegs = (transactions: Transaction[], selected: Transaction[]): Transaction[] => {
+  const transferIds = new Set(selected.map(entry => entry.transferId).filter((id): id is string => !!id));
+  if (transferIds.size === 0) {
+    return selected;
+  }
+  const selectedIds = new Set(selected.map(entry => entry.id));
+  const partners = transactions.filter(entry => (
+    !selectedIds.has(entry.id) && !!entry.transferId && transferIds.has(entry.transferId)
+  ));
+  return [...selected, ...partners];
+};
+
 const withSyncManager = async <T,>(run: (syncManager: SyncManagerInstance) => Promise<T>): Promise<T> =>
   run(await getSyncManager());
 
@@ -32,28 +70,12 @@ export function useTransactionHandlers({
   closeEditModal,
   closeReceiptModal,
 }: UseTransactionHandlersOptions) {
-  const [deletedTransaction, setDeletedTransaction] = useState<Transaction | null>(null);
-
   const addTransaction = useCallback(async (transaction: Transaction) => {
-    let finalTransaction = { ...transaction };
-
-    setState(prev => {
-      let txToAdd = { ...transaction };
-      if (txToAdd.accountId === 'acc3' && txToAdd.currency !== 'USD') {
-        const fromRate = prev.rates.rates[txToAdd.currency];
-        const toRate = prev.rates.rates.USD;
-        if (fromRate && toRate && fromRate !== 0) {
-          const rate = toRate / fromRate;
-          const convertedAmount = txToAdd.amount * rate;
-          if (Number.isFinite(convertedAmount)) {
-            txToAdd.amount = parseFloat(convertedAmount.toFixed(2));
-            txToAdd.currency = 'USD';
-          }
-        }
-      }
-      finalTransaction = txToAdd;
-      return { ...prev, transactions: [txToAdd, ...prev.transactions] };
-    });
+    // Computed before setState so the synced row is the stored row (an updater
+    // is not guaranteed to have run by the time the sync below starts).
+    const account = state.accounts.find(entry => entry.id === transaction.accountId);
+    const finalTransaction = convertToAccountCurrency(transaction, account?.currency, state.rates);
+    setState(prev => ({ ...prev, transactions: [finalTransaction, ...prev.transactions] }));
 
     try {
       await withSyncManager(syncManager => syncManager.syncTransaction(finalTransaction));
@@ -64,62 +86,37 @@ export function useTransactionHandlers({
 
     vibrate(HAPTIC_PATTERNS.success);
     addToast('Transaction added successfully', 'success');
-  }, [addToast, setState]);
+  }, [addToast, setState, state.accounts, state.rates]);
 
-  const undoDelete = useCallback(() => {
-    if (!deletedTransaction) {
+  /**
+   * Puts deleted transactions back and re-syncs them (upsert). Person balances
+   * are derived from transactions, so restoring the rows restores their
+   * balance effects too. Uses functional state so it is safe to call from a
+   * toast created several renders ago.
+   */
+  const restoreTransactions = useCallback(async (restored: Transaction[], message: string) => {
+    if (restored.length === 0) {
       return;
     }
 
     setState(prev => {
-      const transactions = [deletedTransaction, ...prev.transactions];
-      let updatedPeople = [...prev.people];
-
-      if (deletedTransaction.splitDetails) {
-        deletedTransaction.splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = deletedTransaction.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) + share.amount) * 100) / 100,
-              },
-            };
-          }
-        });
-      }
-
-      return { ...prev, transactions, people: updatedPeople };
+      const existingIds = new Set(prev.transactions.map(transaction => transaction.id));
+      const missing = restored.filter(transaction => !existingIds.has(transaction.id));
+      return missing.length === 0 ? prev : { ...prev, transactions: [...missing, ...prev.transactions] };
     });
 
-    if (deletedTransaction.splitDetails) {
-      deletedTransaction.splitDetails.shares.forEach(async share => {
-        const person = state.people.find(entry => entry.id === share.personId);
-        if (!person) {
-          return;
-        }
-
-        try {
-          const currency = deletedTransaction.currency;
-          await withSyncManager(syncManager => syncManager.syncPerson({
-            ...person,
-            balances: {
-              ...person.balances,
-              [currency]: Math.round(((person.balances[currency] || 0) + share.amount) * 100) / 100,
-            },
-          }));
-        } catch (error) {
-          console.error('Failed to sync person balance after undo:', error);
-        }
-      });
+    try {
+      await withSyncManager(syncManager =>
+        Promise.all(restored.map(transaction => syncManager.syncTransaction(transaction))).then(() => undefined)
+      );
+    } catch (error) {
+      console.error('Failed to sync restored transactions:', error);
+      addToast('Restored locally, but sync failed', 'error');
+      return;
     }
 
-    setDeletedTransaction(null);
-    addToast('Transaction restored', 'success');
-  }, [addToast, deletedTransaction, setState, state.people]);
+    addToast(message, 'success');
+  }, [addToast, setState]);
 
   const deleteTransaction = useCallback(async (id: string) => {
     const transaction = state.transactions.find(entry => entry.id === id);
@@ -127,53 +124,16 @@ export function useTransactionHandlers({
       return;
     }
 
-    setDeletedTransaction(transaction);
-    setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => entry.id !== id) }));
-
-    const splitDetails = transaction.splitDetails;
-    if (splitDetails) {
-      setState(prev => {
-        const updatedPeople = [...prev.people];
-        splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = transaction.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) - share.amount) * 100) / 100,
-              },
-            };
-          }
-        });
-        return { ...prev, people: updatedPeople };
-      });
-
-      splitDetails.shares.forEach(async share => {
-        const person = state.people.find(entry => entry.id === share.personId);
-        if (!person) {
-          return;
-        }
-
-        try {
-          const currency = transaction.currency;
-          await withSyncManager(syncManager => syncManager.syncPerson({
-            ...person,
-            balances: {
-              ...person.balances,
-              [currency]: Math.round(((person.balances[currency] || 0) - share.amount) * 100) / 100,
-            },
-          }));
-        } catch (error) {
-          console.error('Failed to sync person balance after delete:', error);
-        }
-      });
-    }
+    // Captured per deletion: each toast's undo restores exactly what it deleted
+    // (both legs of a transfer).
+    const deleted = withTransferLegs(state.transactions, [transaction]);
+    const deletedIds = new Set(deleted.map(entry => entry.id));
+    setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => !deletedIds.has(entry.id)) }));
 
     try {
-      await withSyncManager(syncManager => syncManager.deleteTransaction(id));
+      await withSyncManager(syncManager =>
+        Promise.all(deleted.map(entry => syncManager.deleteTransaction(entry.id))).then(() => undefined)
+      );
     } catch (error) {
       console.error('Failed to delete transaction from Supabase:', error);
       addToast('Transaction deleted locally, but sync failed', 'error');
@@ -182,38 +142,21 @@ export function useTransactionHandlers({
     vibrate(HAPTIC_PATTERNS.success);
     addToast('Transaction deleted', 'info', {
       label: 'Undo',
-      onClick: undoDelete,
+      onClick: () => {
+        void restoreTransactions(deleted, 'Transaction restored');
+      },
     });
-  }, [addToast, setState, state.people, state.transactions, undoDelete]);
+  }, [addToast, restoreTransactions, setState, state.transactions]);
 
-  const restoreBatchDeletedTransactions = useCallback(async (transactions: Transaction[]) => {
-    if (transactions.length === 0) {
-      return;
-    }
-
-    setState(prev => ({
-      ...prev,
-      transactions: [...transactions, ...prev.transactions],
-    }));
-
-    try {
-      await withSyncManager(syncManager =>
-        Promise.all(transactions.map(transaction => syncManager.syncTransaction(transaction))).then(() => undefined)
-      );
-    } catch (error) {
-      console.error('Failed to sync batch restore:', error);
-      addToast('Transactions restored locally, but sync failed', 'error');
-    }
-
-    addToast('Batch restored', 'success');
-  }, [addToast, setState]);
-
-  const batchDeleteTransactions = useCallback(async (ids: string[]) => {
-    const idSet = new Set(ids);
-    const deletedTransactions = state.transactions.filter(transaction => idSet.has(transaction.id));
-    const canUndoBatchDelete = deletedTransactions.length > 0 && deletedTransactions.every(transaction => (
-      !transaction.personId && !transaction.splitDetails
-    ));
+  const batchDeleteTransactions = useCallback(async (requestedIds: string[]) => {
+    const requestedIdSet = new Set(requestedIds);
+    const deletedTransactions = withTransferLegs(
+      state.transactions,
+      state.transactions.filter(transaction => requestedIdSet.has(transaction.id)),
+    );
+    // Unknown ids are still deleted remotely; transfer partners are added.
+    const idSet = new Set([...requestedIds, ...deletedTransactions.map(transaction => transaction.id)]);
+    const ids = [...idSet];
 
     setState(prev => ({
       ...prev,
@@ -231,129 +174,64 @@ export function useTransactionHandlers({
 
     vibrate(HAPTIC_PATTERNS.success);
 
-    if (canUndoBatchDelete) {
-      addToast(`${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`, 'info', {
-        label: state.language === 'sr' ? 'Vrati' : 'Undo',
-        onClick: () => {
-          void restoreBatchDeletedTransactions(deletedTransactions);
-        },
-      });
+    const message = `${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`;
+    if (deletedTransactions.length === 0) {
+      addToast(message, 'success');
       return;
     }
 
-    addToast(`${ids.length} ${state.language === 'sr' ? 'transakcija obrisano' : 'transactions deleted'}`, 'success');
-  }, [addToast, restoreBatchDeletedTransactions, setState, state.language, state.transactions]);
+    // Balances are derived from transactions, so every batch can be undone safely.
+    addToast(message, 'info', {
+      label: state.language === 'sr' ? 'Vrati' : 'Undo',
+      onClick: () => {
+        void restoreTransactions(deletedTransactions, 'Batch restored');
+      },
+    });
+  }, [addToast, restoreTransactions, setState, state.language, state.transactions]);
 
   const updateTransaction = useCallback(async (updated: Transaction, targetAccountId?: string) => {
     const isNewTransaction = !state.transactions.find(transaction => transaction.id === updated.id);
 
+    // Editing one leg of a transfer keeps the other leg in step (date, amount).
+    const partnerLegs = updated.transferId
+      ? state.transactions
+        .filter(transaction => transaction.transferId === updated.transferId && transaction.id !== updated.id)
+        .map(partner => {
+          const rawAmount = convertAmount(updated.amount, updated.currency, partner.currency, state.rates);
+          return {
+            ...partner,
+            date: updated.date,
+            amount: Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : partner.amount,
+          };
+        })
+      : [];
+    const changed = [updated, ...partnerLegs];
+    const changedById = new Map(changed.map(transaction => [transaction.id, transaction]));
+
+    // Person balances follow from the transaction itself (see domain/balances.ts),
+    // so editing only replaces the row: no balance bookkeeping, no currency drift.
     setState(prev => {
-      const oldTx = prev.transactions.find(transaction => transaction.id === updated.id);
-      const transactions = prev.transactions.map(transaction => transaction.id === updated.id ? updated : transaction);
-      const finalTransactions = oldTx ? transactions : [...prev.transactions, updated];
-
-      let updatedPeople = [...prev.people];
-      const peopleToSyncSet = new Set<string>();
-
-      if (oldTx?.personId) {
-        const personIndex = updatedPeople.findIndex(person => person.id === oldTx.personId);
-        if (personIndex !== -1) {
-          const person = updatedPeople[personIndex];
-          const oldAmount = convertAmount(oldTx.amount, oldTx.currency, person.defaultCurrency, prev.rates);
-          const balanceChange = oldTx.type === 'expense' ? oldAmount : -oldAmount;
-          updatedPeople[personIndex] = {
-            ...person,
-            balances: {
-              ...person.balances,
-              [person.defaultCurrency]: Math.round(((person.balances[person.defaultCurrency] || 0) - balanceChange) * 100) / 100,
-            },
-          };
-          peopleToSyncSet.add(person.id);
-        }
-      }
-
-      if (oldTx?.splitDetails) {
-        oldTx.splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = oldTx.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) - share.amount) * 100) / 100,
-              },
-            };
-            peopleToSyncSet.add(person.id);
-          }
-        });
-      }
-
-      if (updated.personId) {
-        const personIndex = updatedPeople.findIndex(person => person.id === updated.personId);
-        if (personIndex !== -1) {
-          const person = updatedPeople[personIndex];
-          const newAmount = convertAmount(updated.amount, updated.currency, person.defaultCurrency, prev.rates);
-          const balanceChange = updated.type === 'expense' ? newAmount : -newAmount;
-          updatedPeople[personIndex] = {
-            ...person,
-            balances: {
-              ...person.balances,
-              [person.defaultCurrency]: Math.round(((person.balances[person.defaultCurrency] || 0) + balanceChange) * 100) / 100,
-            },
-          };
-          peopleToSyncSet.add(person.id);
-        }
-      }
-
-      if (updated.splitDetails) {
-        updated.splitDetails.shares.forEach(share => {
-          const personIndex = updatedPeople.findIndex(person => person.id === share.personId);
-          if (personIndex !== -1) {
-            const person = updatedPeople[personIndex];
-            const currency = updated.currency;
-            updatedPeople[personIndex] = {
-              ...person,
-              balances: {
-                ...person.balances,
-                [currency]: Math.round(((person.balances[currency] || 0) + share.amount) * 100) / 100,
-              },
-            };
-            peopleToSyncSet.add(person.id);
-          }
-        });
-      }
-
-      peopleToSyncSet.forEach(async personId => {
-        const person = updatedPeople.find(entry => entry.id === personId);
-        if (!person) {
-          return;
-        }
-
-        try {
-          await withSyncManager(syncManager => syncManager.syncPerson(person));
-        } catch (error) {
-          console.error('Failed to sync person balance after update:', error);
-        }
-      });
-
+      const exists = prev.transactions.some(transaction => transaction.id === updated.id);
+      const transactions = prev.transactions.map(transaction => changedById.get(transaction.id) ?? transaction);
       return {
         ...prev,
-        transactions: finalTransactions,
-        people: updatedPeople,
+        transactions: exists ? transactions : [...transactions, updated],
       };
     });
 
     try {
-      await withSyncManager(syncManager => syncManager.syncTransaction(updated));
+      await withSyncManager(syncManager =>
+        Promise.all(changed.map(transaction => syncManager.syncTransaction(transaction))).then(() => undefined)
+      );
     } catch (error) {
       console.error('Failed to sync transaction update:', error);
       addToast('Transaction updated locally, but sync failed', 'error');
     }
 
     if (isNewTransaction && targetAccountId && updated.categoryId === 'internal-transfer') {
-      const outflowTx = { ...updated, type: 'expense' as const };
+      // Both legs share a transferId so they are edited and deleted together.
+      const transferId = updated.transferId ?? createId();
+      const outflowTx = { ...updated, type: 'expense' as const, transferId };
 
       setState(prev => ({
         ...prev,
@@ -368,11 +246,8 @@ export function useTransactionHandlers({
 
       const targetAccount = state.accounts.find(account => account.id === targetAccountId);
       if (targetAccount) {
-        const toRate = state.rates.rates[targetAccount.currency];
-        const fromRate = state.rates.rates[updated.currency];
-        const rate = (toRate && fromRate && fromRate !== 0) ? toRate / fromRate : 1;
-        const rawAmount = updated.amount * rate;
-        const convertedAmount = Number.isFinite(rawAmount) ? parseFloat(rawAmount.toFixed(2)) : updated.amount;
+        const rawAmount = convertAmount(updated.amount, updated.currency, targetAccount.currency, state.rates);
+        const convertedAmount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : updated.amount;
 
         const inflowTx: Transaction = {
           id: createId(),
@@ -384,6 +259,7 @@ export function useTransactionHandlers({
           type: 'income',
           note: `Transfer from ${state.accounts.find(account => account.id === updated.accountId)?.name || 'Account'}`,
           subcategory: 'Transfer In',
+          transferId,
         };
 
         await addTransaction(inflowTx);

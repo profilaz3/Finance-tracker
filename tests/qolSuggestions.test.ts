@@ -108,9 +108,9 @@ describe('QOL suggestions', () => {
 
     expect(summary).toEqual({
       count: 2,
-      safeToUndoCount: 1,
-      unsafeCount: 1,
-      canUndoAll: false,
+      safeToUndoCount: 2,
+      unsafeCount: 0,
+      canUndoAll: true,
       selectedTransactions: expect.arrayContaining([
         expect.objectContaining({ id: 'safe' }),
         expect.objectContaining({ id: 'split' }),

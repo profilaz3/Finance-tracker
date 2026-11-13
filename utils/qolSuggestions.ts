@@ -199,9 +199,9 @@ export const detectDuplicateTransactionGroups = (
   return groups.slice(0, limit);
 };
 
-const canUndoAfterBatchDelete = (transaction: Transaction): boolean => (
-  !transaction.personId && !transaction.splitDetails
-);
+// Person balances are derived from transactions (domain/balances.ts), so
+// restoring a deleted debt or split transaction restores its balance effect too.
+const canUndoAfterBatchDelete = (_transaction: Transaction): boolean => true;
 
 export const getBatchDeleteSafetySummary = (
   transactions: Transaction[],

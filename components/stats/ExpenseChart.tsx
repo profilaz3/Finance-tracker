@@ -4,6 +4,7 @@ import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { Account, Currency, ExchangeRates, Transaction } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getCountedExpenseAmount, getCountedIncomeAmount, isCountedExpense } from '../../domain/money';
 import {
   ChartColors,
   ChartDataItem,
@@ -57,13 +58,12 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
     transactions
       .filter((transaction) => new Date(transaction.date) >= cutoff)
       .forEach((transaction) => {
-        if (transaction.type !== 'expense' || isTransfer(transaction)) {
+        if (!isCountedExpense(transaction)) {
           return;
         }
 
         const key = getGroupKey(transaction.date, trendTimeFrame);
-        const effectiveAmount = transaction.splitDetails ? transaction.splitDetails.myPortion : transaction.amount;
-        const amount = convertAmount(effectiveAmount, transaction.currency, baseCurrency, rates);
+        const amount = getCountedExpenseAmount(transaction, baseCurrency, rates);
 
         if (!grouped[key]) {
           grouped[key] = { date: key, expense: 0, sortDate: new Date(transaction.date).getTime() };
@@ -85,25 +85,18 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
       .filter((transaction) => new Date(transaction.date) >= cutoff)
       .forEach((transaction) => {
         const key = getGroupKey(transaction.date, comparisonTimeFrame);
-        const effectiveAmount =
-          transaction.type === 'expense' && transaction.splitDetails ? transaction.splitDetails.myPortion : transaction.amount;
-        const amount = convertAmount(effectiveAmount, transaction.currency, baseCurrency, rates);
+        const income = getCountedIncomeAmount(transaction, baseCurrency, rates);
+        const expense = getCountedExpenseAmount(transaction, baseCurrency, rates);
+        if (income === 0 && expense === 0) {
+          return;
+        }
 
         if (!grouped[key]) {
           grouped[key] = { date: key, income: 0, expense: 0 };
         }
 
-        if (
-          transaction.type === 'income' &&
-          transaction.categoryId !== 'internal-transfer' &&
-          transaction.categoryId !== 'c8' &&
-          transaction.categoryId !== 'reimbursement' &&
-          !isTransfer(transaction)
-        ) {
-          grouped[key].income = Number(grouped[key].income ?? 0) + amount;
-        } else if (transaction.type === 'expense' && !isTransfer(transaction)) {
-          grouped[key].expense = Number(grouped[key].expense ?? 0) + amount;
-        }
+        grouped[key].income = Number(grouped[key].income ?? 0) + income;
+        grouped[key].expense = Number(grouped[key].expense ?? 0) + expense;
       });
 
     return Object.values(grouped)
@@ -118,7 +111,9 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
     transactions
       .filter((transaction) => new Date(transaction.date) >= cutoff)
       .forEach((transaction) => {
-        if (isTransfer(transaction)) {
+        const income = getCountedIncomeAmount(transaction, baseCurrency, rates);
+        const expense = getCountedExpenseAmount(transaction, baseCurrency, rates);
+        if (income === 0 && expense === 0) {
           return;
         }
 
@@ -128,16 +123,8 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
           grouped[key] = { date: key, income: 0, expense: 0 };
         }
 
-        const feeAmount = transaction.fees ? convertAmount(transaction.fees, 'USD', baseCurrency, rates) : 0;
-
-        if (transaction.type === 'income' && transaction.categoryId !== 'c8' && transaction.categoryId !== 'reimbursement') {
-          grouped[key].income += convertAmount(transaction.amount, transaction.currency, baseCurrency, rates);
-        } else if (transaction.type === 'expense') {
-          const effectiveAmount = transaction.splitDetails ? transaction.splitDetails.myPortion : transaction.amount;
-          grouped[key].expense += convertAmount(effectiveAmount, transaction.currency, baseCurrency, rates);
-        }
-
-        grouped[key].expense += feeAmount;
+        grouped[key].income += income;
+        grouped[key].expense += expense;
       });
 
     return Object.values(grouped)
