@@ -986,3 +986,27 @@ select:focus {
 .toast-enter {
   animation: toast-enter 180ms ease-out;
 }
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Duration is set inline per toast. scaleX keeps the countdown on the compositor. */
+.toast-progress {
+  transform-origin: left center;
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-progress {
+    visibility: hidden;
+  }
+}

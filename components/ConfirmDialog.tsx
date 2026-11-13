@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { AlertTriangle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
@@ -89,11 +89,14 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
         setResolvePromise(null);
     };
 
+    // Memoized so consumers of useConfirmDialog do not re-render whenever the dialog opens.
+    const contextValue = useMemo(() => ({ confirm }), [confirm]);
+
     const typeStyles = options?.type ? getTypeStyles(options.type) : getTypeStyles('info');
     const IconComponent = typeStyles.Icon;
 
     return (
-        <ConfirmDialogContext.Provider value={{ confirm }}>
+        <ConfirmDialogContext.Provider value={contextValue}>
             {children}
 
             <AnimatePresence>

@@ -3,7 +3,8 @@ import { Transaction, Category, Person, View, TransactionType, Event } from './t
 
 import { getSupabaseService } from './services/runtimeServices';
 import { TRANSLATIONS } from './constants';
-import { ToastContainer, Toast } from './components/Toast';
+import { ToastContainer } from './components/Toast';
+import { useToasts } from './hooks/useToasts';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
 import clsx from 'clsx';
 import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
@@ -64,8 +65,8 @@ const App: React.FC = () => {
   // Split context
   const [splitTransactionContext, setSplitTransactionContext] = useState<Transaction | undefined>(undefined);
 
-  // Toast system
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  // Toast system (stable addToast, uuid ids)
+  const { toasts, addToast, dismissToast } = useToasts();
 
   // Scroll restoration
   const scrollRestore = useScrollRestore();
@@ -140,23 +141,6 @@ const App: React.FC = () => {
       hasAutoOpenedRef.current = false;
     }
   }, [currentView, state.events, selectedEvent]);
-
-  // Toast Management
-  const addToast = (message: string, type: Toast['type'], action?: Toast['action']) => {
-    const id = `toast-${Date.now()}`;
-    const toast: Toast = { id, message, type, action, duration: action ? 10000 : 1500 };
-    setToasts(prev => [...prev, toast]);
-
-    if (!action) {
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== id));
-      }, toast.duration);
-    }
-  };
-
-  const dismissToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
 
   const {
     addTransaction,

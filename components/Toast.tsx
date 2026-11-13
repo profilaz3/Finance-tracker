@@ -1,18 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { AlertCircleIcon, CheckCircleIcon, CloseIcon, InfoIcon, XCircleIcon } from './icons/UiIcons';
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info';
+import type { Toast } from '../hooks/useToasts';
 
-export interface Toast {
-    id: string;
-    message: string;
-    type: ToastType;
-    duration?: number;
-    action?: {
-        label: string;
-        onClick: () => void;
-    };
-}
+export type { Toast, ToastType } from '../hooks/useToasts';
 
 interface ToastContainerProps {
     toasts: Toast[];
@@ -24,24 +15,8 @@ interface ToastItemProps {
     onDismiss: (id: string) => void;
 }
 
-const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
-    const [progress, setProgress] = useState(100);
+const ToastItem = React.memo<ToastItemProps>(({ toast, onDismiss }) => {
     const duration = toast.duration || 4000;
-
-    useEffect(() => {
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
-            setProgress(remaining);
-
-            if (remaining <= 0) {
-                clearInterval(interval);
-            }
-        }, 50);
-
-        return () => clearInterval(interval);
-    }, [duration]);
 
     const icons = {
         success: CheckCircleIcon,
@@ -96,16 +71,17 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
                     <CloseIcon size={14} aria-hidden="true" />
                 </button>
             </div>
-            {/* Progress bar */}
-            <div className="h-0.5 w-full bg-scrim/10">
+            {/* Progress bar: a compositor-only CSS animation instead of a 50ms state interval */}
+            <div className="h-0.5 w-full bg-scrim/10" aria-hidden="true">
                 <div
-                    className={`h-full ${progressColors[toast.type]}`}
-                    style={{ width: `${progress}%` }}
+                    className={`toast-progress h-full ${progressColors[toast.type]}`}
+                    style={{ animationDuration: `${duration}ms` }}
                 />
             </div>
         </div>
     );
-};
+});
+ToastItem.displayName = 'ToastItem';
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
     return (
