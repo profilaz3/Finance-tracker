@@ -38,7 +38,7 @@ type AiFunction = 'scan-receipt' | 'parse-transaction' | 'generate-insights';
 const DEFAULT_DAILY_LIMITS: Record<AiFunction, number> = {
   'scan-receipt': 30,
   'parse-transaction': 100,
-  'generate-insights': 10,
+  'generate-insights': 30,
 };
 
 /** Counts one AI call against the caller's daily quota; throws 429 when exhausted. */

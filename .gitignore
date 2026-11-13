@@ -41,3 +41,6 @@ tmp-preview.*
 .env.*
 !.env.example
 .claude/worktrees/
+
+# Android release signing (points at ~/Android/keystores; never commit)
+android/keystore.properties

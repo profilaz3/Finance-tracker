@@ -1,12 +1,14 @@
 import React from 'react';
-import { m } from 'motion/react';
-import { Calendar, Users, ArrowRight, MapPin, CheckCircle2, Archive, PlayCircle } from 'lucide-react';
-import { Event, Person, Currency } from '../types';
-import { formatCurrency } from '../utils/currencyUtils';
 import clsx from 'clsx';
+import { Archive, CalendarDays, CheckCircle2, Users } from 'lucide-react';
+import { Event, Person, Currency } from '../types';
 import { getParticipantInitials, getParticipantTooltipLabel, resolveEventParticipants } from '../utils/eventParticipants';
 import { TRANSLATIONS } from '../constants';
 import { formatShortDate, type AppLanguage } from '../utils/locale';
+import { eventBannerStyle } from '../utils/eventVisuals';
+import { compactMoney, money } from './home/parts';
+
+type Strings = (typeof TRANSLATIONS)['en'];
 
 interface EventCardProps {
     event: Event;
@@ -16,9 +18,64 @@ interface EventCardProps {
     baseCurrency: Currency;
     onClick: () => void;
     language?: AppLanguage;
+    /** The large hero treatment used for the event happening now. */
+    featured?: boolean;
 }
 
-export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, userProfile, totalCost, baseCurrency, onClick, language = 'en' }) => {
+/** "12 May · 18 May", "12 May · Ongoing" or "No dates set". */
+export const formatEventDates = (event: Pick<Event, 'startDate' | 'endDate'>, t: Strings, language: AppLanguage): string => {
+    const short = (value: string) => formatShortDate(value, language);
+    if (event.startDate) {
+        return `${short(event.startDate)} · ${event.endDate ? short(event.endDate) : t.eventOngoing}`;
+    }
+    return event.endDate ? t.eventEndedOn.replace('{date}', short(event.endDate)) : t.noDatesSet;
+};
+
+export const eventStatusLabel = (status: Event['status'], t: Strings): string =>
+    status === 'active' ? t.eventStatusActive : status === 'completed' ? t.eventStatusCompleted : t.eventStatusArchived;
+
+/** Glass status pill for photo or gradient banners. */
+export const EventStatusChip: React.FC<{ status: Event['status']; t: Strings }> = ({ status, t }) => (
+    <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-white/20 px-2.5 text-[12px] font-semibold text-white ring-1 ring-white/25 backdrop-blur-md">
+        {status === 'active' && <span className="h-2 w-2 animate-pulse rounded-full bg-[#4ADE80]" aria-hidden="true" />}
+        {status === 'completed' && <CheckCircle2 size={13} aria-hidden="true" />}
+        {status === 'archived' && <Archive size={13} aria-hidden="true" />}
+        {eventStatusLabel(status, t)}
+    </span>
+);
+
+/** Overlapping participant avatars with a +N overflow bubble. */
+export const ParticipantStack: React.FC<{ people: Person[]; max?: number; size?: number; ringClassName?: string }> = ({
+    people,
+    max = 4,
+    size = 28,
+    ringClassName = 'ring-[var(--paper-tile)]',
+}) => (
+    <span className="flex -space-x-2">
+        {people.slice(0, max).map(person => (
+            <span
+                key={person.id}
+                title={getParticipantTooltipLabel(person)}
+                className={clsx('flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ring-2', ringClassName)}
+                style={{ width: size, height: size, background: person.color, fontSize: size < 32 ? 11 : 13 }}
+            >
+                {person.avatar
+                    ? <img src={person.avatar} alt={person.name} className="h-full w-full object-cover" />
+                    : getParticipantInitials(person.name)}
+            </span>
+        ))}
+        {people.length > max && (
+            <span
+                className={clsx('flex shrink-0 items-center justify-center rounded-full bg-chip font-bold text-muted ring-2', ringClassName)}
+                style={{ width: size, height: size, fontSize: 11 }}
+            >
+                +{people.length - max}
+            </span>
+        )}
+    </span>
+);
+
+export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, userProfile, totalCost, baseCurrency, onClick, language = 'en', featured = false }) => {
     const t = TRANSLATIONS[language];
     const eventPeople = resolveEventParticipants({
         event,
@@ -26,111 +83,74 @@ export const EventCard: React.FC<EventCardProps> = React.memo(({ event, people, 
         userProfile,
         fallbackCurrency: baseCurrency,
     });
+    const dates = formatEventDates(event, t, language);
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'active': return 'bg-tertiary/10 text-tertiary border-tertiary/20';
-            case 'completed': return 'bg-primary/10 text-primary border-primary/20';
-            case 'archived': return 'bg-on-surface-variant/10 text-on-surface-variant border-on-surface-variant/20';
-            default: return 'bg-on-surface-variant/10 text-on-surface-variant';
-        }
-    };
-
-    const getStatusIcon = (status: string) => {
-        switch (status) {
-            case 'active': return <PlayCircle size={14} />;
-            case 'completed': return <CheckCircle2 size={14} />;
-            case 'archived': return <Archive size={14} />;
-            default: return null;
-        }
-    };
-
-    const formatDate = (dateString?: string) => {
-        if (!dateString) return t.dateTbd;
-        return formatShortDate(dateString, language);
-    };
+    if (featured) {
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                className="relative flex h-[232px] w-full flex-col justify-between overflow-hidden rounded-[30px] p-4 text-left text-white shadow-[0_10px_30px_-12px_rgba(0,0,0,0.45)]"
+                style={eventBannerStyle(event)}
+            >
+                {event.imageUrl && <img src={event.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+                <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/10" aria-hidden="true" />
+                <span className="relative flex items-center justify-between">
+                    <EventStatusChip status={event.status} t={t} />
+                    <ParticipantStack people={eventPeople} ringClassName="ring-black/25" />
+                </span>
+                <span className="relative flex items-end justify-between gap-3">
+                    <span className="flex min-w-0 flex-col gap-1">
+                        <span className="truncate text-[28px] font-bold leading-tight tracking-[-0.6px]">{event.name}</span>
+                        <span className="flex items-center gap-1.5 text-[13px] font-medium text-white/80">
+                            <CalendarDays size={14} aria-hidden="true" />
+                            {dates}
+                        </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.totalSpent}</span>
+                        <span className="text-[22px] font-bold tracking-[-0.4px]">{compactMoney(totalCost, baseCurrency, language)}</span>
+                    </span>
+                </span>
+            </button>
+        );
+    }
 
     return (
-        <m.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
+        <button
+            type="button"
             onClick={onClick}
-            className="group relative overflow-hidden rounded-xl border border-outline/10 bg-surface-container-low hover:bg-surface-container hover:border-outline/20 transition-all cursor-pointer shadow-sm hover:shadow-elevation-2 hover:-translate-y-0.5"
+            className="paper-tile flex w-full flex-col overflow-hidden p-0 text-left"
         >
-            {/* Background Image or Gradient */}
-            <div className="h-32 w-full relative overflow-hidden bg-surface-container-high">
-                {event.imageUrl ? (
-                    <img
-                        src={event.imageUrl}
-                        alt={event.name}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                ) : (
-                    <div className={clsx("w-full h-full flex items-center justify-center", event.color || "bg-primary/5")}>
-                        <MapPin size={48} className="text-primary/20" />
-                    </div>
-                )}
-
-                {/* Status Badge */}
-                <div className={clsx(
-                    "absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-medium border flex items-center gap-1.5 backdrop-blur-md",
-                    getStatusColor(event.status)
-                )}>
-                    {getStatusIcon(event.status)}
-                    <span>{event.status === 'active' ? t.eventStatusActive : event.status === 'completed' ? t.eventStatusCompleted : event.status === 'archived' ? t.eventStatusArchived : event.status}</span>
-                </div>
-            </div>
-
-            <div className="p-4 space-y-4">
-                <div>
-                    <h3 className="text-lg font-semibold text-on-surface group-hover:text-primary transition-colors">
-                        {event.name}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-on-surface-variant mt-1">
-                        <Calendar size={14} />
-                        <span>
-                            {event.startDate
-                                ? `${formatDate(event.startDate)}${event.endDate ? ` - ${formatDate(event.endDate)}` : ` (${t.eventOngoing})`}`
-                                : event.endDate
-                                    ? t.eventEndedOn.replace('{date}', formatDate(event.endDate))
-                                    : t.noDatesSet
-                            }
+            <span className="relative block h-[96px] w-full overflow-hidden" style={eventBannerStyle(event)}>
+                {event.imageUrl && <img src={event.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+                <span className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" aria-hidden="true" />
+                <span className="absolute left-3 top-3">
+                    <EventStatusChip status={event.status} t={t} />
+                </span>
+                <span className="absolute bottom-2.5 left-3.5 right-3.5 truncate text-[19px] font-bold tracking-[-0.3px] text-white">{event.name}</span>
+            </span>
+            <span className="flex items-center gap-3 px-3.5 py-3">
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <span className="flex items-center gap-1.5 truncate text-[13px] text-muted">
+                        <CalendarDays size={14} aria-hidden="true" className="shrink-0" />
+                        {dates}
+                    </span>
+                    {eventPeople.length > 0 ? (
+                        <ParticipantStack people={eventPeople} size={24} />
+                    ) : (
+                        <span className="flex items-center gap-1.5 text-[13px] text-faint">
+                            <Users size={14} aria-hidden="true" />
+                            0
                         </span>
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-outline/10">
-                    <div className="flex -space-x-2">
-                        {eventPeople.slice(0, 3).map((person) => (
-                            <div
-                                key={person.id}
-                                className="w-8 h-8 rounded-full border-2 border-surface bg-surface-container flex items-center justify-center text-xs font-medium overflow-hidden"
-                                title={getParticipantTooltipLabel(person)}
-                            >
-                                {person.avatar ? (
-                                    <img src={person.avatar} alt={person.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span style={{ color: person.color }}>{getParticipantInitials(person.name)}</span>
-                                )}
-                            </div>
-                        ))}
-                        {eventPeople.length > 3 && (
-                            <div className="w-8 h-8 rounded-full border-2 border-surface bg-surface-container-high flex items-center justify-center text-xs font-medium text-on-surface-variant">
-                                +{eventPeople.length - 3}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="text-right">
-                        <p className="text-xs text-on-surface-variant mb-0.5">{t.totalSpent}</p>
-                        <p className="font-semibold text-on-surface">
-                            {formatCurrency(totalCost, baseCurrency, language)}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </m.div>
+                    )}
+                </span>
+                <span className="flex shrink-0 flex-col items-end">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t.totalSpent}</span>
+                    <span className="text-[17px] font-bold">{money(totalCost, baseCurrency, language)}</span>
+                </span>
+            </span>
+        </button>
     );
 });
 

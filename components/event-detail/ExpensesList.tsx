@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useMemo, useRef } from 'react';
 import { m } from 'motion/react';
-import { Edit, Trash2, Receipt, Plus, MoreVertical } from 'lucide-react';
-import { EmptyState } from '../EmptyState';
-import { TransactionItem } from '../TransactionItem';
-import { AppState, SharedExpense, Transaction, Person } from '../../types';
-import { formatCurrency } from '../../utils/currencyUtils';
+import { Edit, Handshake, MoreHorizontal, Plus, Receipt, Trash2 } from 'lucide-react';
+import { AppState, SharedExpense, Transaction, Person, Currency } from '../../types';
+import { convertCurrency } from '../../utils/currencyUtils';
 import { UnifiedExpense } from './types';
 import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
 import { useEscapeKey } from '../../hooks/useFocusTrap';
 import { TRANSLATIONS } from '../../constants';
-import { formatShortDate, getIntlLocale } from '../../utils/locale';
+import { getIntlLocale } from '../../utils/locale';
+import { CategoryGlyph } from '../ui/CategoryGlyph';
+import { money } from '../home/parts';
+import { isSettlementExpense } from '../../domain/settle';
 
 interface ExpensesListProps {
     unifiedExpenses: UnifiedExpense[];
@@ -22,7 +23,132 @@ interface ExpensesListProps {
     onEditSharedExpense: (expense: SharedExpense) => void;
     onDeleteSharedExpense: (id: string) => void;
     onOpenSharedModal: () => void;
+    /** Currency for the per-day totals. */
+    currency?: Currency;
 }
+
+const LONG_PRESS_MS = 500;
+
+const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+interface RowProps {
+    id: string;
+    left: React.ReactNode;
+    title: string;
+    sub: string;
+    amount: string;
+    amountClassName?: string;
+    last: boolean;
+    menuOpen: boolean;
+    setOpenMenuId: (id: string | null) => void;
+    /** Without it (settlement rows) a tap opens the actions menu instead. */
+    onEdit?: () => void;
+    onDelete: () => void;
+    t: (typeof TRANSLATIONS)['en'];
+}
+
+/** One expense row: tap to edit, long-press or the ... button for actions. */
+const ExpenseRow: React.FC<RowProps> = ({ id, left, title, sub, amount, amountClassName, last, menuOpen, setOpenMenuId, onEdit, onDelete, t }) => {
+    const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressed = useRef(false);
+
+    const handlePressStart = () => {
+        longPressed.current = false;
+        pressTimer.current = setTimeout(() => {
+            longPressed.current = true;
+            setOpenMenuId(id);
+        }, LONG_PRESS_MS);
+    };
+    const handlePressEnd = () => {
+        if (pressTimer.current) clearTimeout(pressTimer.current);
+    };
+
+    return (
+        <div className="relative">
+            <div className={`group flex min-h-[64px] items-center gap-3 py-2 ${last ? '' : 'border-b border-hair'}`}>
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (longPressed.current) return;
+                        if (onEdit) onEdit();
+                        else setOpenMenuId(menuOpen ? null : id);
+                    }}
+                    onMouseDown={handlePressStart}
+                    onMouseUp={handlePressEnd}
+                    onMouseLeave={handlePressEnd}
+                    onTouchStart={handlePressStart}
+                    onTouchEnd={handlePressEnd}
+                    onContextMenu={event => {
+                        event.preventDefault();
+                        setOpenMenuId(id);
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                    {left}
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                        <span className="truncate text-[15px] font-semibold">{title}</span>
+                        <span className="truncate text-[13px] text-muted">{sub}</span>
+                    </span>
+                    <span className={`shrink-0 text-[15px] font-semibold ${amountClassName ?? ''}`}>{amount}</span>
+                </button>
+                {/* Visible alternative to long-press */}
+                <button
+                    type="button"
+                    aria-label={t.moreActions}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    title={t.moreActions}
+                    onClick={() => setOpenMenuId(menuOpen ? null : id)}
+                    className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-opacity hover:bg-chip opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                    <MoreHorizontal size={18} aria-hidden="true" />
+                </button>
+            </div>
+
+            {menuOpen && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} aria-hidden="true" />
+                    <m.div
+                        role="menu"
+                        aria-label={t.moreActions}
+                        initial={{ opacity: 0, scale: 0.94, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        style={{ transformOrigin: 'top right' }}
+                        className="glass-sheet absolute right-0 top-[calc(100%-6px)] z-50 min-w-[170px] rounded-[22px] p-1.5"
+                    >
+                        {onEdit && (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                autoFocus
+                                onClick={() => {
+                                    setOpenMenuId(null);
+                                    onEdit();
+                                }}
+                                className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium hover:bg-chip"
+                            >
+                                <Edit size={17} className="text-muted" aria-hidden="true" /> {t.edit}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            role="menuitem"
+                            autoFocus={!onEdit}
+                            onClick={() => {
+                                setOpenMenuId(null);
+                                // Single-item delete: the handler offers Undo.
+                                onDelete();
+                            }}
+                            className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium text-neg hover:bg-chip"
+                        >
+                            <Trash2 size={17} aria-hidden="true" /> {t.delete}
+                        </button>
+                    </m.div>
+                </>
+            )}
+        </div>
+    );
+};
 
 export const ExpensesList: React.FC<ExpensesListProps> = ({
     unifiedExpenses,
@@ -35,9 +161,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     onEditSharedExpense,
     onDeleteSharedExpense,
     onOpenSharedModal,
+    currency = state.baseCurrency,
 }) => {
     const t = TRANSLATIONS[state.language];
-    const pluralRules = new Intl.PluralRules(getIntlLocale(state.language));
+    const locale = getIntlLocale(state.language);
+    const pluralRules = new Intl.PluralRules(locale);
     const formatPeopleCount = (count: number) => {
         const category = pluralRules.select(count);
         const template = category === 'one' ? t.peopleCountOne : category === 'few' ? t.peopleCountFew : t.peopleCountOther;
@@ -45,188 +173,150 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     };
     useEscapeKey(() => setOpenMenuId(null), openMenuId !== null);
 
+    const groups = useMemo(() => {
+        const result: Array<{ key: string; date: Date; items: UnifiedExpense[]; total: number }> = [];
+        unifiedExpenses.forEach(item => {
+            const key = dayKey(item.date);
+            let group = result.find(entry => entry.key === key);
+            if (!group) {
+                group = { key, date: item.date, items: [], total: 0 };
+                result.push(group);
+            }
+            group.items.push(item);
+            const isIncome = item.type === 'transaction' && item.data.type !== 'expense';
+            const isSettlement = item.type === 'sharedExpense' && isSettlementExpense(item.data);
+            if (!isIncome && !isSettlement) {
+                group.total += convertCurrency(item.data.amount, item.data.currency, currency, state.rates.rates);
+            }
+        });
+        return result;
+    }, [unifiedExpenses, currency, state.rates.rates]);
+
+    const dayLabel = (date: Date) => {
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+        if (dayKey(date) === dayKey(today)) return t.today;
+        if (dayKey(date) === dayKey(yesterday)) return t.yesterday;
+        return date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
+    };
+
+    if (unifiedExpenses.length === 0) {
+        return (
+            <section className="paper-tile flex flex-col items-center gap-3 px-6 py-10 text-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-accent-soft text-accent" aria-hidden="true">
+                    <Receipt size={26} />
+                </span>
+                <h3 className="text-[17px] font-bold">{t.noExpensesYet}</h3>
+                <p className="max-w-[280px] text-[14px] text-muted">{t.noEventExpensesDesc}</p>
+                <button
+                    type="button"
+                    onClick={onOpenSharedModal}
+                    className="mt-1 flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-[15px] font-semibold text-on-accent"
+                >
+                    <Plus size={18} aria-hidden="true" />
+                    {t.addExpense}
+                </button>
+            </section>
+        );
+    }
+
     return (
-        <m.div
-            key="shared"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-6"
-        >
-
-
-            {/* Unified Expenses List */}
-            <div className="space-y-3">
-                {unifiedExpenses.length === 0 ? (
-                    <EmptyState
-                        icon={Receipt}
-                        title={t.noExpensesYet}
-                        description={t.noEventExpensesDesc}
-                        action={{ label: t.addExpense, onClick: onOpenSharedModal }}
-                    />
-                ) : (
-                    <div className="bg-surface-container-low rounded-xl overflow-hidden border border-outline/10">
-                        {unifiedExpenses.map(item => {
+        <div className="flex flex-col gap-4">
+            {groups.map(group => (
+                <section key={group.key} className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline justify-between px-1.5">
+                        <h3 className="text-[13px] font-semibold uppercase tracking-wide text-muted">{dayLabel(group.date)}</h3>
+                        <span className="text-[13px] font-medium text-faint">{money(group.total, currency, state.language)}</span>
+                    </div>
+                    <div className="paper-tile px-4 py-1">
+                        {group.items.map((item, index) => {
+                            const last = index === group.items.length - 1;
                             if (item.type === 'transaction') {
                                 const tx = item.data;
-                                const category = state.categories.find(c => c.id === tx.categoryId) || state.categories[0];
-                                const account = state.accounts.find(a => a.id === tx.accountId) || state.accounts[0];
-                                const person = tx.personId ? state.people.find(p => p.id === tx.personId) : undefined;
-
+                                const category = state.categories.find(c => c.id === tx.categoryId);
+                                const account = state.accounts.find(a => a.id === tx.accountId);
+                                const isExpense = tx.type === 'expense';
                                 return (
-                                    <TransactionItem
+                                    <ExpenseRow
                                         key={tx.id}
-                                        transaction={tx}
-                                        category={category}
-                                        account={account}
-                                        person={person}
-                                        state={state}
-                                        onClick={() => {}}
-                                        onSplit={() => {}}
+                                        id={tx.id}
+                                        left={<CategoryGlyph category={category} />}
+                                        title={tx.note || category?.name || t.expense}
+                                        sub={[category?.name, account?.name].filter(Boolean).join(' · ')}
+                                        amount={money(tx.amount, tx.currency, state.language, true)}
+                                        amountClassName={isExpense ? undefined : 'text-pos'}
+                                        last={last}
+                                        menuOpen={openMenuId === tx.id}
+                                        setOpenMenuId={setOpenMenuId}
                                         onEdit={() => onEditTransaction(tx)}
                                         onDelete={() => onDeleteTransaction?.(tx.id)}
-                                        onViewReceipt={() => {}}
+                                        t={t}
                                     />
                                 );
-                            } else {
-                                // Shared Expense
-                                const expense = item.data;
-                                const payer =
-                                    eventPeople.find(p => p.id === expense.paidBy) ??
-                                    state.people.find(p => p.id === expense.paidBy);
-                                const showMenu = openMenuId === expense.id;
-                                let pressTimer: NodeJS.Timeout;
+                            }
 
-                                const handlePressStart = (e: React.MouseEvent | React.TouchEvent) => {
-                                    e.preventDefault();
-                                    pressTimer = setTimeout(() => {
-                                        setOpenMenuId(expense.id);
-                                    }, 500);
-                                };
-
-                                const handlePressEnd = () => {
-                                    clearTimeout(pressTimer);
-                                };
-
+                            const expense = item.data;
+                            const payer =
+                                eventPeople.find(p => p.id === expense.paidBy) ??
+                                state.people.find(p => p.id === expense.paidBy);
+                            const findPerson = (id: string) =>
+                                eventPeople.find(p => p.id === id) ?? state.people.find(p => p.id === id);
+                            if (isSettlementExpense(expense)) {
+                                const isSelf = (id: string) => id === 'self' || id === state.userProfile?.id;
+                                const nameOf = (id: string) => (isSelf(id) ? t.you : findPerson(id)?.name ?? t.unknown);
+                                const receiver = expense.sharedWith[0] ?? '';
                                 return (
-                                    <div key={expense.id} className="relative">
-                                        <div
-                                            className="group flex items-center justify-between p-4 hover:bg-surface-container transition-colors cursor-pointer border-b border-outline/5 last:border-b-0"
-                                            onMouseDown={handlePressStart}
-                                            onMouseUp={handlePressEnd}
-                                            onMouseLeave={handlePressEnd}
-                                            onTouchStart={handlePressStart}
-                                            onTouchEnd={handlePressEnd}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div
-                                                    className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border-2"
-                                                    title={payer ? getParticipantTooltipLabel(payer) : t.unknownPayer}
-                                                    style={{
-                                                        backgroundColor: payer?.color ? payer.color + '20' : '#888888' + '20',
-                                                        color: payer?.color || '#888888',
-                                                        borderColor: payer?.color || '#888888'
-                                                    }}
-                                                >
-                                                    {payer?.avatar ? (
-                                                        <img src={payer.avatar} alt={payer.name} className="w-full h-full rounded-full object-cover" />
-                                                    ) : (
-                                                        payer ? getParticipantInitials(payer.name) : '?'
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-on-surface">{expense.name}</p>
-                                                    <p className="text-xs text-on-surface-variant">
-                                                        {t.paidByName.replace('{name}', payer?.name ?? '')} • {formatPeopleCount(expense.sharedWith.length)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <div className="flex flex-col items-end">
-                                                    <span className="font-semibold text-on-surface">
-                                                        {formatCurrency(expense.amount, expense.currency)}
-                                                    </span>
-                                                    <span className="text-xs text-on-surface-variant">
-                                                        {formatShortDate(expense.date, state.language)}
-                                                    </span>
-                                                </div>
-                                                {/* Visible alternative to long-press */}
-                                                <button
-                                                    type="button"
-                                                    aria-label={t.moreActions}
-                                                    aria-haspopup="menu"
-                                                    aria-expanded={showMenu}
-                                                    title={t.moreActions}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onTouchStart={(e) => e.stopPropagation()}
-                                                    onClick={() => setOpenMenuId(showMenu ? null : expense.id)}
-                                                    className="-mr-2 p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-opacity opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
-                                                >
-                                                    <MoreVertical size={18} aria-hidden="true" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {showMenu && (
-                                            <>
-                                                <div
-                                                    className="fixed inset-0 z-40"
-                                                    onClick={() => setOpenMenuId(null)}
-                                                />
-                                                <m.div
-                                                    role="menu"
-                                                    aria-label={t.moreActions}
-                                                    initial={{ opacity: 0, scale: 0.95 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    className="absolute right-0 top-full mt-2 z-50 bg-surface rounded-xl shadow-2xl border border-outline/10 overflow-hidden min-w-[150px]"
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        role="menuitem"
-                                                        autoFocus
-                                                        onClick={() => {
-                                                            setOpenMenuId(null);
-                                                            onEditSharedExpense(expense);
-                                                        }}
-                                                        className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
-                                                    >
-                                                        <Edit size={16} aria-hidden="true" /> {t.edit}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        role="menuitem"
-                                                        onClick={() => {
-                                                            setOpenMenuId(null);
-                                                            // Single-item delete: the handler offers Undo.
-                                                            onDeleteSharedExpense(expense.id);
-                                                        }}
-                                                        className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
-                                                    >
-                                                        <Trash2 size={16} aria-hidden="true" /> {t.delete}
-                                                    </button>
-                                                </m.div>
-                                            </>
+                                    <ExpenseRow
+                                        key={expense.id}
+                                        id={expense.id}
+                                        left={(
+                                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
+                                                <Handshake size={19} />
+                                            </span>
                                         )}
-                                    </div>
+                                        title={t.settlement}
+                                        sub={`${nameOf(expense.paidBy)} → ${nameOf(receiver)}`}
+                                        amount={money(expense.amount, expense.currency, state.language, true)}
+                                        amountClassName="text-muted"
+                                        last={last}
+                                        menuOpen={openMenuId === expense.id}
+                                        setOpenMenuId={setOpenMenuId}
+                                        onDelete={() => onDeleteSharedExpense(expense.id)}
+                                        t={t}
+                                    />
                                 );
                             }
+                            return (
+                                <ExpenseRow
+                                    key={expense.id}
+                                    id={expense.id}
+                                    left={(
+                                        <span
+                                            title={payer ? getParticipantTooltipLabel(payer) : t.unknownPayer}
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white"
+                                            style={{ background: payer?.color || '#8A8984' }}
+                                        >
+                                            {payer?.avatar
+                                                ? <img src={payer.avatar} alt={payer.name} className="h-full w-full object-cover" />
+                                                : payer ? getParticipantInitials(payer.name) : '?'}
+                                        </span>
+                                    )}
+                                    title={expense.name}
+                                    sub={`${t.paidByName.replace('{name}', payer?.name ?? t.unknownPayer)} · ${formatPeopleCount(expense.sharedWith.length)}`}
+                                    amount={money(expense.amount, expense.currency, state.language, true)}
+                                    last={last}
+                                    menuOpen={openMenuId === expense.id}
+                                    setOpenMenuId={setOpenMenuId}
+                                    onEdit={() => onEditSharedExpense(expense)}
+                                    onDelete={() => onDeleteSharedExpense(expense.id)}
+                                    t={t}
+                                />
+                            );
                         })}
                     </div>
-                )}
-            </div>
-
-        </m.div>
-    );
-};
-
-export const ExpensesFab: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-    return (
-        /* Floating Action Button - Outside motion.div to prevent "teleporting" glitch */
-        <button
-            onClick={onClick}
-            className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] md:bottom-6 right-[calc(1rem+env(safe-area-inset-right))] md:right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 hover:shadow-2xl hover:shadow-primary/20"
-        >
-            <Plus size={28} />
-        </button>
+                </section>
+            ))}
+        </div>
     );
 };

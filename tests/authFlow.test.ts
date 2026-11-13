@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAuthErrorKey, PASSWORD_MIN_LENGTH, validatePassword } from '../utils/authValidation';
+import { getAuthErrorKey, PASSWORD_MIN_LENGTH, validateAuthForm, validatePassword } from '../utils/authValidation';
 import { parseAuthRedirect, stripAuthParams } from '../hooks/usePasswordRecovery';
 
 describe('validatePassword', () => {
@@ -53,5 +53,22 @@ describe('auth redirect URL handling', () => {
   it('strips auth params but keeps unrelated ones', () => {
     expect(stripAuthParams('https://vratipare.netlify.app/?code=abc&keep=1#')).toBe('https://vratipare.netlify.app/?keep=1');
     expect(stripAuthParams('https://vratipare.netlify.app/#error=access_denied&error_code=otp_expired')).toBe('https://vratipare.netlify.app/');
+  });
+});
+
+describe('validateAuthForm', () => {
+  it('requires a plausible email in every mode', () => {
+    expect(validateAuthForm('signIn', '  ', 'x')).toBe('authEmailRequired');
+    expect(validateAuthForm('forgot', 'not-an-email', '')).toBe('authErrorInvalidEmail');
+    expect(validateAuthForm('signUp', 'a@b', 'Password123')).toBe('authErrorInvalidEmail');
+    expect(validateAuthForm('forgot', 'me@example.com', '')).toBeNull();
+  });
+
+  it('requires a password to sign in and applies the policy on sign up', () => {
+    expect(validateAuthForm('signIn', 'me@example.com', '')).toBe('authPasswordRequired');
+    expect(validateAuthForm('signIn', 'me@example.com', 'short')).toBeNull();
+    expect(validateAuthForm('signUp', 'me@example.com', 'short1')).toBe('authPasswordTooShort');
+    expect(validateAuthForm('signUp', 'me@example.com', 'onlyletterslong')).toBe('authPasswordNeedsLetterAndDigit');
+    expect(validateAuthForm('signUp', ' me@example.com ', 'letters12345')).toBeNull();
   });
 });

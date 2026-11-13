@@ -23,12 +23,12 @@ export const ReceiptFields: React.FC<ReceiptFieldsProps> = ({ edited, setEdited,
     };
 
     return (
-        <div className="bg-surface-container p-4 rounded-xl space-y-3">
-            <h4 className="text-sm font-medium text-primary flex items-center gap-2">
+        <div className="paper-tile space-y-3 p-4">
+            <h4 className="flex items-center gap-2 text-[14px] font-semibold text-accent">
                 <Receipt size={14} aria-hidden="true" /> {t.receiptDetails}
             </h4>
             <div>
-                <label htmlFor="edit-tx-merchant" className="text-xs text-on-surface-variant mb-1 block">{t.merchant}</label>
+                <label htmlFor="edit-tx-merchant" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">{t.merchant}</label>
                 <input
                     id="edit-tx-merchant"
                     value={receiptData.merchant}
@@ -36,32 +36,32 @@ export const ReceiptFields: React.FC<ReceiptFieldsProps> = ({ edited, setEdited,
                         ...edited,
                         receiptData: { ...receiptData, merchant: e.target.value }
                     })}
-                    className="w-full bg-surface-container-high border-none rounded px-2 py-1 text-sm text-on-surface"
+                    className="w-full rounded-[10px] border-none bg-chip px-2.5 py-1.5 text-sm text-on-surface"
                 />
             </div>
 
             <div className="space-y-2 mt-2">
-                <label className="text-xs text-on-surface-variant block">{t.items}</label>
+                <label className="block text-[12px] font-semibold text-muted">{t.items}</label>
                 {receiptData.items.map((item, idx) => (
                     <div key={idx} className="flex gap-2">
                         <input
                             value={item.name}
                             onChange={e => updateItem(idx, { ...item, name: e.target.value })}
-                            className="flex-1 bg-surface-container-high border-none rounded px-2 py-1 text-xs text-on-surface"
+                            className="flex-1 rounded-[10px] border-none bg-chip px-2.5 py-1.5 text-xs text-on-surface"
                             placeholder={t.itemName}
                         />
                         <input
                             type="number"
                             value={item.quantity || 1}
                             onChange={e => updateItem(idx, { ...item, quantity: parseRequiredNumberInput(e.target.value) })}
-                            className="w-12 bg-surface-container-high border-none rounded px-2 py-1 text-xs text-on-surface text-center"
+                            className="w-12 rounded-[10px] border-none bg-chip px-2.5 py-1.5 text-xs text-on-surface text-center"
                             placeholder={t.qty}
                         />
                         <input
                             type="number"
                             value={item.price}
                             onChange={e => updateItem(idx, { ...item, price: parseRequiredNumberInput(e.target.value) })}
-                            className="w-20 bg-surface-container-high border-none rounded px-2 py-1 text-xs text-on-surface text-right"
+                            className="w-20 rounded-[10px] border-none bg-chip px-2.5 py-1.5 text-xs text-on-surface text-right"
                             placeholder="0.00"
                         />
                     </div>

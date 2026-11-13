@@ -58,11 +58,33 @@ export async function loadWithReload<T>(factory: () => Promise<T>): Promise<T> {
   }
 }
 
+export type PreloadableLazy<T extends ComponentType<any>> = LazyExoticComponent<T> & {
+  /** Fetch the chunk ahead of time; the first render then needs no Suspense fallback. */
+  preload: () => Promise<void>;
+};
+
 /** React.lazy that reloads the page once when the chunk is missing after a deploy. */
 export function lazyWithReload<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>
-): LazyExoticComponent<T> {
-  return lazy(() => loadWithReload(factory));
+): PreloadableLazy<T> {
+  let loaded: { default: T } | null = null;
+  let pending: Promise<{ default: T }> | null = null;
+  const load = () =>
+    (pending ??= loadWithReload(factory).then(
+      module => {
+        loaded = module;
+        return module;
+      },
+      error => {
+        pending = null;
+        throw error;
+      },
+    ));
+  // A preloaded module resolves synchronously, so React renders it without suspending.
+  const component = lazy(() =>
+    loaded ? ({ then: (resolve: (module: { default: T }) => void) => resolve(loaded!) } as unknown as Promise<{ default: T }>) : load(),
+  );
+  return Object.assign(component, { preload: () => load().then(() => undefined) });
 }
 
 /** Vite fires vite:preloadError when a modulepreload/CSS dependency fails to load. */

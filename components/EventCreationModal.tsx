@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { m, AnimatePresence } from 'motion/react';
-import { X, Upload, Image as ImageIcon, Check, Loader2, Users, Type, Palette, Camera } from 'lucide-react';
+import { m } from 'motion/react';
+import { X, Image as ImageIcon, Check, Loader2, Users, Palette, Camera } from 'lucide-react';
 import { Person, Event } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
@@ -11,6 +11,11 @@ import { MOTION } from '../config';
 import { useDialog } from '../hooks/useFocusTrap';
 import { getSupabaseService } from '../services/runtimeServices';
 import { getTranslations } from '../utils/i18n';
+import { useSheetDrag } from '../hooks/useSheetDrag';
+import { Avatar } from './home/parts';
+
+const label = 'mb-1.5 block px-1 text-[13px] font-semibold text-muted';
+const chip = 'flex h-10 items-center gap-2 rounded-full pl-1 pr-3.5 text-[14px] font-semibold transition-colors';
 
 interface EventCreationModalProps {
     isOpen: boolean;
@@ -141,30 +146,53 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
     };
 
     const { dialogProps, titleId } = useDialog(isOpen, onClose);
+    const { wrapRef, handleProps } = useSheetDrag(onClose);
+    const nameId = `${titleId}-name`;
+    const descriptionId = `${titleId}-description`;
 
     if (!isOpen) return null;
 
+    const canCreate = !!name.trim() && !isUploading;
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm">
+        <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
+            <m.div
+                className="paper-scrim absolute inset-0"
+                exit={{ opacity: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={MOTION.backdrop}
+                onClick={onClose}
+                aria-hidden="true"
+            />
+            <div ref={wrapRef} className="relative flex w-full justify-center">
             <m.div
                 {...dialogProps}
-                initial={MOTION.modal.initial}
-                animate={MOTION.modal.animate}
-                exit={MOTION.modal.exit}
-                transition={MOTION.modal.spring}
-                className="bg-surface w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={MOTION.sheet.exit}
+                transition={MOTION.sheet.spring}
+                className="glass-sheet flex max-h-[90dvh] w-full max-w-[500px] flex-col overflow-hidden rounded-[36px] text-on-surface outline-none"
             >
-                <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">{t.createEvent}</h2>
-                    <button type="button" onClick={onClose} aria-label={t.close} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
-                    </button>
+                <div className="shrink-0 touch-none" {...handleProps}>
+                    <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
+                    <div className="flex items-center gap-2 px-5 pb-3 pt-2 md:pt-5">
+                        <h2 id={titleId} className="flex-1 text-[22px] font-bold tracking-[-0.4px]">{t.createEvent}</h2>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label={t.close}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                        >
+                            <X size={18} aria-hidden="true" />
+                        </button>
+                    </div>
                 </div>
 
-                <div className="overflow-y-auto p-6 space-y-6">
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-5 pt-1 custom-scrollbar">
                     {/* Image Upload */}
-                    <div className="space-y-3">
-                        <label className="block text-sm font-medium text-on-surface-variant">{t.eventPhoto}</label>
+                    <div>
+                        <p className={label}>{t.eventPhoto}</p>
                         <div
                             onClick={openPicker}
                             onKeyDown={(e) => {
@@ -176,32 +204,33 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                             role="button"
                             tabIndex={0}
                             aria-label={t.eventPhoto}
-                            className={clsx(
-                                "relative w-full h-48 rounded-xl border-2 border-dashed border-outline/20 flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden group",
-                                !previewUrl && "hover:bg-surface-container hover:border-primary/50"
-                            )}
+                            className="group relative flex h-40 w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[24px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         >
                             {previewUrl ? (
                                 <>
-                                    <img src={previewUrl} alt={t.imagePreview} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-scrim/40 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
-                                        <div className="bg-surface/20 backdrop-blur-md p-3 rounded-full text-white">
-                                            <Camera size={24} />
-                                        </div>
+                                    <img src={previewUrl} alt={t.imagePreview} className="h-full w-full object-cover" />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-60 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100">
+                                        <span className="glass flex h-12 w-12 items-center justify-center rounded-full text-white">
+                                            <Camera size={22} aria-hidden="true" />
+                                        </span>
                                     </div>
                                 </>
                             ) : (
-                                <div className="text-center p-4">
-                                    <div className="w-12 h-12 bg-surface-container rounded-full flex items-center justify-center mx-auto mb-3 text-primary">
-                                        <ImageIcon size={24} />
+                                <>
+                                    <div aria-hidden="true" className={clsx('absolute inset-0 transition-colors', selectedColor)} />
+                                    <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/25" />
+                                    <div className="relative px-4 text-center text-white">
+                                        <span className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-full bg-white/25 backdrop-blur-sm">
+                                            <ImageIcon size={22} aria-hidden="true" />
+                                        </span>
+                                        <p className="text-[15px] font-semibold">{t.addEventPhoto}</p>
+                                        <p className="mt-0.5 text-[13px] text-white/80">{t.takeOrChoosePhoto}</p>
                                     </div>
-                                    <p className="text-sm font-medium text-on-surface">{t.addEventPhoto}</p>
-                                    <p className="text-xs text-on-surface-variant mt-1">{t.takeOrChoosePhoto}</p>
-                                </div>
+                                </>
                             )}
                             {isUploading && (
-                                <div className="absolute inset-0 bg-scrim/50 flex items-center justify-center">
-                                    <Loader2 className="animate-spin text-white" size={32} />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                    <Loader2 className="animate-spin text-white" size={30} aria-hidden="true" />
                                 </div>
                             )}
                             {/* Hidden file input for web fallback */}
@@ -216,131 +245,131 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     </div>
 
                     {/* Name & Description */}
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                                <Type size={16} /> {t.eventName}
-                            </label>
-                            <input
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder={t.eventNamePlaceholder}
-                                className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                autoFocus
-                            />
-                        </div>
+                    <div>
+                        <label htmlFor={nameId} className={label}>{t.eventName}</label>
+                        <input
+                            id={nameId}
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder={t.eventNamePlaceholder}
+                            className="h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
+                            autoFocus
+                        />
+                    </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-on-surface-variant pl-1">{t.descriptionOptional}</label>
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder={t.eventDescriptionPlaceholder}
-                                rows={3}
-                                className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-                            />
-                        </div>
+                    <div>
+                        <label htmlFor={descriptionId} className={label}>{t.descriptionOptional}</label>
+                        <textarea
+                            id={descriptionId}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder={t.eventDescriptionPlaceholder}
+                            rows={3}
+                            className="w-full resize-none rounded-[14px] border-none bg-chip px-4 py-3 text-[16px] text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
+                        />
                     </div>
 
                     {/* People */}
-                    <div className="space-y-3">
-                        <label className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                            <Users size={16} /> {t.whosGoing}
-                        </label>
+                    <div>
+                        <p className={clsx(label, 'flex items-center gap-1.5')}>
+                            <Users size={14} aria-hidden="true" /> {t.whosGoing}
+                        </p>
                         <div className="flex flex-wrap gap-2">
                             {/* Owner (userProfile) - always included */}
                             {userProfile && (
                                 <div
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border bg-primary/10 text-primary border-primary/20 opacity-80"
+                                    className={clsx(chip, 'bg-accent text-on-accent')}
                                     title={t.youEventOwner}
                                 >
-                                    {userProfile.avatar ? (
-                                        <img src={userProfile.avatar} alt={userProfile.name} className="w-5 h-5 rounded-full object-cover" />
-                                    ) : (
-                                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style={{ backgroundColor: userProfile.color + '20', color: userProfile.color }}>
-                                            {userProfile.name?.[0] || 'Y'}
-                                        </div>
-                                    )}
+                                    <Avatar name={userProfile.name || t.you} color={userProfile.color} image={userProfile.avatar} size={32} />
                                     {userProfile.name || t.you}
-                                    <Check size={14} />
+                                    <Check size={14} aria-hidden="true" />
                                 </div>
                             )}
                             {/* Other people */}
-                            {people.map(person => (
-                                <button
-                                    key={person.id}
-                                    type="button"
-                                    onClick={() => togglePerson(person.id)}
-                                    className={clsx(
-                                        "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all border",
-                                        selectedPersonIds.includes(person.id)
-                                            ? "bg-primary/10 text-primary border-primary/20"
-                                            : "bg-surface-container text-on-surface-variant border-transparent hover:bg-surface-container-high"
-                                    )}
-                                >
-                                    {person.avatar ? (
-                                        <img src={person.avatar} alt={person.name} className="w-5 h-5 rounded-full object-cover" />
-                                    ) : (
-                                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style={{ backgroundColor: person.color + '20', color: person.color }}>
-                                            {person.name[0]}
-                                        </div>
-                                    )}
-                                    {person.name}
-                                    {selectedPersonIds.includes(person.id) && <Check size={14} />}
-                                </button>
-                            ))}
+                            {people.filter(person => person.id !== userProfile?.id).map(person => {
+                                const selected = selectedPersonIds.includes(person.id);
+                                return (
+                                    <button
+                                        key={person.id}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        onClick={() => togglePerson(person.id)}
+                                        className={clsx(
+                                            chip,
+                                            selected ? 'bg-accent-soft text-accent ring-1 ring-accent/30' : 'bg-chip text-muted'
+                                        )}
+                                    >
+                                        <Avatar name={person.name} color={person.color} image={person.avatar} size={32} />
+                                        {person.name}
+                                        {selected && <Check size={14} aria-hidden="true" />}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
                     {/* Color */}
-                    <div className="space-y-3">
-                        <label className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-                            <Palette size={16} /> {t.themeColor}
-                        </label>
-                        <div className="flex gap-3 overflow-x-auto pb-2">
-                            {COLORS.map(color => (
-                                <button
-                                    key={color}
-                                    type="button"
-                                    onClick={() => setSelectedColor(color)}
-                                    className={clsx(
-                                        "w-8 h-8 rounded-full transition-all flex items-center justify-center",
-                                        color,
-                                        selectedColor === color ? "ring-2 ring-offset-2 ring-offset-surface ring-primary scale-110" : "opacity-70 hover:opacity-100"
-                                    )}
-                                >
-                                    {selectedColor === color && <Check size={14} className="text-white" />}
-                                </button>
-                            ))}
+                    <div>
+                        <p className={clsx(label, 'flex items-center gap-1.5')}>
+                            <Palette size={14} aria-hidden="true" /> {t.themeColor}
+                        </p>
+                        <div className="flex flex-wrap gap-3 px-1 pt-1" role="radiogroup" aria-label={t.themeColor}>
+                            {COLORS.map((color, index) => {
+                                const selected = selectedColor === color;
+                                return (
+                                    <button
+                                        key={color}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        aria-label={`${t.themeColor} ${index + 1}`}
+                                        onClick={() => setSelectedColor(color)}
+                                        className={clsx(
+                                            'flex h-9 w-9 items-center justify-center rounded-full transition-transform',
+                                            color,
+                                            selected ? 'scale-110 ring-2 ring-on-surface ring-offset-2 ring-offset-transparent' : 'opacity-80 hover:opacity-100'
+                                        )}
+                                    >
+                                        {selected && <Check size={15} strokeWidth={3} className="text-white" aria-hidden="true" />}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
 
-        <div className="p-4 border-t border-outline/10 bg-surface-container-low flex justify-end gap-3">
-            <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors"
-            >
-                {t.cancel}
-            </button>
-            <button
-                onClick={handleSubmit}
-                disabled={!name.trim() || isUploading}
-                className="px-6 py-2 bg-primary text-on-primary rounded-xl font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-                {isUploading ? t.uploading : t.createEvent}
-            </button>
-        </div>
-    </m.div>
+                <div className="flex shrink-0 justify-end gap-2 border-t border-hair px-5 pb-5 pt-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="h-11 rounded-full px-5 text-[15px] font-semibold text-muted hover:bg-chip"
+                    >
+                        {t.cancel}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!canCreate}
+                        className={clsx(
+                            'h-11 rounded-full px-6 text-[15px] font-semibold transition-colors',
+                            canCreate ? 'bg-accent text-on-accent' : 'cursor-not-allowed bg-chip text-faint'
+                        )}
+                    >
+                        {isUploading ? t.uploading : t.createEvent}
+                    </button>
+                </div>
+            </m.div>
+            </div>
 
-    <ImagePickerSheet
-        isOpen={isPickerOpen}
-        onClose={closePicker}
-        onSelectCamera={handleCameraSelect}
-        onSelectGallery={handleGallerySelect}
-        title={t.chooseEventPhoto}
-    />
-</div>
-);
+            <ImagePickerSheet
+                isOpen={isPickerOpen}
+                onClose={closePicker}
+                onSelectCamera={handleCameraSelect}
+                onSelectGallery={handleGallerySelect}
+                title={t.chooseEventPhoto}
+            />
+        </div>
+    );
 };

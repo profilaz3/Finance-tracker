@@ -1,0 +1,77 @@
+{
+ "source": "Public sample receipt from github.com/turanjanin/serbian-fiscal-receipts-parser (MIT)",
+ "url": "https://suf.purs.gov.rs/v/?vl=A0pKNFVZTVJGSko0VVlNUkZzGwAAZRsAAOB5rwAAAAAAAAABjU%2BB5%2FEAAABpTy7unuLhcXg9ZfaKVXgL8Qy6rRNpuxzEveQd67GfOzZgHgA%2BJIK42JzQB7ubdMAnu%2BL3JNwm7642BTWrLRJ1JTNhGt3t7lkBLKYeHK9jMXyo79svwUnMGU9LAO6G8GGrWrrwtVZf7GykiQd5SJiMJi%2FKBGwTZUZJU3DVKExIL5SwyXIsXsjdcy%2B8avj9ODZiAmwhZuROOgV54as09mxspbmSM5CG4nl0qrgZKeSJ6hDZFyvxTOdNnvt6OMDy06KYBKopQ5Y5c5CY3ueEY924mZx2vzRrK5gq1EoQ9PsHqu95jwYoNyVaILth%2FS%2FcJxdQgG0ECRwbofaKDSFEXV8Tc4045jW9%2BYeqmDIb0G1jowHIwLBwbJN12A2KPbxP8ZqBoNNfhKJJCeimt3SPA7cnwKMpmAB1fUEpP6izdxc5iJ%2F1ebn8ZkXZ7Gfc29TwadvvUZVGN1Ie0FkCAVA5b%2BCa1vR1E9CHQWTaHI2L9eZ30JOI13w5pdxm1LDIekTVenQ9jrsW6xx5gWcWHCvbKd0jyTf40Hp7a06Qj4pnZNe75XTjIW4um4TKtmdHbRaMAcv7ljNokh4v6KF0P3M%2BAG1fYEuTi33VuZO6jV9ySlu7PE3o1Byw9hdjzLhU%2F6VWWn4dNt16Ij9%2FJ03ZMAeIIzbDbwrGcsF2rZl20XR%2FUdLzZ4grsH0e%2F8eXsXKA1dCHmn4%3D",
+ "api": {
+  "invoiceRequest": {
+   "posTime": null,
+   "taxId": "110867582",
+   "businessName": "MLEKARICA MILK",
+   "locationName": "1016227-MLEKARICA MILK Milunka Trifunović Pr",
+   "address": "Књажевачка ББ Пијаца Башта лок 43   ",
+   "city": "НИШ (ПАНТЕЛЕЈ)",
+   "administrativeUnit": "Ниш-Пантелеј",
+   "buyer": null,
+   "buyerCostCenter": null,
+   "cashier": "Mlekarica Milk",
+   "requestedBy": "JJ4UYMRF",
+   "referentDocumentNumber": null,
+   "invoiceType": 0,
+   "transactionType": 0,
+   "payments": [
+    {
+     "paymentType": 1,
+     "amount": 1150.0
+    }
+   ]
+  },
+  "invoiceResult": {
+   "totalAmount": 1150.0,
+   "transactionTypeCounter": 7013,
+   "totalCounter": 7027,
+   "invoiceCounterExtension": "ПП",
+   "invoiceNumber": "JJ4UYMRF-JJ4UYMRF-7027",
+   "signedBy": "JJ4UYMRF",
+   "sdcTime": "2024-01-28T09:58:50.097Z"
+  },
+  "journal": "============ ФИСКАЛНИ РАЧУН ============\r\n               110867582                \r\n             MLEKARICA MILK             \r\n     1016227-MLEKARICA MILK Milunka     \n             Trifunović Pr              \r\n  Књажевачка ББ Пијаца Башта лок 43     \r\n              Ниш-Пантелеј              \r\nКасир:                    Mlekarica Milk\r\nЕСИР број:                       245/1.0\r\n-------------ПРОМЕТ ПРОДАЈА-------------\r\nАртикли\r\n========================================\r\nНазив   Цена         Кол.         Укупно\r\nKore (kom) (А)                          \r\n       120,00          1          120,00\r\nHeljdine kore (kom) (А)                 \r\n       180,00          1          180,00\r\nKantica jastrebacki (kom) (А)           \r\n       850,00          1          850,00\r\n----------------------------------------\r\nУкупан износ:                   1.150,00\r\nГотовина:                       1.150,00\r\n========================================\r\nОзнака       Име      Стопа        Порез\r\nА      Није у ПДВ    0,00%          0,00\r\n----------------------------------------\r\nУкупан износ пореза:                0,00\r\n========================================\r\nПФР време:          28.01.2024. 10:58:50\r\nПФР број рачуна:  JJ4UYMRF-JJ4UYMRF-7027\r\nБројач рачуна:               7013/7027ПП\r\n========================================\r\n======== КРАЈ ФИСКАЛНОГ РАЧУНА =========",
+  "isValid": true
+ },
+ "specifications": {
+  "success": true,
+  "items": [
+   {
+    "gtin": "",
+    "name": "Kore (kom)",
+    "quantity": 1,
+    "total": 120,
+    "unitPrice": 120,
+    "label": "А",
+    "labelRate": 0,
+    "taxBaseAmount": 120,
+    "vatAmount": 0
+   },
+   {
+    "gtin": "",
+    "name": "Heljdine kore (kom)",
+    "quantity": 1,
+    "total": 180,
+    "unitPrice": 180,
+    "label": "А",
+    "labelRate": 0,
+    "taxBaseAmount": 180,
+    "vatAmount": 0
+   },
+   {
+    "gtin": "",
+    "name": "Kantica jastrebacki (kom)",
+    "quantity": 1,
+    "total": 850,
+    "unitPrice": 850,
+    "label": "А",
+    "labelRate": 0,
+    "taxBaseAmount": 850,
+    "vatAmount": 0
+   }
+  ]
+ }
+}

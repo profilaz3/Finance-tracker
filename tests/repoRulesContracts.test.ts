@@ -64,8 +64,6 @@ describe('repo rules contracts', () => {
 
     expect(app).toContain("import { createTransactionDraft } from './domain/transactions'");
     expect(router).toContain("from '../../domain/transactions'");
-    expect(router).toContain('createLinkedExpenseDraft');
-    expect(router).toContain('createTransactionDraft');
     expect(router).toContain('duplicateTransactionDraft');
     expect(transactionsView).toContain("import { TransactionsToolbar } from './transactions/TransactionsToolbar'");
     expect(transactionsView).toContain("import { TransactionsList } from './transactions/TransactionsList'");

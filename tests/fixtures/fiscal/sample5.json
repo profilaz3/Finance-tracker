@@ -1,0 +1,77 @@
+{
+ "source": "Public sample receipt from github.com/turanjanin/serbian-fiscal-receipts-parser (MIT)",
+ "url": "https://suf.purs.gov.rs/v/?vl=A1ZCTUhYOVNYVzZVQlBaTzCyKwEA%2FmgAAMDh5AAAAAAAAAABhXchESoAAAAP3tYiO2%2BdI6Z5y2v4eC5wJTxirHDeiB1hqaKpgb%2FGvUy6yLkMNgZNqKxLqR40mK2cAfqZmKQ3%2BuCcTbec%2BQ3%2F9YY5EhTDP5HxDNhG%2FugU849FmvrVzP0sKecosSNL10dFtlH8Wgor2A2DDs8sHlmfmpokJnVcm24b%2BCz2bSCSl3HtzGRJ1w4Sw9hhdzsQ4WuPo%2FMEGMlmV8a%2Ffc7X05cWsDCHZoA5uPNWfN%2Bre8%2By5JETDJgRwNDFipYIdh0k62TMp5P0%2FzbCueIJJjas5IxAS9iIdpoTAIIl3eKwUZUWvEwtbGz5nkz52hw5%2Bmg50Uczx1SRifYq%2FEDt79xNkcceS0llpMyNdQ12TSYyL0UjMNymgGX4WPajSzPkQuFBcGLB%2BNLOn2AKLPJXa3B8b87eESXrcIbilNXS3zyr3eg4DIqcTVLXwHwcSh1WDmWKI2TFSu%2Bc6iORB11ln1kYbsEsuCoUegxRJR3RW4%2BkQz45%2Bbm4O5qWTCkDlZ73XHATWPn%2BpPfHP2Fh0Y0QK8gGxNiqrdbob3u0l8uaxKcEDaX%2F4HXnhMezvLEEwBNgWXDMn29uWYx9SWEvPrxV%2FLsIULQbE%2FlcvPeYIla63NhCyuEuGLIlwB2p%2B9O8x7sxD53fTMC7EKKRFUV13WBJS2N5%2BLUh33joYo8Qrc%2BNV2CqrtChYTftFukoKbQvCUKOYYIW0%2FA%3D",
+ "api": {
+  "invoiceRequest": {
+   "posTime": null,
+   "taxId": "112392483",
+   "businessName": "RESTAURANT PLEASURE PARK ČAIR",
+   "locationName": "1207756-PLEASURE PARK ČAIR",
+   "address": "ИX БРИГАДЕ 27 Л1   ",
+   "city": "НИШ (МЕДИЈАНА)",
+   "administrativeUnit": "Ниш-Медијана",
+   "buyer": null,
+   "buyerCostCenter": null,
+   "cashier": "Operater 1",
+   "requestedBy": "VBMHX9SX",
+   "referentDocumentNumber": null,
+   "invoiceType": 0,
+   "transactionType": 0,
+   "payments": [
+    {
+     "paymentType": 1,
+     "amount": 1500.0
+    }
+   ]
+  },
+  "invoiceResult": {
+   "totalAmount": 1500.0,
+   "transactionTypeCounter": 26878,
+   "totalCounter": 76722,
+   "invoiceCounterExtension": "ПП",
+   "invoiceNumber": "VBMHX9SX-W6UBPZO0-76722",
+   "signedBy": "W6UBPZO0",
+   "sdcTime": "2023-01-03T10:15:33.93Z"
+  },
+  "journal": "============ ФИСКАЛНИ РАЧУН ============\r\n               112392483                \r\n     RESTAURANT PLEASURE PARK ČAIR      \r\n       1207756-PLEASURE PARK ČAIR       \r\n          ИX БРИГАДЕ 27 Л1              \r\n              Ниш-Медијана              \r\nКасир:                        Operater 1\r\nЕСИР број:                       868/5.0\r\n-------------ПРОМЕТ ПРОДАЈА-------------\r\nАртикли\r\n========================================\r\nНазив   Цена         Кол.         Укупно\r\nBurito sa piletinom (Ђ)                 \r\n       650,00          1          650,00\r\nGrcki omlet (Ђ)                         \r\n       490,00          1          490,00\r\nElixir mix 0.33l (Ђ)                    \r\n       360,00          1          360,00\r\n----------------------------------------\r\nУкупан износ:                   1.500,00\r\nГотовина:                       1.500,00\r\n========================================\r\nОзнака       Име      Стопа        Порез\r\nЂ           О-ПДВ   20,00%        250,00\r\n----------------------------------------\r\nУкупан износ пореза:              250,00\r\n========================================\r\nПФР време:          03.01.2023. 11:15:33\r\nПФР број рачуна: VBMHX9SX-W6UBPZO0-76722\r\nБројач рачуна:             26878/76722ПП\r\n========================================\r\n======== КРАЈ ФИСКАЛНОГ РАЧУНА =========",
+  "isValid": true
+ },
+ "specifications": {
+  "success": true,
+  "items": [
+   {
+    "gtin": "",
+    "name": "Burito sa piletinom",
+    "quantity": 1,
+    "total": 650,
+    "unitPrice": 650,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 541.67,
+    "vatAmount": 108.33
+   },
+   {
+    "gtin": "",
+    "name": "Grcki omlet",
+    "quantity": 1,
+    "total": 490,
+    "unitPrice": 490,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 408.33,
+    "vatAmount": 81.67
+   },
+   {
+    "gtin": "",
+    "name": "Elixir mix 0.33l",
+    "quantity": 1,
+    "total": 360,
+    "unitPrice": 360,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 300,
+    "vatAmount": 60
+   }
+  ]
+ }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { m } from 'motion/react';
 import { X } from 'lucide-react';
 import { Currency, Transaction, SplitMode, SplitMethod, SplitShare } from '../../types';
@@ -9,9 +9,11 @@ import { SplitExpenseModalProps, Recipient } from './types';
 import { ModeToggle } from './ModeToggle';
 import { MOTION } from '../../config';
 import { useDialog } from '../../hooks/useFocusTrap';
+import { useSheetDrag } from '../../hooks/useSheetDrag';
 import { CommonFields } from './CommonFields';
 import { IPaidSection } from './IPaidSection';
 import { TheyPaidSection } from './TheyPaidSection';
+import { excludeOwnProfile } from '../../domain/people';
 import {
     calculateIPaidSplitSubmission,
     calculateTheyPaidSubmission,
@@ -29,7 +31,8 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     isOpen,
     onClose,
     onSplit,
-    people,
+    people: allPeople,
+    userProfile,
     categories,
     accounts,
     baseCurrency,
@@ -39,9 +42,15 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     activeEvent,
     linkToActiveEvent,
     onShowToast,
-    rates
+    rates,
+    prefill
 }) => {
     const t = TRANSLATIONS[language];
+    // The built-in "me" already stands for the user, so their own profile is not offered again.
+    const people = useMemo(
+        () => excludeOwnProfile(allPeople, userProfile, transaction?.splitDetails?.shares?.map(share => share.personId)),
+        [allPeople, userProfile, transaction],
+    );
 
     // Helper for toast notification
     const showError = (message: string) => {
@@ -53,7 +62,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     };
 
     // Mode: "I paid" or "Someone paid for me"
-    const [mode, setMode] = useState<SplitMode>('i_paid');
+    const [mode, setMode] = useState<SplitMode>(prefill && !transaction && prefill.payerId !== 'self' ? 'they_paid' : 'i_paid');
 
     // Common fields
     const [amount, setAmount] = useState('');
@@ -65,7 +74,11 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     const [transactionDate, setTransactionDate] = useState<string>(new Date().toISOString());
 
     // "I paid" mode fields
-    const [splitMethod, setSplitMethod] = useState<SplitMethod>('equal');
+    // Start on the method the open effect will pick: the share recalculation runs in the same
+    // commit and would otherwise level exact amounts (edited or prefilled) with the stale 'equal'.
+    const [splitMethod, setSplitMethod] = useState<SplitMethod>(
+        () => (transaction?.splitDetails ? transaction.splitDetails.splitMethod || 'equal' : 'exact')
+    );
     const [shares, setShares] = useState<SplitShare[]>([]);
 
     // "Someone paid for me" mode fields
@@ -147,8 +160,32 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                 { personId: 'self', name: t.me, amount: 0, isIncluded: false },
                 ...people.map(p => ({ personId: p.id, name: p.name, amount: 0, isIncluded: false }))
             ]);
+
+            // Exact amounts from a receipt split: "I paid" when I paid, otherwise "Someone paid for me".
+            if (prefill && !transaction) {
+                const amountFor = (id: string) => prefill.amounts[id] ?? 0;
+                setAmount(String(prefill.amount));
+                setFees('');
+                setCurrency(prefill.currency);
+                setNote(prefill.note);
+                setCategoryId(prefill.categoryId);
+                setAccountId(prefill.accountId);
+                setTransactionDate(prefill.date);
+                setSplitMethod('exact');
+                setShares(people.map(p => ({ personId: p.id, amount: amountFor(p.id), percentage: 0, isIncluded: amountFor(p.id) > 0 })));
+                if (prefill.payerId === 'self') {
+                    setMode('i_paid');
+                } else {
+                    setMode('they_paid');
+                    setPayerId(prefill.payerId);
+                    setRecipients([
+                        { personId: 'self', name: t.me, amount: amountFor('self'), isIncluded: amountFor('self') > 0 },
+                        ...people.map(p => ({ personId: p.id, name: p.name, amount: amountFor(p.id), isIncluded: p.id !== prefill.payerId && amountFor(p.id) > 0 })),
+                    ]);
+                }
+            }
         }
-    }, [isOpen, transaction, people, categories, accounts, baseCurrency, events, language]);
+    }, [isOpen, transaction, people, categories, accounts, baseCurrency, events, language, prefill]);
 
     // Recalculate shares when amount, fees or included people change
     useEffect(() => {
@@ -227,7 +264,11 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                 return;
             }
 
-            onSplit({ transactions: result.transaction ? [result.transaction] : [], balanceUpdates: result.balanceUpdates });
+            // A split started from a scanned receipt keeps the receipt on the expense.
+            const splitTransaction = result.transaction && prefill?.receiptData && !transaction
+                ? { ...result.transaction, receiptData: prefill.receiptData }
+                : result.transaction;
+            onSplit({ transactions: splitTransaction ? [splitTransaction] : [], balanceUpdates: result.balanceUpdates });
             onClose();
 
         } else {
@@ -265,6 +306,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     const { availableRecipients, includedRecipients, recipientTotal } = deriveTheyPaidRecipients(recipients, payerId);
 
     const { dialogProps, titleId } = useDialog(isOpen, onClose);
+    const { wrapRef, handleProps } = useSheetDrag(onClose);
 
     if (!isOpen) return null;
 
@@ -282,28 +324,45 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
         : remainingAmount;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-sm" onClick={onClose}>
+        <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
+            <m.div
+                className="paper-scrim absolute inset-0"
+                exit={{ opacity: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={MOTION.backdrop}
+                onClick={onClose}
+                aria-hidden="true"
+            />
+            <div ref={wrapRef} className="relative flex w-full justify-center">
             <m.div
                 {...dialogProps}
-                onClick={(e) => e.stopPropagation()}
-                initial={MOTION.modal.initial}
-                animate={MOTION.modal.animate}
-                exit={MOTION.modal.exit}
-                transition={MOTION.modal.spring}
-                className="bg-surface w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={MOTION.sheet.exit}
+                transition={MOTION.sheet.spring}
+                className="glass-sheet flex max-h-[90dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-[36px] text-on-surface outline-none"
             >
                 {/* Header */}
-                <div className="p-4 border-b border-outline/10 flex items-center justify-between">
-                    <h2 id={titleId} className="text-xl font-bold font-display text-on-surface">{t.splitTransaction}</h2>
-                    <button type="button" onClick={onClose} aria-label={t.close} className="p-2 hover:bg-surface-container rounded-full transition-colors">
-                        <X size={20} className="text-on-surface-variant" aria-hidden="true" />
-                    </button>
+                <div className="shrink-0 touch-none" {...handleProps}>
+                    <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
+                    <div className="flex items-center gap-2 px-5 pb-3 pt-2 md:pt-5">
+                        <h2 id={titleId} className="flex-1 text-[22px] font-bold tracking-[-0.4px]">{t.splitTransaction}</h2>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label={t.close}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                        >
+                            <X size={18} aria-hidden="true" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Mode Toggle */}
                 <ModeToggle mode={mode} setMode={setMode} language={language} />
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto custom-scrollbar">
+                <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-5 pt-4 custom-scrollbar">
                     {/* Common Fields */}
                     <CommonFields
                         mode={mode}
@@ -371,7 +430,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                             (mode === 'i_paid' && (includedCount === 0 || !isValidSplit || !(parseFloat(amount) > 0))) ||
                             (mode === 'they_paid' && (!payerId || includedRecipients.length === 0 || recipientTotal <= 0))
                         }
-                        className="w-full py-3 bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-2"
+                        className="mt-2 h-12 w-full rounded-full bg-accent text-[16px] font-semibold text-on-accent transition-colors disabled:cursor-not-allowed disabled:bg-chip disabled:text-faint"
                     >
                         {mode === 'i_paid'
                             ? t.splitExpense
@@ -380,6 +439,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                     </button>
                 </form>
             </m.div>
+            </div>
         </div>
     );
 };

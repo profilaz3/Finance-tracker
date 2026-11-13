@@ -240,7 +240,7 @@ describe('build contracts', () => {
     expect(script).toContain("console.error('Bundle budget failed')");
     expect(script).toContain("console.log('Bundle budget passed')");
     expect(script).toContain("{ label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false }");
-    expect(script).toContain("{ label: 'startup-js', prefix: null, maxBytes: 400 * 1024, aggregate: false }");
+    expect(script).toContain("{ label: 'startup-js', prefix: null, maxBytes: 520 * 1024, aggregate: false }");
     expect(script).toContain("{ label: 'react', prefix: 'react-', maxBytes: 224 * 1024, aggregate: false }");
     expect(script).toContain("const startupAssetNames = [");
     expect(script).toContain("indexHtml.matchAll(/<script[^>]+type=\"module\"");

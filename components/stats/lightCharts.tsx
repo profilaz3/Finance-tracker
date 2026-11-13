@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
   buildLinearTicks,
   buildPolylinePoints,
@@ -58,7 +58,11 @@ const resolveDomain = (values: number[], options?: { includeZero?: boolean; padR
   }
 
   const pad = (max - min) * padRatio;
-  return { min: min - pad, max: max + pad };
+  // Keep a zero baseline at zero: all-positive data never shows a negative tick (and vice versa).
+  return {
+    min: includeZero && min === 0 ? 0 : min - pad,
+    max: includeZero && max === 0 ? 0 : max + pad,
+  };
 };
 
 const formatSvgNumber = (value: number) => Number(value.toFixed(3));
@@ -96,6 +100,31 @@ const buildStackedBarDomain = (rows: Array<Record<string, number>>, keys: string
   return resolveDomain(values, { includeZero: true, padRatio: 0.1 });
 };
 
+/** Pixel size of the chart box, so the SVG draws 1:1 and 11px labels stay 11px on a phone. */
+const useBoxSize = () => {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      if (width <= 0 || height <= 0) return;
+      setSize(prev => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, size] as const;
+};
+
 const ChartSurface: React.FC<{
   width?: number;
   height?: number;
@@ -104,12 +133,23 @@ const ChartSurface: React.FC<{
   yTickFormatter?: (value: number) => string;
   xLabels: string[];
   children: (plot: ReturnType<typeof getPlot>) => React.ReactNode;
-}> = ({ width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT, min, max, yTickFormatter, xLabels, children }) => {
+}> = ({ width: fallbackWidth = DEFAULT_WIDTH, height: fallbackHeight = DEFAULT_HEIGHT, min, max, yTickFormatter, xLabels, children }) => {
+  const [boxRef, box] = useBoxSize();
+  const width = box?.width ?? fallbackWidth;
+  const height = box?.height ?? fallbackHeight;
   const plot = getPlot(width, height);
   const ticks = buildLinearTicks(min, max, 4);
+  // Thin the x labels so they never collide on a narrow phone chart (~64px per label).
+  const lastIndex = xLabels.length - 1;
+  const labelStep = Math.max(1, Math.ceil(xLabels.length / Math.max(2, Math.floor(plot.innerWidth / 64))));
+  const showXLabel = (index: number) => (
+    index % labelStep === 0
+      ? index === lastIndex || lastIndex - index >= labelStep / 2 || lastIndex % labelStep === 0
+      : index === lastIndex
+  );
 
   return (
-    <div className="h-full w-full" data-no-swipe>
+    <div ref={boxRef} className="h-full w-full" data-no-swipe>
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" role="img" aria-hidden="true">
         <g transform={`translate(${plot.left}, ${plot.top})`}>
           {ticks.map((tick) => {
@@ -138,6 +178,7 @@ const ChartSurface: React.FC<{
           })}
           {children(plot)}
           {xLabels.map((label, index) => (
+            !showXLabel(index) ? null :
             <text
               key={`${label}-${index}`}
               x={formatSvgNumber(scaleX(index, xLabels.length, plot.innerWidth))}
@@ -258,7 +299,8 @@ export const GroupedBarChart: React.FC<{
           <>
             {rows.map((row, rowIndex) => {
               const center = scaleX(rowIndex, rows.length, plot.innerWidth);
-              const startX = center - groupWidth / 2;
+              // Keep edge groups inside the plot so they never sit under the y-axis labels.
+              const startX = clamp(center - groupWidth / 2, 0, Math.max(0, plot.innerWidth - groupWidth));
 
               return series.map((item, seriesIndex) => {
                 const value = Number(row[item.key] ?? 0);
@@ -317,7 +359,7 @@ export const StackedSignedBarChart: React.FC<{
           <>
             <line x1={0} x2={plot.innerWidth} y1={zeroY} y2={zeroY} stroke="rgb(var(--md-sys-color-outline) / 0.65)" strokeDasharray="4 6" />
             {rows.map((row, rowIndex) => {
-              const x = scaleX(rowIndex, rows.length, plot.innerWidth) - barWidth / 2;
+              const x = clamp(scaleX(rowIndex, rows.length, plot.innerWidth) - barWidth / 2, 0, Math.max(0, plot.innerWidth - barWidth));
               let positiveStack = 0;
               let negativeStack = 0;
 
@@ -370,23 +412,21 @@ export const HorizontalBarChart: React.FC<{
   const maxValue = Math.max(...rows.map((row) => row.value), 0);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
       {rows.map((row) => {
         const percent = maxValue > 0 ? clamp((row.value / maxValue) * 100, 0, 100) : 0;
         return (
-          <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="truncate text-on-surface">{row.label}</span>
-                <span className="font-mono text-xs text-on-surface-variant">{valueFormatter(row.value)}</span>
-              </div>
-              <div className="h-3 rounded-full bg-surface-container-high overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${percent}%`, minWidth: percent > 0 ? '10px' : '0px', backgroundColor: row.color }}
-                  title={`${row.label}: ${valueFormatter(row.value)}`}
-                />
-              </div>
+          <div key={row.id} className="min-w-0 space-y-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 truncate text-[15px] font-semibold">{row.label}</span>
+              <span className="flex-none text-[14px] font-semibold tabular-nums text-muted">{valueFormatter(row.value)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-chip">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${percent}%`, minWidth: percent > 0 ? '8px' : '0px', backgroundColor: row.color }}
+                title={`${row.label}: ${valueFormatter(row.value)}`}
+              />
             </div>
           </div>
         );
@@ -407,7 +447,7 @@ export const DonutChart: React.FC<{
   let angle = -90;
 
   return (
-    <div className="relative h-[260px] w-full" data-no-swipe>
+    <div className="relative h-[220px] w-full sm:h-[260px]" data-no-swipe>
       <svg viewBox="0 0 240 240" className="h-full w-full" role="img" aria-hidden="true">
         <path
           d={describeDonutArc({
@@ -418,10 +458,11 @@ export const DonutChart: React.FC<{
             startAngle: 0,
             endAngle: 359.999,
           })}
-          fill="rgb(var(--md-sys-color-surface-container-high))"
+          fill="var(--paper-chip, rgb(var(--md-sys-color-surface-container-high)))"
         />
         {rows.map((row) => {
-          const slice = total > 0 ? (row.value / total) * 360 : 0;
+          // A single 100% slice would start and end on the same point and draw nothing.
+          const slice = total > 0 ? Math.min((row.value / total) * 360, 359.999) : 0;
           const startAngle = angle;
           const endAngle = angle + slice;
           angle = endAngle;
@@ -435,7 +476,7 @@ export const DonutChart: React.FC<{
               key={row.label}
               d={describeDonutArc({ cx, cy, innerRadius, outerRadius, startAngle, endAngle })}
               fill={row.color}
-              stroke="rgb(var(--md-sys-color-surface))"
+              stroke="var(--paper-tile, rgb(var(--md-sys-color-surface)))"
               strokeWidth="2"
             >
               <title>{`${row.label}: ${row.value.toFixed(2)}`}</title>

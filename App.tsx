@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react';
-import { Transaction, Category, Person, View, TransactionType, Event } from './types';
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react';
+import { Transaction, Category, Person, View, TransactionType, Event, Account, RecurringTransaction } from './types';
 
 import { getSupabaseService } from './services/runtimeServices';
 import { subscribeStorageErrors } from './services/storageHealth';
@@ -10,8 +10,7 @@ import { getIntlLocale, setAppLanguage } from './utils/locale';
 import { ToastContainer } from './components/Toast';
 import { useToasts } from './hooks/useToasts';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
-import { shouldIgnoreSwipeStart } from './utils/swipeGuard';
-import clsx from 'clsx';
+import { playPageEnter, resetPageMotion, useSwipePager, type SwipeDirection } from './hooks/useSwipePager';
 import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
 import { createTransactionDraft } from './domain/transactions';
 import { installPreloadErrorReload, lazyWithReload } from './utils/lazyWithReload';
@@ -25,7 +24,10 @@ import { DashboardSkeleton, TransactionsListSkeleton, CalendarSkeleton, GenericV
 import { ErrorBoundary, ViewErrorBoundary } from './components/ErrorBoundary';
 import { AppModals } from './components/app/AppModals';
 import { AppNavigation } from './components/app/AppNavigation';
+import { AppSheets } from './components/app/AppSheets';
+import { LiquidGlassDefs } from './components/ui/LiquidGlassDefs';
 import { AppViewRouter } from './components/app/AppViewRouter';
+import { preloadViews, subViewGroup, type PeekControl } from './components/app/AppViewRouter';
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
@@ -38,6 +40,8 @@ import { useExchangeRates } from './hooks/useExchangeRates';
 import { useEventHandlers } from './hooks/useEventHandlers';
 import { usePeopleHandlers } from './hooks/usePeopleHandlers';
 import { useRecurringProcessor } from './hooks/useRecurringProcessor';
+import { useNotifications } from './hooks/useNotifications';
+import { useMonthlyLetter } from './components/insights/useMonthlyLetter';
 import { useRecurringHandlers } from './hooks/useRecurringHandlers';
 import { useSync } from './hooks/useSync';
 import { useScrollRestore } from './hooks/useScrollRestore';
@@ -46,18 +50,30 @@ import { useTransactionHandlers } from './hooks/useTransactionHandlers';
 import { useAccountHandlers } from './hooks/useAccountHandlers';
 import { useSplitHandlers } from './hooks/useSplitHandlers';
 import { useFinancialSelectors } from './hooks/useFinancialSelectors';
+import { useWorkspace } from './hooks/useWorkspace';
+import { useWidgetSync } from './hooks/useWidgetSync';
+import { useNativeIntents } from './hooks/useNativeIntents';
+import { resolveWorkspaceId, scopeStateToWorkspace, withWorkspaceTeam } from './domain/teams';
 
 const createId = () => crypto.randomUUID();
+
+/** Swipe order of the tab pages: Home, Activity (list, calendar), Events (events, people), Insights. */
+const PAGE_ORDER: View[] = ['dashboard', 'transactions', 'calendar', 'events', 'people', 'analytics', 'insights'];
 
 const App: React.FC = () => {
   // --- Extracted Hooks ---
   const { isAuthenticated, isLoadingAuth, handleLogin, handleLogout, handleDeleteAccount: handleDeleteUserAccount } = useAuth();
-  const { state, setState, fetchRemoteState, areSlicesHydrated } = useAppState(isAuthenticated);
+  const { state, setState, fetchRemoteState, areSlicesHydrated, hydrationStatus } = useAppState(isAuthenticated);
   const authFlow = usePasswordRecovery();
+  // Teams: the app shows one workspace at a time (personal, or a team).
+  const { storedWorkspaceId, setWorkspaceId } = useWorkspace();
+  const workspaceId = resolveWorkspaceId(storedWorkspaceId, state.teams);
+  const scopedState = useMemo(() => scopeStateToWorkspace(state, workspaceId), [state, workspaceId]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const modals = useModals();
 
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [dashboardTab, setDashboardTab] = useState<'wallets' | 'debts' | 'loans' | 'people'>('wallets');
+  const [homeEditing, setHomeEditing] = useState(false);
 
   // Inputs State
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -73,7 +89,7 @@ const App: React.FC = () => {
   const [linkToActiveEvent, setLinkToActiveEvent] = useState(false);
 
   // Computed: Active event for dashboard linking
-  const activeEvent = state.events.find(e => e.status === 'active');
+  const activeEvent = scopedState.events.find(e => e.status === 'active');
 
   // Split context
   const [splitTransactionContext, setSplitTransactionContext] = useState<Transaction | undefined>(undefined);
@@ -85,11 +101,14 @@ const App: React.FC = () => {
   const scrollRestore = useScrollRestore();
   const mainRef = useRef<HTMLElement>(null);
 
-  // Touch Swipe Refs
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
-  const touchEndXRef = useRef<number | null>(null);
-  const touchEndYRef = useRef<number | null>(null);
+  // Swipe paging: the wrapper around the routed page, and the direction of the pending slide.
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const pageDirectionRef = useRef<SwipeDirection | 0>(0);
+  // The way the user last moved through the pages: that neighbour is parked first.
+  const travelDirectionRef = useRef<SwipeDirection>(1);
+  const peekControlRef = useRef<PeekControl | null>(null);
+  // Set when a swipe slid the live neighbour fully in: where its content sat on screen.
+  const liveCommitRef = useRef<{ contentTop: number | null } | null>(null);
 
   // Keep the locale layer in sync before children render (formatters read it).
   setAppLanguage(state.language);
@@ -98,10 +117,23 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.lang = getIntlLocale(state.language);
   }, [state.language]);
-  const defaultAccountId = state.accounts[0]?.id || '';
+  const defaultAccountId = scopedState.accounts[0]?.id || '';
 
   // --- Use extracted hooks ---
   useExchangeRates(isAuthenticated, setState);
+
+  // Once signed in and idle, fetch the other pages so swiping never shows a loading skeleton.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const hasIdle = 'requestIdleCallback' in window;
+    const handle = hasIdle
+      ? window.requestIdleCallback(() => void preloadViews(), { timeout: 2500 })
+      : window.setTimeout(() => void preloadViews(), 1200);
+    return () => {
+      if (hasIdle) window.cancelIdleCallback(handle);
+      else window.clearTimeout(handle);
+    };
+  }, [isAuthenticated]);
   useSync(state, isAuthenticated, areSlicesHydrated('settings'));
 
   // Fetch remote state on auth
@@ -290,7 +322,25 @@ const App: React.FC = () => {
     totalIncome,
     getAccountBalance,
     viewState,
-  } = useFinancialSelectors(state);
+  } = useFinancialSelectors(scopedState);
+
+  // New items land in the active workspace.
+  const createEventInWorkspace = useCallback(
+    (event: Event) => handleCreateEvent(withWorkspaceTeam(event, workspaceId)),
+    [handleCreateEvent, workspaceId]
+  );
+  const addRecurringInWorkspace = useCallback(
+    (recurring: RecurringTransaction) => handleAddRecurring(withWorkspaceTeam(recurring, workspaceId)),
+    [handleAddRecurring, workspaceId]
+  );
+  const addAccountInWorkspace = useCallback(
+    (account: Account) => handleAddAccount(withWorkspaceTeam(account, workspaceId)),
+    [handleAddAccount, workspaceId]
+  );
+  const addCategoryInWorkspace = useCallback(
+    (category: Category) => handleAddCategory(withWorkspaceTeam(category, workspaceId)),
+    [handleAddCategory, workspaceId]
+  );
 
   // Handler for AI parsed transactions
   const handleParsedTransaction = (parsed: ParsedTransaction) => {
@@ -345,56 +395,30 @@ const App: React.FC = () => {
     modals.setIsEditModalOpen(true);
   }, [defaultAccountId, modals.setIsEditModalOpen, state.baseCurrency]);
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCurrentUserId(null);
+      return;
+    }
+    let cancelled = false;
+    void getSupabaseService()
+      .then(service => service.getUser())
+      .then(user => {
+        if (!cancelled) setCurrentUserId(user?.id ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
   useRecurringProcessor({
+    currentUserId,
     isAuthenticated,
     isHydrated: areSlicesHydrated('transactions', 'recurringTransactions'),
     recurringTransactions: state.recurringTransactions,
     processRecurringTransactions,
   });
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchEndXRef.current = null;
-    touchEndYRef.current = null;
-    // Leave horizontal gestures to scrollable rows, inputs, sliders and charts.
-    if (e.targetTouches.length !== 1 || shouldIgnoreSwipeStart(e.target, mainRef.current)) {
-      touchStartXRef.current = null;
-      touchStartYRef.current = null;
-      return;
-    }
-    touchStartXRef.current = e.targetTouches[0].clientX;
-    touchStartYRef.current = e.targetTouches[0].clientY;
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    touchEndXRef.current = e.targetTouches[0].clientX;
-    touchEndYRef.current = e.targetTouches[0].clientY;
-  };
-
-  const onTouchEnd = () => {
-    if (touchStartXRef.current === null || touchEndXRef.current === null) return;
-    if (touchStartYRef.current === null || touchEndYRef.current === null) return;
-
-    const distanceX = touchStartXRef.current - touchEndXRef.current;
-    const distanceY = Math.abs(touchStartYRef.current - touchEndYRef.current);
-
-    const isHorizontalSwipe = Math.abs(distanceX) > distanceY * 2 && Math.abs(distanceX) > 50;
-    if (!isHorizontalSwipe) return;
-
-    const isLeftSwipe = distanceX > 0;
-    const isRightSwipe = distanceX < 0;
-
-    const views: View[] = ['dashboard', 'transactions', 'events', 'calendar', 'analytics', 'insights', 'settings'];
-    const currentIndex = views.indexOf(currentView);
-
-    if (isLeftSwipe && currentIndex < views.length - 1) {
-      handleViewChange(views[currentIndex + 1]);
-      vibrate(HAPTIC_PATTERNS.light);
-    }
-    if (isRightSwipe && currentIndex > 0) {
-      handleViewChange(views[currentIndex - 1]);
-      vibrate(HAPTIC_PATTERNS.light);
-    }
-  };
 
   // --- View Skeletons ---
   const viewSkeleton: Record<View, React.ReactNode> = {
@@ -406,36 +430,33 @@ const App: React.FC = () => {
     insights: <GenericViewSkeleton />,
     settings: <GenericViewSkeleton />,
     people: <GenericViewSkeleton />,
+    budgets: <GenericViewSkeleton />,
   };
 
   // --- Theme ---
-  const themeClass = clsx(
-    "flex h-screen font-sans overflow-hidden bg-surface text-on-surface transition-colors duration-500 select-none",
-    {
-      'theme-neon': state.theme === 'neon',
-      'theme-racing-orange': state.theme === 'racing-orange',
-      'theme-graphite': state.theme === 'graphite',
-      'theme-coffee': state.theme === 'coffee',
-      'theme-gilded': state.theme === 'gilded',
-      'theme-crimson-red': state.theme === 'crimson-red',
-      'theme-lime-dark': state.theme === 'lime-dark',
-      'theme-sterling': state.theme === 'sterling',
-      'theme-canyon': state.theme === 'canyon',
-      'theme-cyberpunk-pink': state.theme === 'cyberpunk-pink',
-      'theme-harbor': state.theme === 'harbor',
-      'theme-galaxy': state.theme === 'galaxy',
-      'theme-evergreen': state.theme === 'evergreen',
-      'theme-linen': state.theme === 'linen',
-      'theme-mist': state.theme === 'mist'
-    }
-  );
+  const themeClass = "flex h-screen font-sans overflow-hidden bg-paper text-on-surface transition-colors duration-500 select-none";
 
   // --- View Change Handler ---
-  const handleViewChange = useCallback((view: View) => {
+  const handleViewChange = useCallback((view: View, swipeDirection?: SwipeDirection, live = false) => {
     if (mainRef.current) {
       scrollRestore.save(currentView, mainRef.current.scrollTop);
     }
+    // A live swipe's neighbour is becoming the page in place, so it must stay visible.
+    if (!live) peekControlRef.current?.show(null);
+    // Sibling pages slide sideways in page order; other jumps (settings, budgets) fade up.
+    const from = PAGE_ORDER.indexOf(currentView);
+    const to = PAGE_ORDER.indexOf(view);
+    const direction: SwipeDirection | 0 = swipeDirection ?? (from >= 0 && to >= 0 && from !== to ? (to > from ? 1 : -1) : 0);
+    if (direction) travelDirectionRef.current = direction;
+    // A live swipe already slid the new page into place, so it needs no enter animation.
+    pageDirectionRef.current = view === currentView || live ? 0 : direction;
+    // Re-selecting the current view keeps its attributes, so its page does not replay the fade-up.
+    if (pagerRef.current && view !== currentView) {
+      if (direction) pagerRef.current.setAttribute('data-pager-lateral', '');
+      else pagerRef.current.removeAttribute('data-pager-lateral');
+    }
     setCurrentView(view);
+    if (live) return; // the scroll position is carried over in the layout effect below
     requestAnimationFrame(() => {
       if (mainRef.current) {
         mainRef.current.scrollTop = scrollRestore.get(view);
@@ -450,6 +471,151 @@ const App: React.FC = () => {
     handleViewChange(view);
     vibrate(HAPTIC_PATTERNS.light);
   }, [handleViewChange]);
+
+  useNotifications({
+    state,
+    isAuthenticated: !!isAuthenticated,
+    currentUserId,
+    hydrationStatus,
+    fetchRemoteState,
+    addToast,
+    onNavigate: handleViewChange,
+    onOpenEvent: (event: Event) => {
+      setSelectedEvent(event);
+      handleViewChange('events');
+    },
+  });
+
+  useMonthlyLetter({
+    state: scopedState,
+    workspaceId,
+    currentUserId,
+    isAuthenticated: !!isAuthenticated,
+    hydrated: hydrationStatus === 'hydrated' || hydrationStatus === 'partial',
+    addToast,
+    onNavigate: handleViewChange,
+  });
+
+  const currentPage = () => pagerRef.current?.querySelector<HTMLElement>(':scope > [data-pager-page]');
+  // A page with a visible in-page back button (a settings section) swipes back through it.
+  const inPageBack = () => {
+    const button = currentPage()?.querySelector<HTMLElement>('[data-swipe-back]');
+    return button && button.offsetParent !== null ? button : null;
+  };
+
+  useLayoutEffect(() => {
+    const live = liveCommitRef.current;
+    liveCommitRef.current = null;
+    if (live) {
+      // The neighbour became the page in place: drop its drag styles, skip the enter fades, and
+      // keep its content exactly where it was on screen.
+      const page = currentPage();
+      resetPageMotion(page);
+      pagerRef.current?.querySelectorAll<HTMLElement>(':scope > .app-view-enter').forEach(el => {
+        el.getAnimations?.().forEach(animation => animation.finish());
+      });
+      const content = page?.querySelector<HTMLElement>(':scope > [data-pager-content]');
+      if (content && mainRef.current && live.contentTop !== null) {
+        mainRef.current.scrollTop += content.getBoundingClientRect().top - live.contentTop;
+      }
+      return;
+    }
+    const direction = pageDirectionRef.current;
+    pageDirectionRef.current = 0;
+    if (direction) playPageEnter(currentPage(), direction);
+  }, [currentView]);
+
+  // Swipe between sibling pages; from Settings, Budgets or an open event, swipe right goes back.
+  const pageIndex = PAGE_ORDER.indexOf(currentView);
+  const eventDetailOpen = currentView === 'events' && !!selectedEvent;
+  const neighbourView = (dir: SwipeDirection): View | null => {
+    if (eventDetailOpen || inPageBack()) return null;
+    if (pageIndex < 0) return dir === -1 ? 'dashboard' : null;
+    return PAGE_ORDER[pageIndex + dir] ?? null;
+  };
+  const sharesHeader = (view: View) => {
+    const group = subViewGroup(view, selectedEvent);
+    return !!group && group === subViewGroup(currentView, selectedEvent);
+  };
+
+  // Once a page has settled and the app is idle, mount its swipe neighbours hidden so the first
+  // frame of a swipe only reveals them. Phones only (desktop has no swipe), and not with reduced
+  // motion (no live neighbour there).
+  useEffect(() => {
+    if (!isAuthenticated || homeEditing) return;
+    if (window.matchMedia?.('(min-width: 768px), (prefers-reduced-motion: reduce)').matches) return;
+    let idle = 0;
+    const timer = window.setTimeout(() => {
+      const run = () => {
+        const ahead = travelDirectionRef.current;
+        const views = ([ahead, -ahead as SwipeDirection])
+          .map(neighbourView)
+          .filter((view): view is View => !!view && view !== currentView);
+        peekControlRef.current?.park(views.map(view => ({
+          view,
+          header: !!subViewGroup(view, selectedEvent) && !sharesHeader(view),
+        })));
+      };
+      idle = 'requestIdleCallback' in window ? window.requestIdleCallback(run, { timeout: 1500 }) : (window as Window).setTimeout(run, 0);
+    }, 450);
+    return () => {
+      window.clearTimeout(timer);
+      if (idle && 'cancelIdleCallback' in window) window.cancelIdleCallback(idle);
+      else window.clearTimeout(idle);
+    };
+    // neighbourView/sharesHeader read only currentView, selectedEvent and the DOM.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, selectedEvent, isAuthenticated, homeEditing]);
+  const swipeHandlers = useSwipePager({
+    getTarget: () => {
+      const back = inPageBack();
+      return back?.closest<HTMLElement>('[data-swipe-back-page]') ?? currentPage();
+    },
+    getRoot: () => mainRef.current,
+    enabled: !homeEditing,
+    canGo: dir => {
+      if (eventDetailOpen || inPageBack()) return dir === -1;
+      if (pageIndex < 0) return dir === -1;
+      const next = pageIndex + dir;
+      return next >= 0 && next < PAGE_ORDER.length;
+    },
+    onPeek: dir => {
+      const control = peekControlRef.current;
+      const view = dir ? neighbourView(dir) : null;
+      const main = mainRef.current;
+      const page = currentPage();
+      if (!dir || !control || !view || !main || !page) {
+        control?.show(null);
+        return false;
+      }
+      const sameHeader = sharesHeader(view);
+      // Place the neighbour where it will sit once current: below a shared switch, and at its
+      // own remembered scroll position. A parked neighbour is revealed at once; otherwise it
+      // mounts in a transition.
+      const top = (sameHeader ? page.offsetTop : 0) + main.scrollTop - scrollRestore.get(view);
+      control.show({ view, dir, top, header: !!subViewGroup(view, selectedEvent) && !sameHeader });
+      return true;
+    },
+    getPeek: dir => pagerRef.current?.querySelector<HTMLElement>(`:scope > [data-pager-peek="${dir}"]`),
+    onCommit: (dir, live) => {
+      vibrate(HAPTIC_PATTERNS.light);
+      const back = inPageBack();
+      if (back) {
+        back.click();
+        return;
+      }
+      if (eventDetailOpen) {
+        setSelectedEvent(null);
+        requestAnimationFrame(() => playPageEnter(currentPage(), -1));
+        return;
+      }
+      if (live) {
+        const content = pagerRef.current?.querySelector<HTMLElement>(':scope > [data-pager-peek] > [data-pager-content]');
+        liveCommitRef.current = { contentTop: content ? content.getBoundingClientRect().top : null };
+      }
+      handleViewChange(pageIndex < 0 ? 'dashboard' : PAGE_ORDER[pageIndex + dir], dir, live);
+    },
+  });
 
   // --- Back navigation (browser history + Android back button) ---
   // Order matters only as a tie-break when several overlays open in the same render;
@@ -479,7 +645,13 @@ const App: React.FC = () => {
         setSplitTransactionContext(undefined);
       },
     },
-  ], [currentView, selectedEvent, selectedPerson, modals]);
+    { id: 'add-sheet', isOpen: modals.isAddSheetOpen, close: () => modals.setIsAddSheetOpen(false) },
+    { id: 'profile-menu', isOpen: modals.isProfileMenuOpen, close: () => modals.setIsProfileMenuOpen(false) },
+    { id: 'appearance-sheet', isOpen: modals.isAppearanceSheetOpen, close: () => modals.setIsAppearanceSheetOpen(false) },
+    { id: 'export', isOpen: modals.isExportModalOpen, close: () => modals.setIsExportModalOpen(false) },
+    { id: 'ask', isOpen: modals.isAskOpen, close: () => modals.setIsAskOpen(false) },
+    { id: 'home-editing', isOpen: currentView === 'dashboard' && homeEditing, close: () => setHomeEditing(false) },
+  ], [currentView, selectedEvent, selectedPerson, modals, homeEditing]);
 
   const { closeTopLayer } = useBackNavigation({
     currentView,
@@ -494,6 +666,23 @@ const App: React.FC = () => {
   }), [handleOpenAddTransaction, closeTopLayer]);
 
   useKeyboardShortcuts(shortcutHandlers);
+
+  // Android: the home screen widget mirrors this month, and its "+" and the share sheet open the app.
+  const [sharedReceiptImage, setSharedReceiptImage] = useState<string | null>(null);
+  useWidgetSync(viewState, isAuthenticated);
+  useNativeIntents({
+    enabled: isAuthenticated === true,
+    onAction: action => {
+      if (action === 'add-expense') handleOpenAddTransaction('expense');
+    },
+    onSharedImage: dataUrl => {
+      setSharedReceiptImage(dataUrl);
+      modals.setIsReceiptScanModalOpen(true);
+    },
+  });
+  useEffect(() => {
+    if (!modals.isReceiptScanModalOpen) setSharedReceiptImage(null);
+  }, [modals.isReceiptScanModalOpen]);
 
   // --- Render ---
   if (isLoadingAuth) {
@@ -543,16 +732,18 @@ const App: React.FC = () => {
       <AppNavigation
         currentView={currentView}
         onNavigate={handleNavigate}
+        onAdd={() => modals.setIsAddSheetOpen(true)}
         labels={{
-          dashboard: t.dashboard,
-          transactions: t.transactions,
-          events: t.events,
-          calendar: t.calendar,
-          analytics: t.analytics,
-          insights: t.aiInsights,
+          home: t.navHome,
+          activity: t.navActivity,
+          events: t.navEvents,
+          insights: t.navInsights,
+          add: t.addEntry,
+          budgets: t.budgets,
           settings: t.settings,
         }}
       />
+      <LiquidGlassDefs />
 
       {/* Edge-to-edge (Android 15+): keep scrolled content from showing through the status bar. */}
       <div
@@ -567,21 +758,25 @@ const App: React.FC = () => {
       <main
         ref={mainRef}
         id="main-content"
-        className="flex-1 h-full overflow-y-auto bg-surface relative touch-pan-y"
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        className="flex-1 h-full overflow-y-auto overflow-x-hidden bg-paper relative touch-pan-y"
+        {...swipeHandlers}
         role="main"
         aria-label={t.mainContent}
       >
         <div className="max-w-5xl mx-auto pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] md:p-4 md:pb-8 lg:p-8">
+          <div ref={pagerRef} className="relative">
           <ViewErrorBoundary>
             <Suspense fallback={viewSkeleton[currentView] || <DashboardSkeleton />}>
               <AppViewRouter
                 currentView={currentView}
+                peekControlRef={peekControlRef}
+                pageFallback={viewSkeleton[currentView] || <DashboardSkeleton />}
                 state={viewState}
-                dashboardTab={dashboardTab}
-                setDashboardTab={setDashboardTab}
+                homeEditing={homeEditing}
+                setHomeEditing={setHomeEditing}
+                onNavigate={handleNavigate}
+                onOpenProfile={() => modals.setIsProfileMenuOpen(true)}
+                onOpenAdd={() => modals.setIsAddSheetOpen(true)}
                 selectedEvent={selectedEvent}
                 setSelectedEvent={setSelectedEvent}
                 setSelectedPerson={setSelectedPerson}
@@ -611,7 +806,7 @@ const App: React.FC = () => {
                 getAccountBalance={getAccountBalance}
                 processRecurringTransactions={processRecurringTransactions}
                 handleUpdateAccount={handleUpdateAccount}
-                handleAddAccount={handleAddAccount}
+                handleAddAccount={addAccountInWorkspace}
                 handleDeleteAccount={handleDeleteAccount}
                 handleDeleteUserAccount={handleDeleteUserAccount}
                 handleLogout={handleLogout}
@@ -624,18 +819,21 @@ const App: React.FC = () => {
                 setIsReceiptScanModalOpen={modals.setIsReceiptScanModalOpen}
                 setIsSplitExpenseModalOpen={modals.setIsSplitExpenseModalOpen}
                 setIsUserProfileModalOpen={modals.setIsUserProfileModalOpen}
-                handleAddCategory={handleAddCategory}
+                handleAddCategory={addCategoryInWorkspace}
                 handleUpdateCategory={handleUpdateCategory}
                 handleDeleteCategory={handleDeleteCategory}
-                handleAddRecurring={handleAddRecurring}
+                handleAddRecurring={addRecurringInWorkspace}
                 handleUpdateRecurring={handleUpdateRecurring}
                 handleDeleteRecurring={handleDeleteRecurring}
                 handleToggleRecurring={handleToggleRecurring}
                 handleSettleUp={handleSettleUp}
                 addToast={addToast}
+                workspaceId={workspaceId}
+                onWorkspaceChange={setWorkspaceId}
               />
             </Suspense>
           </ViewErrorBoundary>
+          </div>
         </div>
       </main>
 
@@ -661,11 +859,35 @@ const App: React.FC = () => {
         updateUserProfile={updateUserProfile}
         updateTransaction={updateTransaction}
         deleteTransaction={deleteTransaction}
-        handleCreateEvent={handleCreateEvent}
+        handleCreateEvent={createEventInWorkspace}
         addTransaction={addTransaction}
         handleUnifiedSplit={handleUnifiedSplit}
         addToast={addToast}
         t={t}
+        sharedReceiptImage={sharedReceiptImage}
+        clearSharedReceiptImage={() => setSharedReceiptImage(null)}
+      />
+
+      <AppSheets
+        modals={modals}
+        state={viewState}
+        setState={setState}
+        onCustomizeHome={() => {
+          handleViewChange('dashboard');
+          setHomeEditing(true);
+        }}
+        onOpenBudgets={() => handleViewChange('budgets')}
+        onOpenSettings={() => handleViewChange('settings')}
+        onSignOut={() => {
+          void handleLogout().then(setState);
+        }}
+        onParsed={handleParsedTransaction}
+        onManual={type => handleOpenAddTransaction(type)}
+        onScanReceipt={() => modals.setIsReceiptScanModalOpen(true)}
+        onSplitBill={() => modals.setIsSplitExpenseModalOpen(true)}
+        onUseTemplate={handleUseTemplate}
+        workspaceId={workspaceId}
+        onWorkspaceChange={setWorkspaceId}
       />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />

@@ -4,6 +4,8 @@ import { X, Receipt } from 'lucide-react';
 import { Transaction } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { useDialog } from '../hooks/useFocusTrap';
+import { useSheetDrag } from '../hooks/useSheetDrag';
+import { MOTION } from '../config';
 import { formatCurrency } from '../utils/formatters';
 
 interface ReceiptModalProps {
@@ -28,56 +30,81 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     }, [transaction]);
 
     const { dialogProps, titleId } = useDialog(isOpen && !!edited?.receiptData, onClose);
+    const { wrapRef, handleProps, contentProps } = useSheetDrag(onClose);
 
     if (!isOpen || !edited || !edited.receiptData) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm modal-safe-area">
+        <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
+            <m.div
+                className="paper-scrim absolute inset-0"
+                exit={{ opacity: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={MOTION.backdrop}
+                onClick={onClose}
+                aria-hidden="true"
+            />
+            <div ref={wrapRef} className="relative flex w-full justify-center">
             <m.div
                 {...dialogProps}
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                className="bg-surface-container-high w-full max-w-md rounded-xl shadow-elevation-3 overflow-hidden flex flex-col"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={MOTION.sheet.exit}
+                transition={MOTION.sheet.spring}
+                className="glass-sheet flex max-h-[90dvh] w-full max-w-[440px] flex-col overflow-hidden rounded-[36px] text-on-surface outline-none"
             >
-                <div className="p-6 flex justify-between items-center border-b border-outline-variant">
-                    <h3 id={titleId} className="text-lg font-display font-medium text-on-surface flex items-center gap-2">
-                        <Receipt size={20} aria-hidden="true" /> {t.receiptDetails}
-                    </h3>
-                    <button type="button" onClick={onClose} aria-label={t.close} className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"><X size={20} aria-hidden="true" /></button>
+                <div className="shrink-0 touch-none" {...handleProps}>
+                    <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
+                    <div className="flex items-center gap-3 px-5 pb-3 pt-2 md:pt-5">
+                        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-accent-soft text-accent">
+                            <Receipt size={20} />
+                        </span>
+                        <h3 id={titleId} className="flex-1 text-[22px] font-bold tracking-[-0.4px]">
+                            {t.receiptDetails}
+                        </h3>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label={t.close}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                        >
+                            <X size={18} aria-hidden="true" />
+                        </button>
+                    </div>
                 </div>
 
-                <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar max-h-[70vh]">
-                    <div>
-                        <label className="text-xs text-on-surface-variant mb-1 block">{t.merchant}</label>
-                        <p className="text-lg font-medium text-on-surface">{edited.receiptData.merchant}</p>
-                    </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 custom-scrollbar" {...contentProps}>
+                    <div className="paper-tile p-4">
+                        <p className="text-[13px] font-semibold text-muted">{t.merchant}</p>
+                        <p className="mt-0.5 text-[20px] font-bold tracking-tight">{edited.receiptData.merchant}</p>
 
-                    <div className="space-y-2 mt-2">
-                        <label className="text-xs text-on-surface-variant block">{t.items}</label>
-                        {edited.receiptData.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center py-2 border-b border-outline-variant/10 last:border-0">
-                                <span className="text-sm text-on-surface">
-                                    {item.quantity && item.quantity > 1 && <span className="text-primary font-bold mr-1">{item.quantity}x</span>}
-                                    {item.name}
-                                </span>
-                                <span className="text-sm font-medium text-on-surface">{formatCurrency(item.price, edited.currency)}</span>
-                            </div>
-                        ))}
-                        <div className="flex justify-between text-base font-bold text-on-surface pt-3 border-t border-outline-variant/20">
+                        <p className="mt-4 text-[13px] font-semibold text-muted">{t.items}</p>
+                        <div className="mt-1 divide-y divide-hair">
+                            {edited.receiptData.items.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between gap-3 py-2.5">
+                                    <span className="min-w-0 text-[15px]">
+                                        {item.quantity && item.quantity > 1 && <span className="mr-1.5 font-bold text-accent">{item.quantity}x</span>}
+                                        {item.name}
+                                    </span>
+                                    <span className="shrink-0 text-[15px] font-semibold tabular-nums">{formatCurrency(item.price, edited.currency)}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-1 flex items-center justify-between border-t border-hair pt-3 text-[17px] font-bold">
                             <span>{t.total}</span>
-                            <span>{formatCurrency(edited.receiptData.total, edited.currency)}</span>
+                            <span className="tabular-nums">{formatCurrency(edited.receiptData.total, edited.currency)}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="p-6 border-t border-outline-variant flex justify-end">
-                    <button onClick={onClose} className="px-6 py-2 bg-primary text-on-primary font-medium rounded-full shadow-elevation-1 hover:shadow-elevation-2 transition-all">
+                <div className="flex shrink-0 justify-end px-5 pb-5">
+                    <button type="button" onClick={onClose} className="h-11 rounded-full bg-accent px-6 text-[15px] font-semibold text-on-accent">
                         {t.close}
                     </button>
                 </div>
             </m.div>
+            </div>
         </div>
     );
 };

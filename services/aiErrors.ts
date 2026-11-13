@@ -3,7 +3,7 @@
  * explain why (daily limit, service down) without importing the AI service.
  */
 
-export type AiFunctionName = 'parse-transaction' | 'scan-receipt' | 'generate-insights';
+export type AiFunctionName = 'parse-transaction' | 'scan-receipt' | 'generate-insights' | 'transcribe';
 
 export type AiErrorKind = 'quota' | 'unavailable' | 'rejected' | 'network' | 'unknown';
 

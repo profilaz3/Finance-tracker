@@ -1,11 +1,13 @@
 import React from 'react';
 import type { AnalyticsStudioSummary } from '../../utils/analyticsSelectors';
 import type { Currency } from '../../types';
-import { formatCurrency } from '../../utils/formatters';
+import type { AppLanguage } from '../../utils/locale';
+import { money } from '../home/parts';
 
 export interface AnalyticsSummaryPanelProps {
   summary: AnalyticsStudioSummary;
   baseCurrency: Currency;
+  language: AppLanguage;
   label: string;
   labels: {
     income: string;
@@ -38,18 +40,19 @@ const getFactLabel = (
 export const AnalyticsSummaryPanel: React.FC<AnalyticsSummaryPanelProps> = ({
   summary,
   baseCurrency,
+  language,
   label,
   labels,
 }) => (
-  <div className="rounded-xl bg-surface-container-low border border-outline/10 p-4 sm:p-5 shadow-elevation-1 min-w-0">
-    <h3 className="text-lg font-medium text-on-surface break-words">{label}</h3>
-    <p className="text-sm text-on-surface mt-3 break-words">{getHeadline(summary.localSummary.status, labels)}</p>
+  <section className="paper-tile min-w-0 p-4 sm:p-5">
+    <h3 className="mb-2 text-[17px] font-bold tracking-[-0.3px]">{label}</h3>
+    <p className="text-[15px] leading-snug break-words">{getHeadline(summary.localSummary.status, labels)}</p>
     <div className="mt-3 flex flex-wrap gap-2">
       {summary.localSummary.facts.map(fact => (
-        <span key={fact.key} className="rounded-full bg-surface-container px-3 py-1 text-xs text-on-surface-variant break-words">
-          {getFactLabel(fact.key, labels)}: {formatCurrency(fact.value, baseCurrency)}
+        <span key={fact.key} className="rounded-full bg-chip px-3 py-1.5 text-[13px] text-muted break-words">
+          {getFactLabel(fact.key, labels)}: <span className="font-semibold tabular-nums text-on-surface">{money(fact.value, baseCurrency, language)}</span>
         </span>
       ))}
     </div>
-  </div>
+  </section>
 );

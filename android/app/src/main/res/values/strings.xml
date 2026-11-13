@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Finance Tracker</string>
-    <string name="title_activity_main">Finance Tracker</string>
-    <string name="package_name">com.finance.tracker</string>
-    <string name="custom_url_scheme">com.finance.tracker</string>
+    <!-- The app name stays the same in every language. -->
+    <string name="app_name" translatable="false">Finance Tracker</string>
+    <string name="title_activity_main" translatable="false">Finance Tracker</string>
+    <string name="package_name" translatable="false">com.finance.tracker</string>
+    <string name="custom_url_scheme" translatable="false">com.finance.tracker</string>
 </resources>

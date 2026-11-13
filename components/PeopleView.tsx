@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Person, Currency, ExchangeRates } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Plus, User, ArrowUpDown, ArrowDownLeft, ArrowUpRight, Search, Handshake, Check, Wallet, Banknote } from 'lucide-react';
-import { m } from 'motion/react';
+import { Plus, User, ArrowUpDown, ArrowDownLeft, ArrowUpRight, Search, Handshake, Check } from 'lucide-react';
+import clsx from 'clsx';
+import { Segmented } from './ui/Segmented';
+import { Avatar, Big } from './home/parts';
 import { EmptyState } from './EmptyState';
 import { formatCurrency } from '../utils/formatters';
 import { calculateDashboardDebtSummary, getActiveDashboardPeople } from '../utils/dashboardSummarySelectors';
@@ -16,6 +18,8 @@ interface PeopleViewProps {
     baseCurrency: Currency;
     rates: ExchangeRates;
     language: 'en' | 'sr';
+    /** Inside Settings: no page header, and the add button sits with the actions. */
+    embedded?: boolean;
 }
 
 export const PeopleView: React.FC<PeopleViewProps> = ({
@@ -26,7 +30,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
     onSettleUp,
     baseCurrency,
     rates,
-    language
+    language,
+    embedded = false,
 }) => {
     const t = TRANSLATIONS[language];
     const [sortBy, setSortBy] = useState<'name' | 'balance'>('name');
@@ -70,125 +75,119 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
         }
     };
 
+    const sortLabel = (field: 'name' | 'balance', label: string) => (
+        <span className="flex items-center justify-center gap-1">
+            {label}
+            {sortBy === field && <ArrowUpDown size={12} aria-hidden="true" className={sortOrder === 'desc' ? 'rotate-180' : ''} />}
+        </span>
+    );
+
     return (
-        <div className="space-y-6 pb-20">
-            {/* Header Controls */}
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-surface-container p-4 rounded-2xl">
-                <div>
-                    <h2 className="text-2xl font-display font-medium text-on-surface">{t.people}</h2>
-                    <p className="text-sm text-on-surface-variant">{people.length} {t.contacts}</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                    {onAddTransaction && (
-                        <>
-                            <button
-                                onClick={() => onAddTransaction('income')}
-                                className="flex-1 md:flex-none bg-tertiary-container text-on-tertiary-container px-4 py-2 rounded-full flex items-center justify-center gap-2 text-sm font-medium hover:opacity-90 transition-all"
-                            >
-                                <ArrowDownLeft size={16} /> {t.incoming}
-                            </button>
-                            <button
-                                onClick={() => onAddTransaction('expense')}
-                                className="flex-1 md:flex-none bg-error-container text-on-error-container px-4 py-2 rounded-full flex items-center justify-center gap-2 text-sm font-medium hover:opacity-90 transition-all"
-                            >
-                                <ArrowUpRight size={16} /> {t.outgoing}
-                            </button>
-                        </>
-                    )}
+        <div className={clsx('mx-auto flex max-w-[860px] flex-col gap-4', !embedded && 'px-1 pb-8')}>
+            {!embedded && (
+                <header className="flex min-h-[60px] items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.6px]">{t.people}</h1>
+                        <p className="truncate text-[13px] text-muted">{people.length} {t.contacts}</p>
+                    </div>
                     <button
+                        type="button"
                         onClick={onAddPerson}
-                        className="flex-1 md:flex-none bg-primary text-on-primary px-4 py-2 rounded-full flex items-center justify-center gap-2 text-sm font-medium shadow-elevation-1 hover:shadow-elevation-2 transition-all"
+                        aria-label={t.addPerson}
+                        title={t.addPerson}
+                        className="glass flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
                     >
-                        <Plus size={18} />
+                        <Plus size={22} aria-hidden="true" />
                     </button>
-                </div>
-            </div>
+                </header>
+            )}
 
-            {/* Search & Sort */}
-            <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+            {(totalOwedToMe > 0 || totalIOwe > 0) && (
+                <section className="paper-tile grid grid-cols-2 divide-x divide-[var(--paper-line)] py-4">
+                    <div className="flex min-w-0 flex-col gap-1 px-4">
+                        <span className="flex items-center gap-1 text-[13px] text-muted">
+                            <ArrowDownLeft size={13} aria-hidden="true" /> {t.owesYou}
+                        </span>
+                        <Big size={24} className="text-pos">{formatCurrency(totalOwedToMe, baseCurrency)}</Big>
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-1 px-4">
+                        <span className="flex items-center gap-1 text-[13px] text-muted">
+                            <ArrowUpRight size={13} aria-hidden="true" /> {t.youOwe}
+                        </span>
+                        <Big size={24} className="text-neg">{formatCurrency(totalIOwe, baseCurrency)}</Big>
+                    </div>
+                </section>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+                <label className="paper-field relative flex h-11 min-w-[180px] flex-1 items-center rounded-full border border-hair">
+                    <Search size={17} className="pointer-events-none absolute left-3.5 text-muted" aria-hidden="true" />
                     <input
-                        type="text"
+                        type="search"
                         placeholder={t.searchPeople}
+                        aria-label={t.searchPeople}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-surface-container-high pl-10 pr-4 py-2 rounded-full text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        className="h-full w-full rounded-full border-none bg-transparent pl-10 pr-4 text-[15px] placeholder:text-faint focus:ring-2 focus:ring-accent"
                     />
-                </div>
-                <button
-                    onClick={() => toggleSort('name')}
-                    className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 transition-colors ${sortBy === 'name' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'}`}
-                >
-                    {t.name} <ArrowUpDown size={14} className={sortBy === 'name' ? 'opacity-100' : 'opacity-50'} />
-                </button>
-                <button
-                    onClick={() => toggleSort('balance')}
-                    className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 transition-colors ${sortBy === 'balance' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'}`}
-                >
-                    {t.balance} <ArrowUpDown size={14} className={sortBy === 'balance' ? 'opacity-100' : 'opacity-50'} />
-                </button>
+                </label>
+                <Segmented<'name' | 'balance'>
+                    size="sm"
+                    ariaLabel={t.sortBy}
+                    value={sortBy}
+                    onChange={toggleSort}
+                    options={[
+                        { value: 'name', label: sortLabel('name', t.name) },
+                        { value: 'balance', label: sortLabel('balance', t.balance) },
+                    ]}
+                />
             </div>
 
-            {/* Balance Summary Section */}
-                    {(totalOwedToMe > 0 || totalIOwe > 0) && (
-                <div className="grid grid-cols-2 gap-4">
-                    <m.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10 shadow-elevation-1"
+            {onAddTransaction && (
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => onAddTransaction('income')}
+                        className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-chip text-[14px] font-semibold sm:flex-none sm:px-4"
                     >
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-1 flex items-center gap-1">
-                            <ArrowDownLeft size={10} /> {t.owesYou}
-                        </p>
-                        <p className="text-xl md:text-2xl font-display font-medium text-tertiary">
-                            {formatCurrency(totalOwedToMe, baseCurrency)}
-                        </p>
-                    </m.div>
-
-                    <m.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.05 }}
-                        className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10 shadow-elevation-1"
+                        <ArrowDownLeft size={16} className="text-pos" aria-hidden="true" /> {t.incoming}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => onAddTransaction('expense')}
+                        className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-chip text-[14px] font-semibold sm:flex-none sm:px-4"
                     >
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-1 flex items-center gap-1">
-                            <ArrowUpRight size={10} /> {t.youOwe}
-                        </p>
-                        <p className="text-xl md:text-2xl font-display font-medium text-error">
-                            {formatCurrency(totalIOwe, baseCurrency)}
-                        </p>
-                    </m.div>
+                        <ArrowUpRight size={16} className="text-neg" aria-hidden="true" /> {t.outgoing}
+                    </button>
+                    {embedded && (
+                        <button
+                            type="button"
+                            onClick={onAddPerson}
+                            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent text-[14px] font-semibold text-on-accent sm:ml-auto sm:flex-none sm:px-4"
+                        >
+                            <Plus size={16} aria-hidden="true" /> {t.addPerson}
+                        </button>
+                    )}
                 </div>
             )}
 
-            {/* People Grid - 2 columns */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {sortedPeople.length === 0 ? (
-                    <div className="col-span-full">
-                        <EmptyState
-                            icon={User}
-                            title={searchQuery ? t.noPeopleFound : t.noPeopleAdded}
-                            description={searchQuery
-                                ? t.tryDifferentSearch
-                                : t.addContactsToTrack
-                            }
-                            action={!searchQuery ? { label: t.addPerson, onClick: onAddPerson } : undefined}
-                        />
-                    </div>
-                ) : (
-                    sortedPeople.map((person) => {
+            {sortedPeople.length === 0 ? (
+                <EmptyState
+                    icon={User}
+                    title={searchQuery ? t.noPeopleFound : t.noPeopleAdded}
+                    description={searchQuery ? t.tryDifferentSearch : t.addContactsToTrack}
+                    action={!searchQuery ? { label: t.addPerson, onClick: onAddPerson } : undefined}
+                />
+            ) : (
+                <div className="paper-tile px-4 py-1">
+                    {sortedPeople.map((person, index) => {
                         const hasBalance = activePeople.some(activePerson => activePerson.id === person.id);
                         const isImageAvatar = person.avatar?.startsWith('data:') || person.avatar?.startsWith('http');
+                        const balances = (Object.entries(person.balances) as [Currency, number][]).filter(([, amount]) => amount !== 0);
 
                         return (
-                            <m.div
+                            <div
                                 key={person.id}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
                                 onClick={() => onSelectPerson(person)}
                                 role="button"
                                 tabIndex={0}
@@ -200,65 +199,60 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                         onSelectPerson(person);
                                     }
                                 }}
-                                className="bg-surface-container-low p-5 rounded-2xl shadow-elevation-1 cursor-pointer hover:shadow-elevation-2 transition-all relative overflow-hidden group"
+                                className={clsx(
+                                    'group flex min-h-[68px] cursor-pointer items-center gap-3 py-2.5',
+                                    index < sortedPeople.length - 1 && 'border-b border-hair',
+                                )}
                             >
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div
-                                        className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-sm overflow-hidden relative"
-                                        style={{ backgroundColor: person.color }}
+                                {person.avatar && !isImageAvatar ? (
+                                    <span
+                                        aria-hidden="true"
+                                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[22px]"
+                                        style={{ background: `color-mix(in oklab, ${person.color} 22%, var(--paper-tile))` }}
                                     >
-                                        {isImageAvatar ? (
-                                            <img src={person.avatar} alt={person.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            person.avatar || person.name.charAt(0).toUpperCase()
-                                        )}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-medium text-on-surface text-lg">{person.name}</h3>
-                                        <p className="text-sm text-on-surface-variant">{person.defaultCurrency}</p>
-                                    </div>
+                                        {person.avatar}
+                                    </span>
+                                ) : (
+                                    <Avatar name={person.name} color={person.color} image={isImageAvatar ? person.avatar : undefined} size={44} />
+                                )}
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                    <span className="truncate text-[16px] font-semibold">{person.name}</span>
+                                    <span className="truncate text-[13px] text-muted">
+                                        {hasBalance
+                                            ? balances.map(([, amount]) => (amount > 0 ? t.owesYou : t.youOwe)).filter((label, i, all) => all.indexOf(label) === i).join(' · ')
+                                            : t.noActiveBalance}
+                                    </span>
                                 </div>
-
-                                <div className="space-y-1">
-                                    {(Object.entries(person.balances) as [Currency, number][]).map(([currency, amount]) => {
-                                        if (amount === 0) return null;
-                                        return (
-                                            <div key={currency} className="flex justify-between items-center">
-                                                <span className="text-sm text-on-surface-variant">{currency}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`font-mono font-medium ${amount > 0 ? 'text-tertiary' : 'text-error'}`}>
-                                                        {amount > 0 ? '+' : ''}{amount.toFixed(2)}
-                                                    </span>
-                                                    {onSettleUp && amount !== 0 && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onSettleUp(person.id, currency as Currency);
-                                                            }}
-                                                            className="p-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
-                                                            title={t.settleUp}
-                                                            aria-label={`${t.settleUp}: ${person.name} ${currency}`}
-                                                        >
-                                                            <Handshake size={14} aria-hidden="true" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {!hasBalance && (
-                                        <div className="flex items-center gap-2 text-sm text-on-surface-variant/50 italic">
-                                            <Check size={14} className="text-tertiary" />
-                                            {t.noActiveBalance}
+                                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                                    {balances.length === 0 ? (
+                                        <Check size={18} className="text-faint" aria-hidden="true" />
+                                    ) : balances.map(([currency, amount]) => (
+                                        <div key={currency} className="flex items-center gap-1">
+                                            <span className={`text-[15px] font-semibold tabular-nums ${amount > 0 ? 'text-pos' : 'text-neg'}`}>
+                                                {amount > 0 ? '+' : ''}{formatCurrency(amount, currency)}
+                                            </span>
+                                            {onSettleUp && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onSettleUp(person.id, currency as Currency);
+                                                    }}
+                                                    className="flex h-8 w-8 items-center justify-center rounded-full text-accent transition-opacity hover:bg-chip opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                                                    title={t.settleUp}
+                                                    aria-label={`${t.settleUp}: ${person.name} ${currency}`}
+                                                >
+                                                    <Handshake size={16} aria-hidden="true" />
+                                                </button>
+                                            )}
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
-                            </m.div>
+                            </div>
                         );
-                    })
-                )}
-            </div>
+                    })}
+                </div>
+            )}
         </div>
     );
 };

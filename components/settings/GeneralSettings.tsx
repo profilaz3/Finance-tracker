@@ -1,80 +1,61 @@
 import React from 'react';
-import { DollarSign, Keyboard } from 'lucide-react';
-import clsx from 'clsx';
 import { AppState, Currency } from '../../types';
 import { TRANSLATIONS } from '../../constants';
+import { Segmented } from '../ui/Segmented';
 
 interface GeneralSettingsProps {
     state: AppState;
     setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
+const CURRENCIES: Currency[] = ['EUR', 'USD', 'RSD'];
+
+const Kbd: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <kbd className="inline-flex h-7 min-w-7 items-center justify-center rounded-[8px] border border-hair bg-chip px-2 font-sans text-[12px] font-semibold text-muted">
+        {children}
+    </kbd>
+);
+
 export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setState }) => {
     const t = TRANSLATIONS[state.language];
 
+    const shortcuts: Array<{ label: string; keys: React.ReactNode }> = [
+        { label: t.shortcutNewTransaction, keys: <><Kbd>Ctrl</Kbd><Kbd>N</Kbd></> },
+        { label: t.shortcutCloseModal, keys: <Kbd>Esc</Kbd> },
+        { label: t.shortcutContextMenu, keys: <span className="text-[13px] text-muted">{t.shortcutLongPress}</span> },
+    ];
+
     return (
         <>
-            {/* Base Currency Section */}
-            <section className="space-y-4">
-                <h3 className="text-lg font-medium text-on-surface">{t.baseCurrency}</h3>
-                <div className="flex gap-3">
-                    {(['EUR', 'USD', 'RSD'] as Currency[]).map(currency => (
-                        <button
-                            key={currency}
-                            onClick={() => setState(prev => ({ ...prev, baseCurrency: currency }))}
-                            className={clsx(
-                                "px-4 py-2 rounded-xl font-medium transition-all border flex items-center gap-2",
-                                state.baseCurrency === currency
-                                    ? "bg-secondary-container text-on-secondary-container border-secondary-container"
-                                    : "bg-surface-container-low text-on-surface border-outline/20 hover:bg-surface-container-high"
-                            )}
-                        >
-                            <DollarSign size={18} /> {currency}
-                        </button>
-                    ))}
+            <section className="paper-tile flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-[15px] font-bold">{t.baseCurrency}</h3>
+                    <p className="text-[13px] text-muted">{t.baseCurrencyDesc}</p>
                 </div>
+                <Segmented<Currency>
+                    size="sm"
+                    ariaLabel={t.baseCurrency}
+                    value={state.baseCurrency}
+                    onChange={currency => setState(prev => ({ ...prev, baseCurrency: currency }))}
+                    options={CURRENCIES.map(currency => ({ value: currency, label: currency }))}
+                    className="shrink-0"
+                />
             </section>
 
-            {/* Keyboard Shortcuts Section */}
-            <section className="space-y-4">
-                <h3 className="text-lg font-medium text-on-surface flex items-center gap-2">
-                    <Keyboard size={20} />
-                    {t.keyboardShortcuts}
-                </h3>
-                <div className="bg-surface-container-low p-4 rounded-xl shadow-elevation-1">
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-on-surface">
-                                {t.shortcutNewTransaction}
-                            </span>
-                            <div className="flex items-center gap-1">
-                                <kbd className="px-2 py-1 bg-surface-container rounded text-xs font-mono text-on-surface-variant border border-outline-variant/30">
-                                    Ctrl
-                                </kbd>
-                                <span className="text-on-surface-variant text-xs">+</span>
-                                <kbd className="px-2 py-1 bg-surface-container rounded text-xs font-mono text-on-surface-variant border border-outline-variant/30">
-                                    N
-                                </kbd>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-on-surface">
-                                {t.shortcutCloseModal}
-                            </span>
-                            <kbd className="px-2 py-1 bg-surface-container rounded text-xs font-mono text-on-surface-variant border border-outline-variant/30">
-                                Esc
-                            </kbd>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-on-surface">
-                                {t.shortcutContextMenu}
-                            </span>
-                            <span className="text-xs text-on-surface-variant">
-                                {t.shortcutLongPress}
-                            </span>
-                        </div>
-                    </div>
-                </div>
+            {/* Keyboard shortcuts only matter with a keyboard */}
+            <section className="paper-tile hidden px-4 pb-1 pt-4 md:block">
+                <h3 className="text-[15px] font-bold">{t.keyboardShortcuts}</h3>
+                <ul>
+                    {shortcuts.map((shortcut, index) => (
+                        <li
+                            key={shortcut.label}
+                            className={`flex min-h-[48px] items-center justify-between gap-3 ${index < shortcuts.length - 1 ? 'border-b border-hair' : ''}`}
+                        >
+                            <span className="text-[14px]">{shortcut.label}</span>
+                            <span className="flex shrink-0 items-center gap-1">{shortcut.keys}</span>
+                        </li>
+                    ))}
+                </ul>
             </section>
         </>
     );

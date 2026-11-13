@@ -3,6 +3,7 @@ import { Transaction, Currency, ExchangeRates } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { m } from 'motion/react';
+import { Percent } from 'lucide-react';
 import { formatMoney, formatPercent } from '../../utils/locale';
 
 interface StatsSummaryProps {
@@ -43,27 +44,28 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({
   return (
     <m.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
+      className="paper-tile flex min-w-0 items-center gap-3 p-4"
     >
-      <div className="flex justify-between items-center">
-        <div>
-          <p className="text-on-surface-variant text-sm font-medium mb-2">{t.totalFeesPaid}</p>
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-2xl font-display font-medium text-on-surface">
-              {formatMoney(totalFeesUSD, 'USD', language)}
-            </p>
-            {baseCurrency !== 'USD' && (
-              <p className="text-lg text-on-surface-variant">
-                ≈ {formatMoney(totalFees, baseCurrency, language)}
-              </p>
-            )}
-          </div>
-          {totalExpense > 0 && (
-            <p className="text-sm text-on-surface-variant mt-2">
-              ({formatPercent((totalFees / totalExpense) * 100, 2)} {t.ofTotalExpenses})
+      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[14px] bg-chip text-muted" aria-hidden="true">
+        <Percent size={19} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-faint">{t.totalFeesPaid}</p>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <p className="text-[20px] font-bold tabular-nums tracking-[-0.4px]">
+            {formatMoney(totalFeesUSD, 'USD', language)}
+          </p>
+          {baseCurrency !== 'USD' && (
+            <p className="text-[14px] tabular-nums text-muted">
+              ≈ {formatMoney(totalFees, baseCurrency, language)}
             </p>
           )}
         </div>
+        {totalExpense > 0 && (
+          <p className="text-[12px] text-muted">
+            {formatPercent((totalFees / totalExpense) * 100, 2)} {t.ofTotalExpenses}
+          </p>
+        )}
       </div>
     </m.div>
   );

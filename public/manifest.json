@@ -4,19 +4,21 @@
   "description": "Personal finance tracking application with AI-powered transaction parsing and receipt scanning",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#6750A4",
+  "background_color": "#F3F2EE",
+  "theme_color": "#F3F2EE",
   "scope": "/",
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "categories": ["finance", "productivity"],

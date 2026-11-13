@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { withAccountTeam } from '../domain/teams';
 import type { Dispatch, SetStateAction } from 'react';
 import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
@@ -71,11 +72,11 @@ export function useTransactionHandlers({
   closeEditModal,
   closeReceiptModal,
 }: UseTransactionHandlersOptions) {
-  const addTransaction = useCallback(async (transaction: Transaction) => {
+  const addTransaction = useCallback(async (transaction: Transaction, options?: { silent?: boolean }) => {
     // Computed before setState so the synced row is the stored row (an updater
     // is not guaranteed to have run by the time the sync below starts).
     const account = state.accounts.find(entry => entry.id === transaction.accountId);
-    const finalTransaction = convertToAccountCurrency(transaction, account?.currency, state.rates);
+    const finalTransaction = withAccountTeam(convertToAccountCurrency(transaction, account?.currency, state.rates), state.accounts);
     setState(prev => ({ ...prev, transactions: [finalTransaction, ...prev.transactions] }));
 
     try {
@@ -86,7 +87,8 @@ export function useTransactionHandlers({
     }
 
     vibrate(HAPTIC_PATTERNS.success);
-    addToast(getTranslations().transactionAdded, 'success');
+    // Callers that show their own confirmation (settle up) pass silent.
+    if (!options?.silent) addToast(getTranslations().transactionAdded, 'success');
   }, [addToast, setState, state.accounts, state.rates]);
 
   /**

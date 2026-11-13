@@ -1,14 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { Person, Transaction, Currency, Category, ExchangeRates } from '../types';
-import { TRANSLATIONS } from '../constants';
-import { X, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, Wallet, Calendar, Sparkles } from 'lucide-react';
-import { m } from 'motion/react';
+import { TRANSLATIONS, CURRENCIES } from '../constants';
+import { X, Trash2, Pencil, Check, Handshake } from 'lucide-react';
+import { AnimatePresence, m } from 'motion/react';
+import clsx from 'clsx';
 import { formatCurrency, getShortDate } from '../utils/formatters';
 import { convertAmount } from '../services/currencyService';
+import { MOTION } from '../config';
 import { BalanceInput } from './BalanceInput';
-import clsx from 'clsx';
 import { useDialog } from '../hooks/useFocusTrap';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { ConfirmDialog } from './ConfirmDialog';
+import { CategoryGlyph } from './ui/CategoryGlyph';
+import { Avatar, Big } from './home/parts';
 
 interface PersonDetailProps {
     person: Person;
@@ -23,6 +27,8 @@ interface PersonDetailProps {
     onUpdateBalance: (personId: string, currency: Currency, newBalance: number) => void;
     language: 'en' | 'sr';
 }
+
+const isImage = (value?: string) => !!value && /^(data:|http)/.test(value);
 
 export const PersonDetail: React.FC<PersonDetailProps> = ({
     person,
@@ -40,31 +46,72 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
     const t = TRANSLATIONS[language];
     const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const [partialOpen, setPartialOpen] = useState(false);
+    const [partialCurrency, setPartialCurrency] = useState<Currency | null>(null);
+    const [partialAmount, setPartialAmount] = useState('');
+    const [partialError, setPartialError] = useState<string | null>(null);
     const { dialogProps, titleId } = useDialog(true, onClose);
+    const { wrapRef, handleProps, contentProps } = useSheetDrag(onClose);
 
-    // Filter transactions related to this person
     const personTransactions = useMemo(() => {
         return transactions
             .filter(tx => tx.personId === person.id)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transactions, person.id]);
 
-    // Calculate total balance in base currency for summary
+    // A positive balance means this person owes you.
     const totalBalanceInBase = useMemo(() => {
         return Object.entries(person.balances).reduce((acc, [currency, amount]) => {
             return acc + convertAmount(amount, currency as Currency, baseCurrency, rates);
         }, 0);
     }, [person.balances, baseCurrency, rates]);
+    const settled = Math.abs(totalBalanceInBase) < 0.005;
+    const owesYou = totalBalanceInBase > 0;
+    const openCurrencies = CURRENCIES.filter(currency => Math.abs(person.balances[currency] || 0) >= 0.005);
+    const activePartialCurrency = partialCurrency && openCurrencies.includes(partialCurrency) ? partialCurrency : openCurrencies[0];
+    const partialBalance = activePartialCurrency ? Math.abs(person.balances[activePartialCurrency] || 0) : 0;
+
+    // One tap clears every open currency; each settlement toast offers Undo.
+    const settleAll = () => openCurrencies.forEach(currency => onSettleUp(person.id, currency));
+
+    const openPartial = () => {
+        setPartialCurrency(openCurrencies[0] ?? null);
+        setPartialAmount('');
+        setPartialError(null);
+        setPartialOpen(true);
+    };
+
+    const submitPartial = (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!activePartialCurrency) return;
+        const value = Number(partialAmount.replace(',', '.'));
+        if (!Number.isFinite(value) || value <= 0) {
+            setPartialError(t.settleAmountInvalid);
+            return;
+        }
+        if (Math.round(value * 100) > Math.round(partialBalance * 100)) {
+            setPartialError(t.settleAmountTooHigh);
+            return;
+        }
+        // The full balance is a plain settle; anything less is recorded as partial.
+        onSettleUp(person.id, activePartialCurrency, Math.round(value * 100) === Math.round(partialBalance * 100) ? undefined : value);
+        setPartialOpen(false);
+    };
+
+    const iconButton = 'glass flex h-11 w-11 items-center justify-center rounded-full';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-md" onClick={onClose}>
+        <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center" onClick={onClose}>
+            <m.div className="paper-scrim absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} aria-hidden="true" />
+            <div ref={wrapRef} className="relative flex w-full justify-center">
             <m.div
                 {...dialogProps}
                 onClick={(e) => e.stopPropagation()}
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="bg-surface-container w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-outline-variant/10"
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 40 }}
+                transition={MOTION.modal.spring}
+                className="glass-sheet relative flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-[40px] text-on-surface outline-none"
             >
                 {/* Deleting a person drops their balances: confirm first. */}
                 <ConfirmDialog
@@ -80,185 +127,219 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({
                         onDelete(person.id);
                     }}
                 />
-                {/* Avant-Garde Header */}
-                <div className="relative p-8 pb-0">
-                    <div className="absolute top-4 right-4 flex gap-2">
-                        <button
-                            onClick={() => onEdit(person)}
-                            className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
-                            title={t.edit}
-                            aria-label={t.edit}
-                        >
-                            <Edit2 size={20} className="opacity-75" aria-hidden="true" />
+
+                <div className="paper-grab mx-auto mt-2 h-[5px] w-9 shrink-0 rounded-full md:hidden" aria-hidden="true" {...handleProps} />
+                <div className="flex touch-none items-center justify-between px-4 pt-2 md:pt-4" {...handleProps}>
+                    <button type="button" onClick={onClose} aria-label={t.close} title={t.close} className={iconButton}>
+                        <X size={20} aria-hidden="true" />
+                    </button>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => onEdit(person)} aria-label={t.edit} title={t.edit} className={iconButton}>
+                            <Pencil size={18} aria-hidden="true" />
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setIsConfirmingDelete(true)}
-                            className="p-2 hover:bg-error-container/20 hover:text-error rounded-full text-on-surface-variant transition-colors"
-                            title={t.delete}
-                            aria-label={t.delete}
-                        >
-                            <Trash2 size={20} className="opacity-75" aria-hidden="true" />
+                        <button type="button" onClick={() => setIsConfirmingDelete(true)} aria-label={t.delete} title={t.delete} className={clsx(iconButton, 'text-neg')}>
+                            <Trash2 size={18} aria-hidden="true" />
                         </button>
-                        <button type="button" onClick={onClose} aria-label={t.close} title={t.close} className="p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors">
-                            <X size={20} className="opacity-75" aria-hidden="true" />
-                        </button>
-                    </div>
-
-                    <div className="flex flex-col items-center">
-                        <div
-                            className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-xl mb-4 relative"
-                            style={{ backgroundColor: person.color }}
-                        >
-                            {person.avatar?.startsWith('data:') || person.avatar?.startsWith('http') ? (
-                                <img src={person.avatar} alt={person.name} className="w-full h-full object-cover rounded-full" />
-                            ) : (
-                                person.avatar || person.name.charAt(0).toUpperCase()
-                            )}
-
-                            {totalBalanceInBase !== 0 && (
-                                <div className={clsx(
-                                    "absolute -bottom-2 px-3 py-1 rounded-full text-xs font-bold shadow-lg border border-surface",
-                                    totalBalanceInBase > 0 ? "bg-error text-on-error" : "bg-primary text-on-primary"
-                                )}>
-                                    {totalBalanceInBase > 0 ? t.owesYou : t.youOwe}
-                                </div>
-                            )}
-                        </div>
-
-                        <h2 id={titleId} className="text-3xl font-display font-medium text-on-surface text-center mb-1">{person.name}</h2>
-
-                        {totalBalanceInBase !== 0 && (
-                            <p className={clsx(
-                                "text-lg font-mono font-medium mb-6",
-                                totalBalanceInBase > 0 ? "text-error" : "text-primary"
-                            )}>
-                                {formatCurrency(Math.abs(totalBalanceInBase), baseCurrency)}
-                            </p>
-                        )}
-
-                        {totalBalanceInBase === 0 && (
-                            <p className="text-on-surface-variant/70 mb-6 flex items-center gap-2 text-sm">
-                                <Sparkles size={14} /> {t.allSettled}
-                            </p>
-                        )}
                     </div>
                 </div>
 
-                {/* Body */}
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                    {/* Balances Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-                        {['EUR', 'USD', 'RSD'].map((currency) => {
-                            const amount = person.balances[currency as Currency] || 0;
-                            const isEditing = editingCurrency === currency;
+                <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6" {...contentProps}>
+                    <div className="flex flex-col items-center pb-5 pt-1 text-center">
+                        {isImage(person.avatar) || !person.avatar ? (
+                            <Avatar name={person.name} color={person.color} image={isImage(person.avatar) ? person.avatar : undefined} size={80} />
+                        ) : (
+                            <span aria-hidden="true" className="flex h-20 w-20 items-center justify-center rounded-full text-[36px]" style={{ background: person.color }}>
+                                {person.avatar}
+                            </span>
+                        )}
+                        <h2 id={titleId} className="mt-3 max-w-full truncate text-[26px] font-bold tracking-[-0.5px]">{person.name}</h2>
+                        {settled ? (
+                            <p className="mt-1 flex items-center gap-1.5 text-[14px] font-medium text-muted">
+                                <Check size={15} className="text-pos" aria-hidden="true" /> {t.allSettled}
+                            </p>
+                        ) : (
+                            <>
+                                <span className={clsx('mt-2 rounded-full px-3 py-1 text-[12px] font-bold', owesYou ? 'bg-pos/15 text-pos' : 'bg-neg/15 text-neg')}>
+                                    {owesYou ? t.owesYou : t.youOwe}
+                                </span>
+                                <Big size={34} className={clsx('mt-1 w-full text-center', owesYou ? 'text-pos' : 'text-neg')}>
+                                    {formatCurrency(Math.abs(totalBalanceInBase), baseCurrency)}
+                                </Big>
+                                {openCurrencies.length > 0 && (
+                                    <div className="mt-4 flex w-full max-w-[360px] flex-col items-center gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={settleAll}
+                                            className="flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-full bg-accent px-4 text-[15px] font-semibold text-on-accent"
+                                        >
+                                            <Handshake size={18} className="shrink-0" aria-hidden="true" />
+                                            <span className="truncate">
+                                                {(owesYou ? t.settleTheyPaidMe : t.settleIPaidThem).replace('{name}', person.name)}
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => (partialOpen ? setPartialOpen(false) : openPartial())}
+                                            aria-expanded={partialOpen}
+                                            aria-controls="person-partial-settle"
+                                            className="flex h-11 shrink-0 items-center justify-center rounded-full px-4 text-[14px] font-semibold text-accent"
+                                        >
+                                            {t.settleOtherAmount}
+                                        </button>
+                                    </div>
+                                )}
+                                <AnimatePresence initial={false}>
+                                    {partialOpen && activePartialCurrency && (
+                                        <m.form
+                                            id="person-partial-settle"
+                                            onSubmit={submitPartial}
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            transition={MOTION.modal.spring}
+                                            className="w-full max-w-[360px] overflow-hidden"
+                                        >
+                                            <div className="mt-3 flex flex-col gap-2 rounded-[22px] bg-chip p-3 text-left">
+                                                <label htmlFor="person-partial-amount" className="px-1 text-[12px] font-semibold text-muted">
+                                                    {t.settlePaidBack}
+                                                </label>
+                                                <div className="flex items-center gap-2">
+                                                    {openCurrencies.length > 1 ? (
+                                                        <select
+                                                            aria-label={t.currency}
+                                                            value={activePartialCurrency}
+                                                            onChange={(e) => {
+                                                                setPartialCurrency(e.target.value as Currency);
+                                                                setPartialError(null);
+                                                            }}
+                                                            className="h-11 shrink-0 rounded-[14px] bg-[var(--paper-tile)] px-2.5 text-[14px] font-semibold"
+                                                        >
+                                                            {openCurrencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+                                                        </select>
+                                                    ) : (
+                                                        <span className="flex h-11 shrink-0 items-center rounded-[14px] bg-[var(--paper-tile)] px-3 text-[13px] font-bold text-muted">
+                                                            {activePartialCurrency}
+                                                        </span>
+                                                    )}
+                                                    <input
+                                                        id="person-partial-amount"
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        autoComplete="off"
+                                                        autoFocus
+                                                        value={partialAmount}
+                                                        onChange={(e) => {
+                                                            setPartialAmount(e.target.value);
+                                                            setPartialError(null);
+                                                        }}
+                                                        placeholder={String(Math.round(partialBalance * 100) / 100)}
+                                                        aria-invalid={!!partialError}
+                                                        aria-describedby={partialError ? 'person-partial-error' : undefined}
+                                                        className="h-11 min-w-0 flex-1 rounded-[14px] bg-[var(--paper-tile)] px-3 text-[16px] font-semibold tabular-nums outline-none focus:ring-2 focus:ring-accent"
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        className="flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 text-[14px] font-semibold text-on-accent"
+                                                    >
+                                                        <Check size={16} aria-hidden="true" />
+                                                        {t.settle}
+                                                    </button>
+                                                </div>
+                                                {partialError && (
+                                                    <p id="person-partial-error" role="alert" className="px-1 text-[12px] font-medium text-neg">{partialError}</p>
+                                                )}
+                                            </div>
+                                        </m.form>
+                                    )}
+                                </AnimatePresence>
+                            </>
+                        )}
+                    </div>
 
+                    <section aria-label={t.balance} className="paper-tile overflow-hidden py-1">
+                        {CURRENCIES.map((currency, index) => {
+                            const amount = person.balances[currency] || 0;
+                            const isEditing = editingCurrency === currency;
                             return (
                                 <div
                                     key={currency}
-                                    onClick={() => !isEditing && setEditingCurrency(currency as Currency)}
-                                    className={clsx(
-                                        "group relative p-5 rounded-2xl transition-all duration-300 border cursor-pointer",
-                                        amount !== 0 ? "bg-surface-container-high border-transparent" : "bg-surface-container-low border-outline-variant/20 hover:border-primary/30"
-                                    )}
+                                    className={clsx('flex min-h-[60px] items-center gap-3 px-4', index < CURRENCIES.length - 1 && 'border-b border-hair')}
                                 >
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-medium tracking-wider text-on-surface-variant/70 uppercase flex items-center gap-1">
-                                            <Wallet size={12} /> {currency}
-                                        </span>
-                                        {!isEditing && (
-                                            <Edit2 size={12} className="opacity-50 sm:opacity-0 sm:group-hover:opacity-50 transition-opacity text-on-surface-variant" />
-                                        )}
-                                    </div>
-
+                                    <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-[12px] bg-chip text-[12px] font-bold text-muted">
+                                        {currency}
+                                    </span>
                                     {isEditing ? (
-                                        <BalanceInput
-                                            currency={currency as Currency}
-                                            initialAmount={amount}
-                                            onSave={(val) => {
-                                                onUpdateBalance(person.id, currency as Currency, val);
-                                                setEditingCurrency(null);
-                                            }}
-                                            onCancel={() => setEditingCurrency(null)}
-                                            language={language}
-                                        />
-                                    ) : (
-                                        <div className="flex items-baseline gap-2">
-                                            <span className={clsx(
-                                                "text-2xl font-mono font-medium",
-                                                amount > 0 ? "text-error" : amount < 0 ? "text-primary" : "text-on-surface-variant"
-                                            )}>
-                                                {amount > 0 ? '+' : ''}{formatCurrency(amount, currency as Currency)}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Settle Action */}
-                                    {!isEditing && amount !== 0 && (
-                                        <div className="absolute top-4 right-4 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onSettleUp(person.id, currency as Currency);
+                                        <div className="min-w-0 flex-1 py-2">
+                                            <BalanceInput
+                                                currency={currency}
+                                                initialAmount={amount}
+                                                onSave={(val) => {
+                                                    onUpdateBalance(person.id, currency, val);
+                                                    setEditingCurrency(null);
                                                 }}
-                                                className="bg-primary/10 hover:bg-primary text-primary hover:text-on-primary p-2 rounded-full transition-colors"
-                                                title={t.settle}
-                                            >
-                                                <Sparkles size={16} />
-                                            </button>
+                                                onCancel={() => setEditingCurrency(null)}
+                                                language={language}
+                                            />
                                         </div>
+                                    ) : (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingCurrency(currency)}
+                                                aria-label={`${t.edit} ${currency}`}
+                                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                            >
+                                                <span className={clsx('truncate text-[17px] font-semibold', amount > 0 ? 'text-pos' : amount < 0 ? 'text-neg' : 'text-faint')}>
+                                                    {amount > 0 ? '+' : ''}{formatCurrency(amount, currency)}
+                                                </span>
+                                                <Pencil size={13} className="shrink-0 text-faint" aria-hidden="true" />
+                                            </button>
+                                            {amount !== 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onSettleUp(person.id, currency)}
+                                                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent-soft px-3.5 text-[13px] font-semibold text-accent"
+                                                >
+                                                    <Handshake size={15} aria-hidden="true" /> {t.settle}
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             );
                         })}
-                    </div>
+                    </section>
 
-                    {/* Transaction History */}
-                    <div>
-                        <h3 className="text-sm font-medium text-on-surface-variant uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Calendar size={14} /> {t.history}
-                        </h3>
-                        <div className="space-y-1">
-                            {personTransactions.map((tx) => {
+                    <section className="mt-5 flex flex-col gap-1.5">
+                        <h3 className="px-4 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.history}</h3>
+                        <div className="paper-tile overflow-hidden px-4">
+                            {personTransactions.map((tx, index) => {
                                 const category = categories.find(c => c.id === tx.categoryId);
-                                const isOwesYou = tx.type === 'expense';
-
+                                const theyOwe = tx.type === 'expense';
                                 return (
-                                    <div key={tx.id} className="flex justify-between items-center p-3 hover:bg-on-surface/5 rounded-xl transition-colors group">
-                                        <div className="flex items-center gap-4">
-                                            <div className={clsx(
-                                                "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
-                                                isOwesYou ? 'bg-error-container/30 text-error' : 'bg-primary-container/30 text-primary'
-                                            )}>
-                                                {isOwesYou ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
-                                            </div>
-                                            <div>
-                                                <p className="font-medium text-on-surface text-sm">{tx.note || category?.name}</p>
-                                                <p className="text-xs text-on-surface-variant/70">{getShortDate(tx.date, language)}</p>
-                                            </div>
-                                        </div>
-                                        <span className={clsx(
-                                            "font-mono font-medium text-sm",
-                                            isOwesYou ? 'text-error' : 'text-primary'
-                                        )}>
-                                            {isOwesYou ? '+' : ''}{formatCurrency(tx.amount, tx.currency)}
+                                    <div
+                                        key={tx.id}
+                                        className={clsx('flex min-h-[62px] items-center gap-3', index < personTransactions.length - 1 && 'border-b border-hair')}
+                                    >
+                                        <CategoryGlyph category={category} size={38} />
+                                        <span className="flex min-w-0 flex-1 flex-col">
+                                            <span className="truncate text-[15px] font-semibold">{tx.note || category?.name}</span>
+                                            <span className="truncate text-[13px] text-muted">{getShortDate(tx.date, language)}</span>
+                                        </span>
+                                        <span className={clsx('shrink-0 text-[15px] font-semibold', theyOwe ? 'text-pos' : 'text-neg')}>
+                                            {theyOwe ? '+' : '-'}{formatCurrency(tx.amount, tx.currency)}
                                         </span>
                                     </div>
                                 );
                             })}
                             {personTransactions.length === 0 && (
-                                <div className="text-center py-10 opacity-50">
-                                    <div className="bg-surface-container-highest w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Wallet size={24} className="text-on-surface-variant" />
-                                    </div>
-                                    <p className="text-on-surface-variant text-sm">{t.noTransactions}</p>
-                                </div>
+                                <p className="py-8 text-center text-[14px] text-muted">{t.noTransactions}</p>
                             )}
                         </div>
-                    </div>
+                    </section>
                 </div>
             </m.div>
+            </div>
         </div>
     );
 };
-

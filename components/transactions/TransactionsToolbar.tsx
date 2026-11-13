@@ -112,16 +112,16 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden mb-2"
           >
-            <div className="bg-primary/10 border border-primary/30 rounded-xl p-3 flex items-center justify-between">
+            <div className="paper-tile flex items-center justify-between gap-2 px-4 py-2.5">
               <div className="flex items-center gap-3">
                 <button
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
+                  className="flex items-center gap-2 text-[14px] font-semibold text-accent"
                 >
                   {allSelected ? <CheckSquare size={18} /> : <Square size={18} />}
                   {allSelected ? t.deselectAll : t.selectAll}
                 </button>
-                <span className="text-sm text-on-surface-variant">
+                <span className="text-[14px] text-muted">
                   {selectedCount} {t.selected}
                 </span>
               </div>
@@ -130,22 +130,24 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                   <>
                     <button
                       onClick={handleBatchExport}
-                      className="p-2 bg-tertiary/20 text-tertiary hover:bg-tertiary/30 rounded-lg transition-colors"
+                      aria-label={t.exportSelected}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-chip"
                       title={t.exportSelected}
                     >
                       <FileSpreadsheet size={18} />
                     </button>
                     <button
                       onClick={handleBatchDelete}
-                      className="p-2 bg-error/20 text-error hover:bg-error/30 rounded-lg transition-colors"
+                      aria-label={t.deleteSelected}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-chip text-neg"
                       title={t.deleteSelected}
                     >
                       <Trash2 size={18} />
                     </button>
                   </>
                 )}
-                <button onClick={exitSelectionMode} className="p-2 hover:bg-surface-container rounded-lg transition-colors">
-                  <X size={18} />
+                <button onClick={exitSelectionMode} aria-label={t.close} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-chip">
+                  <X size={18} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -154,46 +156,48 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
       </AnimatePresence>
 
       <div className={clsx('flex justify-between items-center transition-all duration-200', isScrolled ? 'mb-2' : 'mb-3')}>
-        <h2 className={clsx('font-display font-medium text-on-surface transition-all duration-200', isScrolled ? 'text-lg' : 'text-2xl')}>
+        <h2 className={clsx('font-bold leading-tight transition-all duration-200', isScrolled ? 'text-[20px] tracking-[-0.3px]' : 'text-[28px] tracking-[-0.6px]')}>
           {t.transactions}
         </h2>
-        <div className="flex gap-1">
+        <div className="flex gap-2">
           <button
             onClick={() => setIsSelectionMode(!isSelectionMode)}
             className={clsx(
-              'p-2 rounded-full transition-colors',
-              isSelectionMode ? 'bg-primary text-on-primary' : 'hover:bg-surface-container-high text-on-surface-variant'
+              'glass flex h-11 w-11 items-center justify-center rounded-full transition-colors',
+              isSelectionMode && 'bg-accent text-on-accent'
             )}
             title={t.selectMultiple}
+            aria-label={t.selectMultiple}
+            aria-pressed={isSelectionMode}
           >
-            <CheckCircle2 size={18} />
+            <CheckCircle2 size={19} aria-hidden="true" />
           </button>
           <button
             onClick={onOpenExportModal}
-            className="p-2 hover:bg-surface-container-high text-on-surface-variant rounded-full transition-colors"
+            className="glass flex h-11 w-11 items-center justify-center rounded-full"
             title={t.export}
             aria-label={t.openExport}
           >
-            <Download size={18} />
+            <Download size={19} aria-hidden="true" />
           </button>
           <button
             onClick={onOpenPrintableReport}
             disabled={isExportingPdf}
-            className="p-2 hover:bg-surface-container-high text-on-surface-variant rounded-full transition-colors"
+            className="glass flex h-11 w-11 items-center justify-center rounded-full"
             title={t.exportPdf}
             aria-label={t.printableReport}
           >
-            {isExportingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+            {isExportingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={19} aria-hidden="true" />}
           </button>
         </div>
       </div>
 
-      <div className="relative mb-2">
+      <div className="relative mb-3">
         <div className="relative">
           {inputMode === 'search' ? (
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50" />
+            <Search size={18} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
           ) : (
-            <Sparkles size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/60" />
+            <Sparkles size={18} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
           )}
           <input
             type="text"
@@ -213,8 +217,8 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
             }}
             placeholder={inputMode === 'search' ? t.searchPlaceholder : t.smartAddPlaceholder}
             className={clsx(
-              'w-full bg-surface-container border border-outline-variant/30 rounded-2xl pl-10 pr-20 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all',
-              inputMode === 'add' && 'border-primary/30 bg-primary/5'
+              'h-12 w-full rounded-full border-none bg-[var(--paper-tile)] pl-11 pr-24 text-[16px] shadow-[var(--paper-tile-shadow)] placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent',
+              inputMode === 'add' && 'ring-2 ring-accent'
             )}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -222,7 +226,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
               <button
                 onClick={onSmartParse}
                 disabled={!smartInput.trim() || isParsing}
-                className="px-2.5 py-1.5 bg-primary text-on-primary rounded-xl text-xs font-medium disabled:opacity-50 transition-colors"
+                className="h-9 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-on-accent disabled:opacity-40"
               >
                 {isParsing ? <Loader2 size={14} className="animate-spin" /> : t.parse}
               </button>
@@ -234,36 +238,37 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                 setSmartInput('');
               }}
               className={clsx(
-                'p-2 rounded-xl transition-colors',
-                inputMode === 'add' ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:bg-surface-container-high'
+                'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                inputMode === 'add' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-chip'
               )}
               title={inputMode === 'search' ? t.smartAdd : t.search}
+              aria-label={inputMode === 'search' ? t.smartAdd : t.search}
             >
-              {inputMode === 'search' ? <Sparkles size={16} /> : <Search size={16} />}
+              {inputMode === 'search' ? <Sparkles size={17} aria-hidden="true" /> : <Search size={17} aria-hidden="true" />}
             </button>
           </div>
         </div>
         {inputMode === 'add' && parseError && (
-          <p className="text-xs text-error mt-2 px-1">{parseError}</p>
+          <p className="mt-2 px-4 text-[13px] text-neg">{parseError}</p>
         )}
         {inputMode === 'add' && !aiAvailable && (
-          <p className="text-xs text-error mt-2 px-1">
+          <p className="mt-2 px-4 text-[13px] text-neg">
             {t.aiUnavailable}
           </p>
         )}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 pt-0.5 scrollbar-hide">
         <button
           onClick={() => {
             setFilterType('all');
             setFilterCategory('all');
           }}
           className={clsx(
-            'px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0 min-h-[32px]',
+            'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
             filterType === 'all' && filterCategory === 'all'
-              ? 'bg-primary/15 text-primary border border-primary/30'
-              : 'bg-surface-container text-on-surface-variant border border-transparent hover:bg-surface-container-high'
+              ? 'bg-accent text-on-accent'
+              : 'bg-[var(--paper-tile)] text-muted shadow-[var(--paper-tile-shadow)] hover:text-[var(--paper-text)]'
           )}
         >
           {t.all}
@@ -276,7 +281,8 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
         <select
           value={filterAccount}
           onChange={(event) => setFilterAccount(event.target.value)}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container text-on-surface-variant border border-transparent hover:bg-surface-container-high transition-colors shrink-0 min-h-[32px]"
+          aria-label={t.wallet}
+          className="h-9 shrink-0 appearance-none rounded-full border-none bg-[var(--paper-tile)] px-3.5 text-[13px] font-semibold text-muted shadow-[var(--paper-tile-shadow)]"
         >
           <option value="all">{filterAccountName || t.wallet}</option>
           {state.accounts.map(account => (
@@ -288,25 +294,25 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
         <button
           onClick={() => setShowDateFilter(!showDateFilter)}
           className={clsx(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0 min-h-[32px]',
+            'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
             (filterDateFrom || filterDateTo)
-              ? 'bg-primary/15 text-primary border border-primary/30'
-              : 'bg-surface-container text-on-surface-variant border border-transparent hover:bg-surface-container-high'
+              ? 'bg-accent text-on-accent'
+              : 'bg-[var(--paper-tile)] text-muted shadow-[var(--paper-tile-shadow)] hover:text-[var(--paper-text)]'
           )}
         >
-          <Calendar size={12} />
+          <Calendar size={14} aria-hidden="true" />
           {filterDateFrom || filterDateTo ? t.dateRange : t.dates}
-          <ChevronDown size={10} className={clsx('opacity-50 transition-transform', showDateFilter && 'rotate-180')} />
+          <ChevronDown size={12} aria-hidden="true" className={clsx('opacity-60 transition-transform', showDateFilter && 'rotate-180')} />
         </button>
         {hasSearchOrFilters && (
           <button
             onClick={clearAllFilters}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-error/80 hover:text-error hover:bg-error/10 transition-colors shrink-0 min-h-[32px]"
+            className="flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[13px] font-semibold text-neg hover:bg-chip"
           >
-            <X size={12} />
+            <X size={14} aria-hidden="true" />
             {t.clear}
             {activeFilterCount > 0 && (
-              <span className="bg-error/15 text-error px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+              <span className="rounded-full bg-chip px-1.5 py-0.5 text-[11px] font-bold">
                 {activeFilterCount}
               </span>
             )}
@@ -328,14 +334,14 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                 type="date"
                 value={filterDateFrom}
                 onChange={(event) => setFilterDateFrom(event.target.value)}
-                className="flex-1 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-xs text-on-surface"
+                className="h-11 min-w-0 flex-1 rounded-[14px] border-none bg-[var(--paper-tile)] px-3 text-[15px] shadow-[var(--paper-tile-shadow)]"
               />
-              <span className="text-xs text-on-surface-variant">-&gt;</span>
+              <span className="text-[13px] text-faint" aria-hidden="true">&rarr;</span>
               <input
                 type="date"
                 value={filterDateTo}
                 onChange={(event) => setFilterDateTo(event.target.value)}
-                className="flex-1 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-xs text-on-surface"
+                className="h-11 min-w-0 flex-1 rounded-[14px] border-none bg-[var(--paper-tile)] px-3 text-[15px] shadow-[var(--paper-tile-shadow)]"
               />
               {(filterDateFrom || filterDateTo) && (
                 <button
@@ -343,9 +349,10 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
                     setFilterDateFrom('');
                     setFilterDateTo('');
                   }}
-                  className="p-2 hover:bg-surface-container rounded-lg"
+                  className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-chip"
+                  aria-label={t.clear}
                 >
-                  <X size={14} className="text-on-surface-variant" />
+                  <X size={16} aria-hidden="true" className="text-muted" />
                 </button>
               )}
             </div>

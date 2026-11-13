@@ -59,27 +59,31 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
                         }
                         setValue(newValue);
                     }}
-                    className="w-full bg-surface-container-highest border-b-2 border-primary focus:border-primary px-2 py-1 text-lg font-mono text-on-surface outline-none transition-all"
+                    className="h-10 w-full rounded-[12px] border-none bg-chip px-3 pr-12 text-[16px] font-semibold text-on-surface outline-none focus:ring-2 focus:ring-accent"
                     placeholder="0.00"
                     onKeyDown={handleKeyDown}
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium text-on-surface-variant pointer-events-none">
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-muted">
                     {currency}
                 </span>
             </div>
             <button
+                type="button"
                 onClick={handleSave}
-                className="p-2 bg-primary text-on-primary rounded-full hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent"
                 title={t.save}
+                aria-label={t.save}
             >
-                <Check size={16} />
+                <Check size={17} aria-hidden="true" />
             </button>
             <button
+                type="button"
                 onClick={onCancel}
-                className="p-2 bg-surface-container-highest text-on-surface-variant rounded-full hover:bg-error-container hover:text-on-error-container transition-transform hover:scale-105 active:scale-95"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
                 title={t.cancel}
+                aria-label={t.cancel}
             >
-                <X size={16} />
+                <X size={17} aria-hidden="true" />
             </button>
         </div>
     );

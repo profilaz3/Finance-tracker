@@ -24,10 +24,10 @@ export const CommonFilterChips: React.FC<CommonFilterChipsProps> = ({
           aria-pressed={isActive}
           onClick={() => onApplyFilter(filter)}
           className={clsx(
-            'px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0 min-h-[32px]',
+            'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
             isActive
-              ? 'bg-primary/15 text-primary border border-primary/30'
-              : 'bg-surface-container text-on-surface-variant border border-transparent hover:bg-surface-container-high'
+              ? 'bg-accent text-on-accent'
+              : 'bg-[var(--paper-tile)] text-muted shadow-[var(--paper-tile-shadow)] hover:text-[var(--paper-text)]'
           )}
         >
           {filter.label}

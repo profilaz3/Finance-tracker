@@ -20,6 +20,30 @@ export const PASSWORD_ISSUE_KEYS: Record<PasswordIssue, TranslationKey> = {
     needsLetterAndDigit: 'authPasswordNeedsLetterAndDigit',
 };
 
+// Deliberately loose: one @, no spaces, a dot in the domain. The server does the real check.
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Validates the sign-in / sign-up / reset form before it is sent, so errors show in the
+ * app's own banner instead of the browser's validation popups (the form is noValidate).
+ */
+export const validateAuthForm = (
+    mode: 'signIn' | 'signUp' | 'forgot',
+    email: string,
+    password: string,
+): TranslationKey | null => {
+    const trimmed = email.trim();
+    if (!trimmed) return 'authEmailRequired';
+    if (!EMAIL_SHAPE.test(trimmed)) return 'authErrorInvalidEmail';
+    if (mode === 'forgot') return null;
+    if (!password) return 'authPasswordRequired';
+    if (mode === 'signUp') {
+        const issue = validatePassword(password);
+        if (issue) return PASSWORD_ISSUE_KEYS[issue];
+    }
+    return null;
+};
+
 interface AuthErrorLike {
     code?: unknown;
     status?: unknown;

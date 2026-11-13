@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { CategoryGlyph } from './ui/CategoryGlyph';
 import { createPortal } from 'react-dom';
 import { m, AnimatePresence } from 'motion/react';
 import { Split, Pencil, Trash2, Receipt, User, MapPin, Users, Check, Copy, Bookmark, MoreVertical } from 'lucide-react';
 import clsx from 'clsx';
 import { Transaction, Category, Account, Person, AppState, Event } from '../types';
 import { formatCurrency, getShortDate } from '../utils/formatters';
-import { getIconByName } from '../utils/categoryIcons';
 import { convertAmount } from '../services/currencyService';
 import { TRANSLATIONS } from '../constants';
-import { hexToRgb, getLuminance } from '../utils/colorUtils';
 import { useEscapeKey, useFocusTrap } from '../hooks/useFocusTrap';
 
 interface TransactionItemProps {
@@ -52,41 +51,9 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
     const timerRef = React.useRef<NodeJS.Timeout | null>(null);
     const isLongPress = React.useRef(false);
     const t = TRANSLATIONS[state.language];
-    const CategoryIcon = getIconByName(category?.icon || 'wallet');
     const hasSplit = !!transaction.splitDetails;
 
     const displayCurrency = account?.currency || state.baseCurrency;
-
-    const categoryRgb = useMemo(() => {
-        const rgb = hexToRgb(category?.color || '#808080');
-        if (!rgb) return { r: 128, g: 128, b: 128, lum: 0.5 };
-        return { ...rgb, lum: getLuminance(rgb.r, rgb.g, rgb.b) };
-    }, [category?.color]);
-
-    const iconStyle = useMemo(() => {
-        const { r, g, b, lum } = categoryRgb;
-        const f = lum > 0.7 ? 0.5 : lum > 0.55 ? 0.65 : 1;
-        return {
-            backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
-            color: `rgb(${Math.round(r * f)}, ${Math.round(g * f)}, ${Math.round(b * f)})`,
-        };
-    }, [categoryRgb]);
-
-    // Category color for the subtitle text
-    const categoryTextColor = useMemo(() => {
-        const { r, g, b, lum } = categoryRgb;
-        const f = lum > 0.7 ? 0.45 : lum > 0.55 ? 0.6 : 0.85;
-        return `rgba(${Math.round(r * f)}, ${Math.round(g * f)}, ${Math.round(b * f)}, 0.7)`;
-    }, [categoryRgb]);
-
-    // Account color for the subtitle text
-    const accountTextColor = useMemo(() => {
-        const rgb = hexToRgb(account?.color || '#808080');
-        if (!rgb) return undefined;
-        const lum = getLuminance(rgb.r, rgb.g, rgb.b);
-        const f = lum > 0.7 ? 0.45 : lum > 0.55 ? 0.6 : 0.85;
-        return `rgba(${Math.round(rgb.r * f)}, ${Math.round(rgb.g * f)}, ${Math.round(rgb.b * f)}, 0.7)`;
-    }, [account?.color]);
 
     // Memoize fee and amount calculations
     const feeInTxCurrency = useMemo(() => {
@@ -178,70 +145,60 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
             data-transaction-row
             whileTap={{ scale: 0.98 }}
             className={clsx(
-                "group relative select-none transition-colors duration-100",
-                !isLastInGroup && "border-b border-outline-variant/10",
+                "group relative select-none transition-colors duration-100 active:bg-chip",
+                !isLastInGroup && "border-b border-hair",
                 hasExpandableContent ? "cursor-pointer" : "cursor-default",
-                transaction.type === 'income'
-                    ? "active:bg-tertiary/8 bg-tertiary/[0.03]"
-                    : "active:bg-surface-container-low"
             )}
         >
             {/* Row */}
-            <div className="flex items-center gap-3 py-2.5 px-3">
-                {/* Icon dot */}
-                <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                    style={iconStyle}
-                >
-                    {person ? (
-                        person.avatar ? (
-                            person.avatar.startsWith('data:') || person.avatar.startsWith('http') ? (
-                                <img src={person.avatar} alt={person.name} className="w-10 h-10 rounded-full object-cover" />
-                            ) : (
-                                <div className="text-xs font-medium">{person.avatar}</div>
-                            )
+            <div className="flex min-h-[64px] items-center gap-3 py-2.5 pl-4 pr-2">
+                {person ? (
+                    <span
+                        className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[15px] font-bold text-white"
+                        style={{ background: person.color || 'var(--paper-muted)' }}
+                        aria-hidden="true"
+                    >
+                        {person.avatar && (person.avatar.startsWith('data:') || person.avatar.startsWith('http')) ? (
+                            <img src={person.avatar} alt="" className="h-10 w-10 object-cover" />
+                        ) : person.avatar ? (
+                            <span className="text-[18px]">{person.avatar}</span>
                         ) : (
                             <User size={18} aria-hidden="true" />
-                        )
-                    ) : (
-                        <CategoryIcon size={18} aria-hidden="true" />
-                    )}
-                </div>
+                        )}
+                    </span>
+                ) : (
+                    <CategoryGlyph category={category} />
+                )}
 
                 {/* Title + metadata */}
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                        <span className="text-base font-medium text-on-surface truncate">
+                        <span className="truncate text-[16px] font-semibold">
                             {transaction.note || category?.name || t.untitled}
                         </span>
                         {hasSplit && (
-                            <span className="text-on-surface-variant/40 text-xs shrink-0">
-                                <Users size={13} className="inline" /> {transaction.splitDetails!.shares.length}
+                            <span className="flex shrink-0 items-center gap-0.5 text-[12px] text-faint">
+                                <Users size={13} aria-hidden="true" /> {transaction.splitDetails!.shares.length}
                             </span>
                         )}
-                        {event && <MapPin size={12} className="text-on-surface-variant/40 shrink-0" />}
-                        {transaction.receiptData && <Receipt size={12} className="text-on-surface-variant/40 shrink-0" />}
+                        {event && <MapPin size={12} className="shrink-0 text-faint" aria-hidden="true" />}
+                        {transaction.receiptData && <Receipt size={12} className="shrink-0 text-faint" aria-hidden="true" />}
                     </div>
-                    <div className="text-sm text-on-surface-variant/50 truncate mt-px">
-                        <span style={accountTextColor ? { color: accountTextColor } : undefined}>{account?.name}</span>
-                        {category?.name && (
-                            <>
-                                <span className="text-on-surface-variant/25"> · </span>
-                                <span style={{ color: categoryTextColor }}>{category.name}</span>
-                            </>
-                        )}
+                    <div className="mt-px truncate text-[13px] text-muted">
+                        {category?.name && transaction.note ? <>{category.name} · </> : null}
+                        {account?.name}
                     </div>
                 </div>
 
                 {/* Amount */}
                 <div className="shrink-0 text-right">
                     <div className={clsx(
-                        "text-base font-semibold tabular-nums",
-                        transaction.type === 'income' ? "text-tertiary" : "text-on-surface"
+                        "text-[16px] font-semibold tabular-nums",
+                        transaction.type === 'income' && "text-pos"
                     )}>
                         {transaction.type === 'income' ? '+' : '−'}{formatCurrency(displayAmount, displayCurrency)}
                     </div>
-                    <div className="text-[13px] text-on-surface-variant/40 tabular-nums">
+                    <div className="text-[12px] tabular-nums text-faint">
                         {getShortDate(transaction.date)}
                     </div>
                 </div>
@@ -259,7 +216,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         const row = (e.currentTarget.closest('[data-transaction-row]') ?? e.currentTarget) as HTMLElement;
                         openMenuAt(row.getBoundingClientRect());
                     }}
-                    className="-mr-1 p-1.5 shrink-0 rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-opacity opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                    className="shrink-0 rounded-full p-1.5 text-muted transition-opacity hover:bg-chip opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
                 >
                     <MoreVertical size={18} aria-hidden="true" />
                 </button>
@@ -273,7 +230,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[9998] bg-scrim/20"
+                        className="paper-scrim fixed inset-0 z-[9998]"
                         style={{ touchAction: 'none' }}
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); }}
                         onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -296,16 +253,16 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         aria-label={t.moreActions}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
-                        className="z-[9999] min-w-[170px] bg-surface-container-high rounded-2xl shadow-elevation-4 border border-outline-variant/15 overflow-hidden py-1"
+                        className="glass-sheet z-[9999] min-w-[190px] overflow-hidden rounded-[22px] p-1.5"
                     >
                         {!transaction.personId && (
                             <button
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { onSplit(); closeMenu(); }}
-                                className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
+                                className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium transition-colors hover:bg-chip active:bg-chip"
                             >
-                                <Split size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.split}
+                                <Split size={18} className="text-muted" aria-hidden="true" /> {t.split}
                             </button>
                         )}
                         <button
@@ -319,18 +276,28 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 }
                                 closeMenu();
                             }}
-                            className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
+                            className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium transition-colors hover:bg-chip active:bg-chip"
                         >
-                            <Pencil size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.edit}
+                            <Pencil size={18} className="text-muted" aria-hidden="true" /> {t.edit}
                         </button>
+                        {transaction.receiptData && (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => { onViewReceipt(); closeMenu(); }}
+                                className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium transition-colors hover:bg-chip active:bg-chip"
+                            >
+                                <Receipt size={18} className="text-muted" aria-hidden="true" /> {t.viewReceipt}
+                            </button>
+                        )}
                         {onDuplicate && (
                             <button
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { onDuplicate(); closeMenu(); }}
-                                className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
+                                className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium transition-colors hover:bg-chip active:bg-chip"
                             >
-                                <Copy size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.duplicate}
+                                <Copy size={18} className="text-muted" aria-hidden="true" /> {t.duplicate}
                             </button>
                         )}
                         {onSaveAsTemplate && (
@@ -338,17 +305,17 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { onSaveAsTemplate(); closeMenu(); }}
-                                className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest flex items-center gap-3 text-sm text-on-surface transition-colors active:bg-surface-container-highest"
+                                className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium transition-colors hover:bg-chip active:bg-chip"
                             >
-                                <Bookmark size={16} className="text-on-surface-variant" aria-hidden="true" /> {t.saveAsTemplate}
+                                <Bookmark size={18} className="text-muted" aria-hidden="true" /> {t.saveAsTemplate}
                             </button>
                         )}
-                        <div role="separator" className="h-px bg-outline-variant/15 mx-3 my-1" />
+                        <div role="separator" className="mx-3 my-1 h-px bg-[var(--paper-line)]" />
                         <button
                             type="button"
                             role="menuitem"
                             onClick={() => { onDelete(); closeMenu(); }}
-                            className="w-full text-left px-4 py-2.5 hover:bg-error/10 text-error flex items-center gap-3 text-sm transition-colors active:bg-error/20"
+                            className="flex h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[15px] font-medium text-neg transition-colors hover:bg-chip"
                         >
                             <Trash2 size={16} aria-hidden="true" /> {t.delete}
                         </button>
@@ -367,7 +334,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                         transition={{ duration: 0.15 }}
                         className="overflow-hidden"
                     >
-                        <div className="ml-[52px] mr-1 mb-2 px-3 py-2.5 rounded-lg bg-surface-container-low/60 space-y-1.5">
+                        <div className="mb-3 ml-[68px] mr-4 space-y-1.5 rounded-[14px] bg-chip px-3 py-2.5">
                             {/* SPLIT */}
                             {hasSplit && (
                                 <>
@@ -416,7 +383,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                                     <span className="text-on-surface-variant/70 truncate flex-1 mr-2">
                                                         {item.quantity > 1 ? `${item.quantity}× ` : ''}{item.name}
                                                     </span>
-                                                    <span className="font-mono text-on-surface tabular-nums">
+                                                    <span className="font-semibold text-on-surface tabular-nums">
                                                         {formatCurrency(item.price, transaction.currency)}
                                                     </span>
                                                 </div>
@@ -428,12 +395,20 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                                             )}
                                         </div>
                                     )}
-                                    <div className="flex justify-between items-center text-xs pt-1.5 border-t border-outline-variant/10">
-                                        <span className="text-on-surface-variant">{t.total}</span>
+                                    <div className="flex justify-between items-center text-xs pt-1.5 border-t border-hair">
+                                        <span className="text-muted">{t.total}</span>
                                         <span className="font-semibold text-on-surface">
                                             {formatCurrency(transaction.receiptData.total || transaction.amount, transaction.currency)}
                                         </span>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}
+                                        className="mt-1 flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-accent-soft text-[13px] font-semibold text-accent transition-colors focus-visible:ring-2 focus-visible:ring-accent"
+                                    >
+                                        <Receipt size={14} aria-hidden="true" /> {t.viewReceipt}
+                                    </button>
                                 </>
                             )}
 

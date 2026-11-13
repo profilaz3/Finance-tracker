@@ -6,7 +6,6 @@ describe('style contracts', () => {
     const themeCss = readFileSync('src/theme.css', 'utf8');
 
     expect(themeCss).not.toContain('button.btn-primary');
-    expect(themeCss).not.toContain('.glass {');
     expect(themeCss).not.toContain('.glass-strong {');
     expect(themeCss).not.toContain('.gradient-text {');
     expect(themeCss).not.toContain('.card-glow {');

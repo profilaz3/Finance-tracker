@@ -35,7 +35,7 @@ describe('calculateEventSettlement', () => {
       baseCurrency: 'EUR',
     }));
     expect(html).toContain('Who Owes Who');
-    expect((html.match(/font-bold text-primary/g) || []).length).toBe(2);
+    expect((html.match(/data-debt=/g) || []).length).toBe(2);
     expect(html).toContain('Unknown');
   });
 

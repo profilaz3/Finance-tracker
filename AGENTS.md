@@ -22,8 +22,8 @@ Required in Supabase Edge Function secrets:
 - `OPENAI_API_KEY` - Receipt scanning and AI insights
 
 Optional Edge Function secrets:
-- `OPENAI_MODEL` (default `gpt-4o`, receipt scanning) / `OPENAI_MODEL_FAST` (default `gpt-4o-mini`, parsing and insights)
-- `AI_DAILY_LIMIT_SCAN_RECEIPT` / `AI_DAILY_LIMIT_PARSE_TRANSACTION` / `AI_DAILY_LIMIT_GENERATE_INSIGHTS` - per-user daily caps (defaults 30 / 100 / 10), enforced by `public.consume_ai_quota`
+- `OPENAI_MODEL` (default `gpt-6-luna`, receipt scanning) / `OPENAI_MODEL_FAST` (default `gpt-6-luna`, parsing and insights) / `OPENAI_REASONING_EFFORT` (default `medium`; ignored for gpt-4 models, which get a temperature instead)
+- `AI_DAILY_LIMIT_SCAN_RECEIPT` / `AI_DAILY_LIMIT_PARSE_TRANSACTION` / `AI_DAILY_LIMIT_GENERATE_INSIGHTS` - per-user daily caps (defaults 30 / 100 / 30; the insights cap is shared by insights, the monthly letter, anomaly explanations and AI clean-up), enforced by `public.consume_ai_quota`
 - `ALLOWED_ORIGINS` - extra comma-separated CORS origins
 
 ## Database & Edge Functions

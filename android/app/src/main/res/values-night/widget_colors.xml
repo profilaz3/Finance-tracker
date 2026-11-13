@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home screen widget: paper tile with the teal accent (dark). -->
+    <color name="widget_background">#18181A</color>
+    <color name="widget_border">#14FFFFFF</color>
+    <color name="widget_text">#F2F1EE</color>
+    <color name="widget_muted">#A3A29D</color>
+    <color name="widget_faint">#706F6B</color>
+    <color name="widget_accent">#2DD4BF</color>
+    <color name="widget_accent_dark">#13897F</color>
+    <color name="widget_track">#2A2A2D</color>
+    <color name="widget_negative">#FF8A5B</color>
+    <color name="widget_on_accent">#06201D</color>
+</resources>

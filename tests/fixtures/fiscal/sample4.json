@@ -1,0 +1,66 @@
+{
+ "source": "Public sample receipt from github.com/turanjanin/serbian-fiscal-receipts-parser (MIT)",
+ "url": "https://suf.purs.gov.rs/v/?vl=A1NETkRZSlJRU0RORFlKUlHdNgEAuCwBAIAjQwAAAAAAAAABkBGcVygAAAA4WIjKrFOQOxVp9zqPGN4aQJzNRrS2OpKb5w+7nuXOBLQviaIqM/uTR0x9Vtyfqa5wcKuuS/quTuEjUg2TG7jg2gBaZJxOf7zftOi/zUvD2W9jceszx+NepNi3DoVBV4+h+xbPJcr5mKh2xjaPdzwxoEWUPn+vf+DPVxWJekz0H2yPH+Z9f2jTcq6RNjU1YfyXQr8NMnZM7MFNMzSCZmEeTOFH3Oi1sPT80xRBc4Yik7/tjbO9mskvOFHBXuwmcFFBEj9ktVSgKB4AldH1G0pX29i/PP2emhKSLEpy9Hk6ympk3ljpW4MaZMr2jjKdj9YjuCd0yrWbu/QlsFY9fPViOI6El2FZaMB9H+CuL4lcNlYtVKnZG3mcBVd6P5XRSliyfCMQSGE4Qaz5s3puIbyzUQTX9tAOU6H5rsew/j78gwr5pt5nN1Kz9KlXjNqC7rwT4jkKhtkEW9uk5qRCLXg9vrWr9hC3XcqW04p6zZTltikhLKUBhIgI857ritkvGBXIIciYv+lYJtqRBdiDSYSkCdfw1XE832dSaC7BGsANGYunXaNexFCPU75XVJRNgrTnOS2Z37gXNhWglN+BzCG8pOnX/Smpx9yrT0dt3VV2I2PIhYdADXArktgROXCyX1FCOKiyFdupH2mi+Qc1YiquFPVSPpm0ESXUH3CFTa20CbVkpScThXoeTBr0oT24u/0=",
+ "api": {
+  "invoiceRequest": {
+   "posTime": null,
+   "taxId": "108607462",
+   "businessName": "ETER  DOO",
+   "locationName": "1028533-ETER DOO - Lounge bar EPIC",
+   "address": "БУЛЕВАР НЕМАЊИЋА ТЦ ДЕЛТА ПЛАНЕТ 11Б ЛОКАЛ Л1.002   ",
+   "city": "НИШ (МЕДИЈАНА)",
+   "administrativeUnit": "Ниш-Медијана",
+   "buyer": null,
+   "buyerCostCenter": null,
+   "cashier": null,
+   "requestedBy": "SDNDYJRQ",
+   "referentDocumentNumber": null,
+   "invoiceType": 0,
+   "transactionType": 0,
+   "payments": [
+    {
+     "paymentType": 1,
+     "amount": 440.0
+    }
+   ]
+  },
+  "invoiceResult": {
+   "totalAmount": 440.0,
+   "transactionTypeCounter": 76984,
+   "totalCounter": 79581,
+   "invoiceCounterExtension": "ПП",
+   "invoiceNumber": "SDNDYJRQ-SDNDYJRQ-79581",
+   "signedBy": "SDNDYJRQ",
+   "sdcTime": "2024-06-13T12:39:37Z"
+  },
+  "journal": "============ ФИСКАЛНИ РАЧУН ============\r\n               108607462                \r\n               ETER  DOO                \r\n   1028533-ETER DOO - Lounge bar EPIC   \r\n  БУЛЕВАР НЕМАЊИЋА ТЦ ДЕЛТА ПЛАНЕТ 11Б  \n              ЛОКАЛ Л1.002              \r\n              Ниш-Медијана              \r\nКасир:                                  \r\nЕСИР број:                     1187/v1.1\r\n-------------ПРОМЕТ ПРОДАЈА-------------\r\nАртикли\r\n========================================\r\nНазив   Цена         Кол.         Укупно\r\nEspresso fredo (Ђ)                      \r\n       270,00          1          270,00\r\nRosa Gazirana (Ђ)                       \r\n       170,00          1          170,00\r\n----------------------------------------\r\nУкупан износ:                     440,00\r\nГотовина:                         440,00\r\n========================================\r\nОзнака       Име      Стопа        Порез\r\nЂ           О-ПДВ   20,00%         73,33\r\n----------------------------------------\r\nУкупан износ пореза:               73,33\r\n========================================\r\nПФР време:          13.06.2024. 14:39:37\r\nПФР број рачуна: SDNDYJRQ-SDNDYJRQ-79581\r\nБројач рачуна:             76984/79581ПП\r\n========================================\r\n======== КРАЈ ФИСКАЛНОГ РАЧУНА =========",
+  "isValid": true
+ },
+ "specifications": {
+  "success": true,
+  "items": [
+   {
+    "gtin": "",
+    "name": "Espresso fredo",
+    "quantity": 1,
+    "total": 270,
+    "unitPrice": 270,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 225,
+    "vatAmount": 45
+   },
+   {
+    "gtin": "",
+    "name": "Rosa Gazirana",
+    "quantity": 1,
+    "total": 170,
+    "unitPrice": 170,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 141.67,
+    "vatAmount": 28.33
+   }
+  ]
+ }
+}

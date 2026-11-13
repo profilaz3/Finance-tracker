@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">Ovaj mesec</string>
+    <string name="widget_description">Potrošnja i budžet za ovaj mesec, uz brzo dodavanje troška.</string>
+    <string name="widget_add">Dodaj trošak</string>
+    <string name="widget_placeholder_title">Ovaj mesec</string>
+    <string name="widget_placeholder_body">Otvori aplikaciju da učitaš brojeve</string>
+    <string name="widget_preview_spent">€1.240</string>
+    <string name="widget_preview_secondary">Ostalo u budžetu · €760</string>
+</resources>

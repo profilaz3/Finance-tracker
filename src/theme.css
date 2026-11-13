@@ -71,8 +71,23 @@
   --radius-3xl: 40px;
 
   /* Fonts */
-  --font-sans: 'Outfit', sans-serif;
-  --font-display: 'Inter', sans-serif;
+  --font-sans: 'Geist', 'Inter', system-ui, sans-serif;
+  --font-display: 'Geist', 'Inter', system-ui, sans-serif;
+
+  /* Paper design tokens (see .theme-paper below) */
+  --color-paper: var(--paper-bg);
+  --color-tile: var(--paper-tile);
+  --color-chip: var(--paper-chip);
+  --color-hair: var(--paper-line);
+  --color-muted: var(--paper-muted);
+  --color-faint: var(--paper-faint);
+  --color-pos: var(--paper-pos);
+  --color-neg: var(--paper-neg);
+  --color-accent: rgb(var(--accent-rgb));
+  --color-accent-soft: rgb(var(--accent-rgb) / var(--accent-soft-a));
+  --color-on-accent: var(--paper-on-accent);
+  --color-lift: var(--paper-lift);
+  --color-thumb: var(--paper-thumb);
 }
 
 :root {
@@ -719,7 +734,7 @@
   --md-sys-color-outline-variant: 226 232 240;
   /* Slate 200 */
 
-  --md-sys-color-warning: 170 93 5;
+  --md-sys-color-warning: 160 85 0;
   --md-sys-color-on-warning: 255 255 255;
   --md-sys-color-scrim: 0 0 0;
 
@@ -827,40 +842,43 @@ body {
 }
 
 /* Smooth transitions for all interactive elements */
-button,
-a,
-input,
-select,
-textarea {
-  transition-duration: 0.2s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-property: background-color, color, border-color, box-shadow, transform, opacity;
-}
+/* Layered so Tailwind utilities (absolute, transition-*, transform) win over these defaults. */
+@layer base {
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    transition-duration: 0.2s;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-property: background-color, color, border-color, box-shadow, transform, opacity;
+  }
 
-button {
-  position: relative;
-  overflow: hidden;
-}
+  button {
+    position: relative;
+    overflow: hidden;
+  }
 
-button:active {
-  transform: scale(0.97);
-}
+  button:active {
+    transform: scale(0.97);
+  }
 
-/* Ripple effect for buttons */
-button::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgb(var(--md-sys-color-on-surface) / 0.15) 0%, transparent 70%);
-  opacity: 0;
-  transform: scale(0);
-  transition: transform 0.4s ease, opacity 0.4s ease;
-}
+  /* Ripple effect for buttons */
+  button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgb(var(--md-sys-color-on-surface) / 0.15) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0);
+    transition: transform 0.4s ease, opacity 0.4s ease;
+  }
 
-button:active::after {
-  transform: scale(2.5);
-  opacity: 1;
-  transition: transform 0s, opacity 0s;
+  button:active::after {
+    transform: scale(2.5);
+    opacity: 1;
+    transition: transform 0s, opacity 0s;
+  }
 }
 
 /* Custom scrollbar */
@@ -1036,4 +1054,300 @@ select:focus-visible,
   .toast-progress {
     visibility: hidden;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Paper design: warm paper background, white tiles, glass chrome.    */
+/* Root classes: theme-paper [paper-dark] accent-* glass-*            */
+/* The MD3 tokens are remapped so older screens inherit the palette.  */
+/* ------------------------------------------------------------------ */
+.theme-paper {
+  color-scheme: light;
+  --paper-bg: #F3F2EE;
+  --paper-tile: #FFFFFF;
+  --paper-text: #121212;
+  --paper-muted: #5F5E59;
+  --paper-faint: #8F8E89;
+  --paper-line: rgba(18, 18, 18, 0.08);
+  --paper-chip: rgba(18, 18, 18, 0.07);
+  --paper-pos: #08784A;
+  --paper-neg: #C8262E;
+  --paper-on-accent: #FFFFFF;
+  --paper-lift: #FFFFFF;
+  --paper-thumb: #ECEBE6;
+  --paper-seg: #FFFFFF;
+  --paper-field: rgba(255, 255, 255, 0.75);
+  --paper-scrim: rgba(18, 18, 18, 0.18);
+  --paper-grab: rgba(18, 18, 18, 0.18);
+  --paper-fade: linear-gradient(180deg, rgba(243, 242, 238, 0) 0%, rgba(243, 242, 238, 0.85) 60%);
+  --paper-tile-shadow: 0 1px 2px rgba(18, 18, 18, 0.04), 0 4px 16px -6px rgba(18, 18, 18, 0.06);
+  --glass-rgb: 252 252 250;
+  --glass-k: 1;
+  --glass-rim: inset 1.5px 1.5px 1px -0.5px rgba(255, 255, 255, 0.95), inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.7), inset 0 0 0 0.5px rgba(18, 18, 18, 0.08), 0 10px 30px rgba(18, 18, 18, 0.12), 0 1px 3px rgba(18, 18, 18, 0.06);
+  --accent-soft-a: 0.10;
+
+  /* Literal teal fallbacks; the accent rule further down maps both to --accent-rgb. */
+  --md-sys-color-primary: 15 118 110;
+  --md-sys-color-on-primary: 255 255 255;
+  --md-sys-color-secondary: 15 118 110;
+  --md-sys-color-on-secondary: 255 255 255;
+  --md-sys-color-secondary-container: 230 229 224;
+  --md-sys-color-on-secondary-container: 18 18 18;
+  --md-sys-color-tertiary: 8 120 74;
+  --md-sys-color-on-tertiary: 255 255 255;
+  --md-sys-color-tertiary-container: 214 236 224;
+  --md-sys-color-on-tertiary-container: 6 84 52;
+  --md-sys-color-error: 200 38 46;
+  --md-sys-color-on-error: 255 255 255;
+  --md-sys-color-error-container: 250 222 222;
+  --md-sys-color-on-error-container: 140 20 26;
+  --md-sys-color-background: 243 242 238;
+  --md-sys-color-on-background: 18 18 18;
+  --md-sys-color-surface: 243 242 238;
+  --md-sys-color-on-surface: 18 18 18;
+  --md-sys-color-on-surface-variant: 95 94 89;
+  --md-sys-color-outline: 125 124 119;
+  --md-sys-color-outline-variant: 222 221 216;
+  --md-sys-color-warning: 160 85 0;
+  --md-sys-color-on-warning: 255 255 255;
+  --md-sys-color-scrim: 18 18 18;
+  --md-sys-color-surface-container-lowest: 255 255 255;
+  --md-sys-color-surface-container-low: 250 250 248;
+  --md-sys-color-surface-container: 255 255 255;
+  --md-sys-color-surface-container-high: 234 233 228;
+  --md-sys-color-surface-container-highest: 225 224 218;
+}
+
+.theme-paper.paper-dark {
+  color-scheme: dark;
+  --paper-bg: #0C0C0D;
+  --paper-tile: #18181A;
+  --paper-text: #F2F1EE;
+  --paper-muted: #A3A29D;
+  --paper-faint: #706F6B;
+  --paper-line: rgba(255, 255, 255, 0.09);
+  --paper-chip: rgba(255, 255, 255, 0.12);
+  --paper-pos: #4ADE80;
+  --paper-neg: #FF6B6B;
+  --paper-on-accent: #0C0C0D;
+  --paper-lift: #232326;
+  --paper-thumb: #1C1C1F;
+  --paper-seg: rgba(255, 255, 255, 0.16);
+  --paper-field: rgba(0, 0, 0, 0.30);
+  --paper-scrim: rgba(0, 0, 0, 0.45);
+  --paper-grab: rgba(255, 255, 255, 0.25);
+  --paper-fade: linear-gradient(180deg, rgba(12, 12, 13, 0) 0%, rgba(12, 12, 13, 0.85) 60%);
+  --paper-tile-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --glass-rgb: 40 40 44;
+  --glass-k: 0.85;
+  --glass-rim: inset 1.5px 1.5px 1px -0.5px rgba(255, 255, 255, 0.30), inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.12), inset 0 0 0 0.5px rgba(255, 255, 255, 0.10), 0 10px 30px rgba(0, 0, 0, 0.55);
+  --accent-soft-a: 0.16;
+
+  --md-sys-color-on-primary: 12 12 13;
+  --md-sys-color-on-secondary: 12 12 13;
+  --md-sys-color-secondary-container: 44 44 48;
+  --md-sys-color-on-secondary-container: 242 241 238;
+  --md-sys-color-tertiary: 74 222 128;
+  --md-sys-color-on-tertiary: 12 12 13;
+  --md-sys-color-tertiary-container: 20 60 38;
+  --md-sys-color-on-tertiary-container: 180 245 200;
+  --md-sys-color-error: 255 107 107;
+  --md-sys-color-on-error: 12 12 13;
+  --md-sys-color-error-container: 72 24 26;
+  --md-sys-color-on-error-container: 255 205 205;
+  --md-sys-color-background: 12 12 13;
+  --md-sys-color-on-background: 242 241 238;
+  --md-sys-color-surface: 12 12 13;
+  --md-sys-color-on-surface: 242 241 238;
+  --md-sys-color-on-surface-variant: 163 162 157;
+  --md-sys-color-outline: 112 111 107;
+  --md-sys-color-outline-variant: 44 44 47;
+  --md-sys-color-warning: 251 191 36;
+  --md-sys-color-on-warning: 12 12 13;
+  --md-sys-color-scrim: 0 0 0;
+  --md-sys-color-surface-container-lowest: 8 8 9;
+  --md-sys-color-surface-container-low: 20 20 22;
+  --md-sys-color-surface-container: 24 24 26;
+  --md-sys-color-surface-container-high: 34 34 37;
+  --md-sys-color-surface-container-highest: 44 44 48;
+}
+
+/* Accents: [light, dark] */
+.theme-paper.accent-teal { --accent-rgb: 15 118 110; --accent-card: linear-gradient(150deg, #13897F 0%, #0B5751 100%); --accent-card-shadow: rgba(15, 118, 110, 0.55); --md-sys-color-primary-container: 204 232 228; --md-sys-color-on-primary-container: 6 70 64; }
+.theme-paper.paper-dark.accent-teal { --accent-rgb: 45 212 191; --md-sys-color-primary-container: 18 70 64; --md-sys-color-on-primary-container: 180 245 235; }
+.theme-paper.accent-ember { --accent-rgb: 180 58 10; --accent-card: linear-gradient(150deg, #D9531A 0%, #8A2E0E 100%); --accent-card-shadow: rgba(194, 65, 12, 0.5); --md-sys-color-primary-container: 250 222 208; --md-sys-color-on-primary-container: 124 40 6; }
+.theme-paper.paper-dark.accent-ember { --accent-rgb: 255 138 91; --md-sys-color-primary-container: 88 40 20; --md-sys-color-on-primary-container: 255 214 196; }
+.theme-paper.accent-iris { --accent-rgb: 79 70 229; --accent-card: linear-gradient(150deg, #5B52F0 0%, #2F2A8F 100%); --accent-card-shadow: rgba(79, 70, 229, 0.5); --md-sys-color-primary-container: 224 222 252; --md-sys-color-on-primary-container: 49 42 160; }
+.theme-paper.paper-dark.accent-iris { --accent-rgb: 156 149 255; --md-sys-color-primary-container: 44 40 100; --md-sys-color-on-primary-container: 222 220 255; }
+.theme-paper.accent-ink { --accent-rgb: 18 18 18; --accent-card: linear-gradient(150deg, #2A2A2C 0%, #0A0A0A 100%); --accent-card-shadow: rgba(0, 0, 0, 0.45); --md-sys-color-primary-container: 228 227 222; --md-sys-color-on-primary-container: 18 18 18; }
+.theme-paper.paper-dark.accent-ink { --accent-rgb: 242 241 238; --md-sys-color-primary-container: 44 44 48; --md-sys-color-on-primary-container: 242 241 238; }
+.theme-paper.paper-dark { --accent-card-shadow: rgba(0, 0, 0, 0.6); }
+.theme-paper { --md-sys-color-primary: var(--accent-rgb); --md-sys-color-secondary: var(--accent-rgb); }
+
+/* Glass levels: chrome (nav, pills) and sheets */
+.theme-paper.glass-frosted { --glass-blur: 14px; --glass-a: 0.66; --sheet-blur: 24px; --sheet-a: 0.74; }
+.theme-paper.glass-clear { --glass-blur: 1.5px; --glass-a: 0.16; --sheet-blur: 3px; --sheet-a: 0.3; }
+.theme-paper.glass-solid { --glass-blur: 30px; --glass-a: 0.94; --sheet-blur: 30px; --sheet-a: 0.96; }
+
+.theme-paper body,
+body.theme-paper {
+  background: var(--paper-bg);
+  color: var(--paper-text);
+}
+
+.theme-paper body {
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'tnum' 1;
+}
+
+.theme-paper .font-display {
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+}
+
+/* Glass surfaces. --lg is set to url(#filter) only on Chromium (see utils/liquidGlass). */
+.glass {
+  background: rgb(var(--glass-rgb) / calc(var(--glass-a) * var(--glass-k)));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: var(--lg, ) blur(var(--glass-blur)) saturate(180%);
+  box-shadow: var(--glass-rim);
+}
+
+.glass-sheet {
+  background: rgb(var(--glass-rgb) / calc(var(--sheet-a) * var(--glass-k)));
+  -webkit-backdrop-filter: blur(var(--sheet-blur)) saturate(180%);
+  backdrop-filter: var(--lg, ) blur(var(--sheet-blur)) saturate(180%);
+  box-shadow: var(--glass-rim);
+}
+
+.glass-accent {
+  background: rgb(var(--accent-rgb) / max(0.78, var(--glass-a)));
+  color: var(--paper-on-accent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: var(--lg, ) blur(var(--glass-blur)) saturate(180%);
+  box-shadow: var(--glass-rim);
+}
+
+.paper-tile {
+  background: var(--paper-tile);
+  box-shadow: var(--paper-tile-shadow);
+  border-radius: 26px;
+}
+
+.paper-scrim {
+  background: var(--paper-scrim);
+}
+
+.paper-fade {
+  background: var(--paper-fade);
+}
+
+.paper-grab {
+  background: var(--paper-grab);
+}
+
+.paper-field {
+  background: var(--paper-field);
+}
+
+.paper-seg-on {
+  background: var(--paper-seg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.accent-card {
+  background: var(--accent-card);
+  box-shadow: 0 18px 40px -14px var(--accent-card-shadow);
+}
+
+/* Home edit mode: a gentle wobble like home-screen widgets. */
+@keyframes home-wiggle {
+  0%, 100% { transform: rotate(-0.4deg); }
+  50% { transform: rotate(0.4deg); }
+}
+
+.home-wiggle {
+  animation: home-wiggle 0.32s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-wiggle { animation: none; }
+}
+
+/* QR viewfinder: a line sweeping down the square while the camera looks for a code. */
+@keyframes qr-scan-sweep {
+  0%, 100% { top: 1.5rem; opacity: 0.35; }
+  50% { top: calc(100% - 1.5rem); opacity: 1; }
+}
+
+.qr-scan-line {
+  animation: qr-scan-sweep 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qr-scan-line { animation: none; top: 50%; }
+}
+
+/* Sliding pill tracks (Segmented, tab bar): while the pill is dragged, the label under it lights up. */
+.pill-track[data-pill-dragging] .pill-item {
+  color: var(--paper-muted);
+}
+
+.pill-track[data-pill-dragging] .pill-item[data-pill-hot] {
+  color: var(--pill-hot, var(--paper-text));
+}
+
+/* A page sliding in sideways replaces the default fade-up. */
+[data-pager-lateral] > [data-pager-page].app-view-enter {
+  animation: none;
+}
+
+/*
+ * Touch press feedback: controls dip slightly under the finger, like native buttons.
+ * Uses the standalone `scale` property so it composes with any transform, and lives in the
+ * base layer so components that set their own transitions or scale still win.
+ */
+@layer base {
+  @media (hover: none) {
+    button,
+    [role='button'] {
+      transition: scale 220ms cubic-bezier(0.34, 1.4, 0.64, 1);
+    }
+
+    button:not(:disabled):active,
+    [role='button']:active {
+      scale: 0.97;
+      transition-duration: 60ms;
+    }
+
+    [data-pill-item]:active,
+    .no-press:active {
+      scale: none;
+    }
+  }
+}
+
+/* Pulling a sheet down fades its backdrop (hooks/useSheetDrag). A registered property so the
+   spring-back can transition it; scaling the colour leaves opacity to the sheet's exit animation. */
+@property --scrim-k {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+.paper-scrim[data-scrim-drag] {
+  background: color-mix(in srgb, var(--paper-scrim) calc(var(--scrim-k) * 100%), transparent);
+}
+
+/* A neighbour page mounted ahead of a swipe (components/app/AppViewRouter): laid out but not
+   painted, and clipped to no height so it adds no scroll range. A swipe reveals it by setting
+   data-pager-peek. */
+[data-pager-park]:not([data-pager-peek]) {
+  visibility: hidden;
+  height: 0;
+  overflow: clip;
+}
+
+/* Loading shimmer keeps still while its page is parked. */
+[data-pager-park]:not([data-pager-peek]) .animate-pulse {
+  animation-play-state: paused;
 }

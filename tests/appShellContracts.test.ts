@@ -33,6 +33,10 @@ describe('app shell contracts', () => {
       'setIsReceiptScanModalOpen(false)',
       'setIsSplitExpenseModalOpen(false)',
       'setIsUserProfileModalOpen(false)',
+      'setIsAddSheetOpen(false)',
+      'setIsProfileMenuOpen(false)',
+      'setIsAppearanceSheetOpen(false)',
+      'setIsExportModalOpen(false)',
     ].forEach(call => {
       expect(closeAllModalsBody).toContain(call);
     });
@@ -85,22 +89,11 @@ describe('app shell contracts', () => {
 
   it('labels mobile app navigation controls for assistive tech and tooltips', () => {
     const navigation = readSource('components/app/AppNavigation.tsx');
-    const bottomNavItem = navigation.match(/const BottomNavItem:[\s\S]*?\n};/)?.[0] ?? '';
 
-    expect(bottomNavItem).toContain('aria-label={label}');
-    expect(bottomNavItem).toContain('title={label}');
-    [
-      ['dashboard', 'LayoutDashboardIcon'],
-      ['transactions', 'ListIcon'],
-      ['events', 'MapPinIcon'],
-      ['calendar', 'CalendarIcon'],
-      ['analytics', 'PieChartIcon'],
-      ['insights', 'SparklesIcon'],
-      ['settings', 'SettingsIcon'],
-    ].forEach(([view, icon]) => {
-      expect(navigation).toContain(
-        `<BottomNavItem view="${view}" icon={${icon}} label={labels.${view}} currentView={currentView} onNavigate={onNavigate} />`
-      );
-    });
+    expect(navigation).toContain("export const NAV_TABS: NavTab[] = ['home', 'activity', 'events', 'insights'];");
+    expect(navigation).toContain("aria-current={isActive ? 'page' : undefined}");
+    expect(navigation).toContain('aria-label={labels.add}');
+    expect(navigation).toContain('title={labels.add}');
+    expect(navigation).toContain('onClick={onAdd}');
   });
 });

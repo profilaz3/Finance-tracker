@@ -12,8 +12,14 @@
 
 import type { Account, AppState, Category } from '../types';
 import type { QueuedEntityType, QueuedOperation } from './offlineQueue';
-import type { SettingsSyncPayload } from '../utils/settingsSync';
+import type { SettingsPrefs, SettingsSyncPayload } from '../utils/settingsSync';
 import { normalizeTheme } from './storageService';
+
+const applyPrefs = (acc: AppState, prefs: SettingsPrefs): Partial<AppState> => ({
+    appearance: prefs.appearance ?? acc.appearance,
+    homeLayout: prefs.homeLayout ?? acc.homeLayout,
+    budget: prefs.budget !== undefined ? prefs.budget : acc.budget,
+});
 
 export type RemoteSlice =
     | 'transactions'
@@ -23,7 +29,8 @@ export type RemoteSlice =
     | 'settings'
     | 'events'
     | 'sharedExpenses'
-    | 'recurringTransactions';
+    | 'recurringTransactions'
+    | 'teams';
 
 export interface RemoteStateResult {
     /** Only slices that were fetched successfully are present. A failed slice is absent, never an empty list. */
@@ -80,6 +87,7 @@ export function applyPendingOperations(state: AppState, operations: PendingWrite
                 theme: normalizeTheme(settings.theme ?? acc.theme),
                 language: settings.language ?? acc.language,
                 userProfile: settings.userProfile ?? acc.userProfile,
+                ...(settings.prefs ? applyPrefs(acc, settings.prefs) : {}),
             };
         }
 
@@ -120,6 +128,14 @@ export function mergeRemoteState(prev: AppState, remote: RemoteStateResult, pend
         next.theme = normalizeTheme(remoteState.theme ?? prev.theme);
         next.language = remoteState.language ?? prev.language;
         next.userProfile = remoteState.userProfile ?? prev.userProfile;
+        next.appearance = remoteState.appearance ?? prev.appearance;
+        next.homeLayout = remoteState.homeLayout ?? prev.homeLayout;
+        next.budget = remoteState.budget !== undefined ? remoteState.budget : prev.budget;
+    }
+
+    // Teams are managed online only (never queued), so the server list wins when it was fetched.
+    if (remoteState.teams !== undefined) {
+        next.teams = remoteState.teams;
     }
 
     return applyPendingOperations(next, pending);

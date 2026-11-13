@@ -9,10 +9,33 @@ export interface ChatOptions {
   json?: boolean;
   /** Overrides OPENAI_MODEL for this call. */
   model?: string;
+  /** Reasoning models only: 'none' | 'low' | 'medium' | 'high'. Defaults to OPENAI_REASONING_EFFORT or 'medium'. */
+  reasoningEffort?: string;
   timeoutMs?: number;
 }
 
-export const DEFAULT_MODEL = 'gpt-4o';
+export const DEFAULT_MODEL = 'gpt-6-luna';
+/** Parsing and insights; override with OPENAI_MODEL_FAST. */
+export const FAST_MODEL = 'gpt-6-luna';
+
+// The gpt-4 family takes a custom temperature and has no reasoning step. Newer (reasoning)
+// models only accept the default temperature, take reasoning_effort, and spend part of
+// max_completion_tokens on reasoning, so they get some headroom.
+const isLegacyModel = (model: string): boolean => /^gpt-4/.test(model);
+const REASONING_HEADROOM = 2000;
+
+export const requestBody = (options: ChatOptions, model: string): Record<string, unknown> => {
+  const legacy = isLegacyModel(model);
+  return {
+    model,
+    messages: options.messages,
+    max_completion_tokens: options.maxTokens + (legacy ? 0 : REASONING_HEADROOM),
+    ...(legacy
+      ? { temperature: options.temperature ?? 0.3 }
+      : { reasoning_effort: options.reasoningEffort ?? Deno.env.get('OPENAI_REASONING_EFFORT') ?? 'medium' }),
+    ...(options.json ? { response_format: { type: 'json_object' } } : {}),
+  };
+};
 
 export const chatCompletion = async (options: ChatOptions): Promise<string> => {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -24,13 +47,7 @@ export const chatCompletion = async (options: ChatOptions): Promise<string> => {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
-      body: JSON.stringify({
-        model: options.model ?? Deno.env.get('OPENAI_MODEL') ?? DEFAULT_MODEL,
-        messages: options.messages,
-        temperature: options.temperature ?? 0.3,
-        max_tokens: options.maxTokens,
-        ...(options.json ? { response_format: { type: 'json_object' } } : {}),
-      }),
+      body: JSON.stringify(requestBody(options, options.model ?? Deno.env.get('OPENAI_MODEL') ?? DEFAULT_MODEL)),
     });
   } catch (error) {
     if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {

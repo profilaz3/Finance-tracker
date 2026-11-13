@@ -1,12 +1,29 @@
-import React from 'react';
-import type { AnalyticsAnomaly } from '../../utils/analyticsSelectors';
-import type { Currency } from '../../types';
-import { formatCurrency } from '../../utils/formatters';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import type { AnalyticsAnomaly, AnalyticsPeriodRange } from '../../utils/analyticsSelectors';
+import type { Category, Currency, ExchangeRates, Event, RecurringTransaction, Transaction } from '../../types';
+import type { AppLanguage } from '../../utils/locale';
+import { money } from '../home/parts';
 import { formatPercent } from '../../utils/locale';
+import { AlertTriangle, Receipt, Sparkles, TrendingUp } from 'lucide-react';
+import { anomalySignature, buildAnomalyContexts } from '../../domain/anomalyContext';
+import { canExplainAnomalies, explainAnomalies, getCachedExplanations, getLetterSnapshot, subscribeLetters } from '../../services/letterService';
+import { ShimmerLine } from '../insights/Shimmer';
+
+/** What the panel needs to ask the AI why each anomaly happened. Without it, no explanations. */
+export interface AnomalyExplainContext {
+  transactions: Transaction[];
+  categories: Category[];
+  recurringTransactions?: RecurringTransaction[];
+  events?: Event[];
+  rates: ExchangeRates;
+  period: AnalyticsPeriodRange;
+  loadingLabel: string;
+}
 
 export interface AnomalyPanelProps {
   anomalies: AnalyticsAnomaly[];
   baseCurrency: Currency;
+  language: AppLanguage;
   labels: {
     observations: string;
     noObservations: string;
@@ -15,6 +32,7 @@ export interface AnomalyPanelProps {
     largeTransactionDetail: (categoryName: string | null, amount: string, percentage: string | null) => string;
     highFeesDetail: (amount: string, percentage: string | null) => string;
   };
+  explain?: AnomalyExplainContext;
 }
 
 const formatPercentage = (percentage: number | undefined): string | null => (
@@ -24,9 +42,10 @@ const formatPercentage = (percentage: number | undefined): string | null => (
 const getAnomalyDetail = (
   anomaly: AnalyticsAnomaly,
   baseCurrency: Currency,
+  language: AppLanguage,
   labels: AnomalyPanelProps['labels'],
 ): string => {
-  const amount = formatCurrency(anomaly.amount, baseCurrency);
+  const amount = money(anomaly.amount, baseCurrency, language);
   const percentage = formatPercentage(anomaly.percentage);
 
   if (anomaly.kind === 'category-spike') {
@@ -40,31 +59,107 @@ const getAnomalyDetail = (
   return labels.highFeesDetail(amount, percentage);
 };
 
-export const AnomalyPanel: React.FC<AnomalyPanelProps> = ({ anomalies, baseCurrency, labels }) => {
+const ANOMALY_ICONS: Record<AnalyticsAnomaly['kind'], typeof TrendingUp> = {
+  'category-spike': TrendingUp,
+  'large-transaction': Receipt,
+  'high-fees': AlertTriangle,
+};
+
+type Explanations = { status: 'idle' | 'loading' | 'done'; byId: Record<string, string> };
+
+/**
+ * One batched AI call explains every flagged anomaly in a sentence. Cached per signature; while
+ * it runs each row shows a shimmer, and on any failure the rows simply have no sentence.
+ */
+const useExplanations = (anomalies: AnalyticsAnomaly[], baseCurrency: Currency, language: AppLanguage, explain?: AnomalyExplainContext): Explanations => {
+  // Re-checked when the signed-in user or workspace changes.
+  const { userId, scope } = useSyncExternalStore(subscribeLetters, getLetterSnapshot, getLetterSnapshot);
+  const enabled = Boolean(explain) && anomalies.length > 0 && Boolean(userId) && canExplainAnomalies();
+  const signature = useMemo(
+    () => (enabled && explain ? `${scope ?? ''}:${anomalySignature(anomalies, explain.period.currentKey, language)}` : null),
+    [enabled, anomalies, explain, language, scope],
+  );
+  const [result, setResult] = useState<Explanations & { signature: string | null }>({ status: 'idle', byId: {}, signature: null });
+
+  useEffect(() => {
+    if (!signature || !explain) return;
+    const cached = getCachedExplanations(signature);
+    if (cached) {
+      setResult({ status: 'done', byId: cached, signature });
+      return;
+    }
+    let cancelled = false;
+    setResult({ status: 'loading', byId: {}, signature });
+    const contexts = buildAnomalyContexts(anomalies, explain.period, {
+      transactions: explain.transactions,
+      categories: explain.categories,
+      events: explain.events,
+      recurringTransactions: explain.recurringTransactions,
+      baseCurrency,
+      rates: explain.rates,
+      language,
+    });
+    void explainAnomalies(contexts, signature, language).then(byId => {
+      if (!cancelled) setResult({ status: 'done', byId: byId ?? {}, signature });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // The signature captures what matters; the inputs behind it are read when it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
+
+  return result.signature === signature ? result : { status: signature ? 'loading' : 'idle', byId: {} };
+};
+
+export const AnomalyPanel: React.FC<AnomalyPanelProps> = ({ anomalies, baseCurrency, language, labels, explain }) => {
+  const explanations = useExplanations(anomalies, baseCurrency, language, explain);
+
   return (
-    <div className="rounded-xl bg-surface-container-low border border-outline/10 p-4 sm:p-5 shadow-elevation-1 min-w-0">
-      <h3 className="text-lg font-medium text-on-surface break-words">{labels.observations}</h3>
+    <section className="paper-tile min-w-0 p-4 sm:p-5">
+      <h3 className="mb-3 text-[17px] font-bold tracking-[-0.3px]">{labels.observations}</h3>
       {anomalies.length === 0 ? (
-        <p className="text-sm text-on-surface-variant mt-3 break-words">{labels.noObservations}</p>
+        <p className="py-4 text-center text-[14px] text-muted">{labels.noObservations}</p>
       ) : (
-        <div className="mt-4 grid gap-3">
-          {anomalies.map(anomaly => (
-            <div key={anomaly.id} className="rounded-lg bg-surface-container p-3 min-w-0">
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <p className="min-w-0 flex-1 text-sm font-medium text-on-surface break-words">
-                  {labels.anomalyTitles[anomaly.kind]}
-                </p>
-                <span className="min-w-0 text-right text-xs font-medium text-on-surface-variant break-words">
-                  {formatCurrency(anomaly.amount, baseCurrency)}
+        <ul className="flex flex-col divide-y divide-hair">
+          {anomalies.map(anomaly => {
+            const Icon = ANOMALY_ICONS[anomaly.kind] ?? AlertTriangle;
+            const why = explanations.byId[anomaly.id];
+            return (
+              <li key={anomaly.id} className="flex min-w-0 items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-[12px] bg-accent-soft text-accent">
+                  <Icon size={18} aria-hidden="true" />
                 </span>
-              </div>
-              <p className="text-xs text-on-surface-variant mt-1 break-words">
-                {getAnomalyDetail(anomaly, baseCurrency, labels)}
-              </p>
-            </div>
-          ))}
-        </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3 min-w-0">
+                    <p className="min-w-0 flex-1 text-[15px] font-semibold break-words">
+                      {labels.anomalyTitles[anomaly.kind]}
+                    </p>
+                    <span className="flex-none text-right text-[14px] font-semibold tabular-nums">
+                      {money(anomaly.amount, baseCurrency, language)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[13px] leading-snug text-muted break-words">
+                    {getAnomalyDetail(anomaly, baseCurrency, language, labels)}
+                  </p>
+                  {explanations.status === 'loading' && (
+                    <span className="mt-2 flex flex-col gap-1.5" role="status" aria-label={explain?.loadingLabel}>
+                      <ShimmerLine className="h-2.5" width="92%" />
+                      <ShimmerLine className="h-2.5" width="60%" />
+                    </span>
+                  )}
+                  {why && (
+                    <p className="mt-1.5 flex gap-1.5 text-[13px] leading-snug text-on-surface break-words">
+                      <Sparkles size={13} aria-hidden="true" className="mt-[3px] flex-none text-accent" />
+                      <span>{why}</span>
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
-    </div>
+    </section>
   );
 };

@@ -1,0 +1,55 @@
+{
+ "source": "Public sample receipt from github.com/turanjanin/serbian-fiscal-receipts-parser (MIT)",
+ "url": "https://suf.purs.gov.rs/v/?vl=A0pGTjJKNkpRSkZOMko2SlEUxwAASMYAABDrCQAAAAAAAAABhxkvlzYAAABd3dUWrzBwp%2FJVhDymOF%2BP8BLruog1GhT3hLglupnFRYet58ZKSrMvdK8DVsMr7D4AhIPX0FPcYcFX4QWWjRNenpNmlgg9vo7ABJH0Lf8R2nsKY4IJOF%2FWIbzV9E3f6%2FNUtARTSGBy5QDERUhhCD9DJOmg%2Bz%2F9cYjYm3jN8ctNA5bmHBXw3g%2Fk81JhZ21FZ2AyGoOZ3zx1Tzc8SbFgK0lTp77drLw5cek5l1QepGU7VIxaGzwpvTlU4BDe3orKlMmL9XTqFQvIBq7rgmodU8Loy3JseN7VopjDnn8ALR9PTAnTvvfZwdE6Wr%2BpsIWvom2ZN7JP2f2GT6vBjfCAJytQhL1WN3d2kE5QO4C8iIDJt4TRZDsJkic77M8xbW%2BHCEdtet%2BBpQ0F7T4DGf0BP3VcjiN%2BMRKDBmt7oIHfj%2FyZYoCuRcgL7r7PW7z%2FB1OW403hfTp%2Fvn7MLBmrqJt1vmXtsMycDI3XJBVeIJJRj%2BXlenaL6Ug249avQhahkZYqKzmj%2BjkprJj%2BQLOBsnmdaRyR1rK9fT71hnmIASwTOb6UOr0CsRPUiK90vbY8Y3GfFn1NvL9VVI9nCZ7quJezSupZvWh7Y75RxRywxtjLrWnwHkZqZro%2B%2FF6XEDiX5c109Zu4WlDkf72NLtNddmMLpCifc2kLNU6VoKSSyiYW4HvJBLJU9Pqsja1Yrx5BWljAyYU%3D",
+ "api": {
+  "invoiceRequest": {
+   "posTime": null,
+   "taxId": "103915893",
+   "businessName": "MOJ KIOSK DOO BEOGRAD",
+   "locationName": "1209768-NI148",
+   "address": "Ул.Обреновићева (према ул. Николе Пашића) на простору између ТЦ Калча и улаза у подземни пролаз    ",
+   "city": "НИШ (МЕДИЈАНА)",
+   "administrativeUnit": "Ниш-Медијана",
+   "buyer": null,
+   "buyerCostCenter": null,
+   "cashier": "21129",
+   "requestedBy": "JFN2J6JQ",
+   "referentDocumentNumber": null,
+   "invoiceType": 0,
+   "transactionType": 0,
+   "payments": [
+    {
+     "paymentType": 1,
+     "amount": 65.0
+    }
+   ]
+  },
+  "invoiceResult": {
+   "totalAmount": 65.0,
+   "transactionTypeCounter": 50760,
+   "totalCounter": 50964,
+   "invoiceCounterExtension": "ПП",
+   "invoiceNumber": "JFN2J6JQ-JFN2J6JQ-50964",
+   "signedBy": "JFN2J6JQ",
+   "sdcTime": "2023-03-25T14:32:42.038Z"
+  },
+  "journal": "============ ФИСКАЛНИ РАЧУН ============\r\n               103915893                \r\n         MOJ KIOSK DOO BEOGRAD          \r\n             1209768-NI148              \r\n   Ул.Обреновићева (према ул. Николе    \n Пашића) на простору између ТЦ Калча и  \n        улаза у подземни пролаз         \r\n              Ниш-Медијана              \r\nКасир:                             21129\r\nЕСИР број:                     315/1.0.0\r\n-------------ПРОМЕТ ПРОДАЈА-------------\r\nАртикли\r\n========================================\r\nНазив   Цена         Кол.         Укупно\r\nVODA AQUA VIVA KNJAZ 0,5L 24/KOM (Ђ)    \r\n        65,00          1           65,00\r\n----------------------------------------\r\nУкупан износ:                      65,00\r\nГотовина:                          65,00\r\n========================================\r\nОзнака       Име      Стопа        Порез\r\nЂ           О-ПДВ   20,00%         10,83\r\n----------------------------------------\r\nУкупан износ пореза:               10,83\r\n========================================\r\nПФР време:          25.03.2023. 15:32:42\r\nПФР број рачуна: JFN2J6JQ-JFN2J6JQ-50964\r\nБројач рачуна:             50760/50964ПП\r\n========================================\r\n======== КРАЈ ФИСКАЛНОГ РАЧУНА =========",
+  "isValid": true
+ },
+ "specifications": {
+  "success": true,
+  "items": [
+   {
+    "gtin": "8600037003504",
+    "name": "VODA AQUA VIVA KNJAZ 0,5L 24/KOM",
+    "quantity": 1,
+    "total": 65,
+    "unitPrice": 65,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 54.17,
+    "vatAmount": 10.83
+   }
+  ]
+ }
+}

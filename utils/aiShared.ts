@@ -15,6 +15,46 @@ export interface ParsedTransaction {
   debtName?: string;
   loanName?: string;
   fees?: number;
+  /** Shop, venue or payee name only, when the text names one. */
+  merchant?: string;
+}
+
+export interface MerchantHint {
+  merchant: string;
+  category: string;
+}
+
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', ђ: 'đ', е: 'e', ж: 'ž', з: 'z', и: 'i', ј: 'j', к: 'k', л: 'l',
+  љ: 'lj', м: 'm', н: 'n', њ: 'nj', о: 'o', п: 'p', р: 'r', с: 's', т: 't', ћ: 'ć', у: 'u', ф: 'f',
+  х: 'h', ц: 'c', ч: 'č', џ: 'dž', ш: 'š',
+};
+
+/** Serbian Cyrillic to Latin (latinica), keeping case. Other characters pass through. */
+export function cyrillicToLatin(text: string): string {
+  return text.replace(/[\u0400-\u04ff]/g, (ch) => {
+    const lower = ch.toLowerCase();
+    const latin = CYRILLIC_TO_LATIN[lower];
+    if (latin === undefined) return ch;
+    if (ch === lower) return latin;
+    return latin.charAt(0).toUpperCase() + latin.slice(1);
+  });
+}
+
+export const MAX_MERCHANT_HINTS = 60;
+const MAX_HINT_CHARS = 60;
+
+/** Keeps only well-formed, bounded merchant -> category hints; anything else is dropped. */
+export function sanitizeMerchantHints(value: unknown): MerchantHint[] {
+  if (!Array.isArray(value)) return [];
+  const hints: MerchantHint[] = [];
+  for (const item of value.slice(0, MAX_MERCHANT_HINTS)) {
+    if (!isRecord(item)) continue;
+    const merchant = typeof item.merchant === 'string' ? item.merchant.trim().slice(0, MAX_HINT_CHARS) : '';
+    const category = typeof item.category === 'string' ? item.category.trim().slice(0, MAX_HINT_CHARS) : '';
+    if (merchant && category) hints.push({ merchant, category });
+  }
+  return hints;
 }
 
 export interface ParsedReceipt {
@@ -82,6 +122,7 @@ export function validateParsedTransaction(data: unknown): ParsedTransaction | nu
     debtName: typeof data.debtName === 'string' ? data.debtName : undefined,
     loanName: typeof data.loanName === 'string' ? data.loanName : undefined,
     fees: typeof data.fees === 'number' ? data.fees : undefined,
+    merchant: typeof data.merchant === 'string' && data.merchant.trim() ? data.merchant.trim().slice(0, 80) : undefined,
   };
 }
 

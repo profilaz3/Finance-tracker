@@ -3,6 +3,9 @@
 import * as z from 'zod/mini';
 
 // Base types
+/** Team link on shareable items; null means "take it out of its team" until synced. */
+export const TeamIdSchema = z.optional(z.nullable(z.string().check(z.minLength(1))));
+
 export const CurrencySchema = z.enum(['EUR', 'USD', 'RSD']);
 export const TransactionTypeSchema = z.enum(['income', 'expense']);
 
@@ -13,7 +16,8 @@ export const CategorySchema = z.object({
     type: TransactionTypeSchema,
     subcategories: z._default(z.array(z.string()), []),
     color: z.string(),
-    icon: z.optional(z.string())
+    icon: z.optional(z.string()),
+    teamId: TeamIdSchema
 });
 
 // Account
@@ -25,7 +29,8 @@ export const AccountSchema = z.object({
     color: z.string(),
     initialBalance: z._default(z.optional(z.number()), 0),
     icon: z.optional(z.string()),
-    order: z.optional(z.number())
+    order: z.optional(z.number()),
+    teamId: TeamIdSchema
 });
 
 // Person
@@ -35,7 +40,8 @@ export const PersonSchema = z.object({
     avatar: z.optional(z.string()),
     color: z.string(),
     defaultCurrency: CurrencySchema,
-    balances: z._default(z.record(CurrencySchema, z.number()), { EUR: 0, USD: 0, RSD: 0 })
+    balances: z._default(z.record(CurrencySchema, z.number()), { EUR: 0, USD: 0, RSD: 0 }),
+    teamId: TeamIdSchema
 });
 
 // Receipt Data
@@ -82,7 +88,8 @@ export const TransactionSchema = z.object({
     fees: z.optional(z.number()),
     eventId: z.optional(z.string()),
     transferId: z.optional(z.string()),
-    splitDetails: z.optional(SplitDetailsSchema)
+    splitDetails: z.optional(SplitDetailsSchema),
+    teamId: TeamIdSchema
 });
 
 // Transaction template
@@ -118,7 +125,9 @@ export const RecurringTransactionSchema = z.object({
     endDate: z.optional(z.string()),
     lastGenerated: z.optional(z.string()),
     nextDue: z.string(),
-    isActive: z.boolean()
+    isActive: z.boolean(),
+    userId: z.optional(z.string()),
+    teamId: TeamIdSchema
 });
 
 // Exchange Rates
@@ -141,7 +150,26 @@ export const EventSchema = z.object({
     color: z.optional(z.string()),
     imageUrl: z.optional(z.string()),
     status: z.enum(['active', 'completed', 'archived']),
-    userId: z.optional(z.string())
+    userId: z.optional(z.string()),
+    teamId: TeamIdSchema
+});
+
+// Teams
+export const TeamRoleSchema = z.enum(['owner', 'admin', 'member']);
+
+export const TeamMemberSchema = z.object({
+    email: z.string().check(z.minLength(3), z.maxLength(254)),
+    userId: z.optional(z.string()),
+    role: TeamRoleSchema
+});
+
+export const TeamSchema = z.object({
+    id: z.string().check(z.minLength(1)),
+    name: z.string().check(z.minLength(1), z.maxLength(80)),
+    ownerId: z.string(),
+    color: z.optional(z.string()),
+    createdAt: z.optional(z.string()),
+    members: z._default(z.array(TeamMemberSchema), [])
 });
 
 // Shared Expense
@@ -169,6 +197,27 @@ export const ThemeSchema = z.enum([
 // Language
 export const LanguageSchema = z.enum(['en', 'sr']);
 
+// Appearance, Home layout and budget (stored in settings.prefs)
+export const AppearanceSchema = z.object({
+    mode: z.enum(['light', 'dark', 'system']),
+    accent: z.enum(['teal', 'ember', 'iris', 'ink']),
+    glass: z.enum(['frosted', 'clear', 'solid'])
+});
+
+export const HomeBlockSchema = z.object({
+    id: z.string().check(z.minLength(1), z.maxLength(64)),
+    type: z.enum(['budget', 'networth', 'categories', 'daily', 'wallets', 'people', 'event', 'upcoming', 'recent', 'rates', 'quickadd']),
+    style: z.string().check(z.maxLength(32)),
+    size: z.enum(['s', 'm', 'l'])
+});
+
+export const HomeLayoutSchema = z.array(HomeBlockSchema).check(z.maxLength(40));
+
+export const BudgetSchema = z.object({
+    monthly: z.number().check(z.minimum(0), z.maximum(1e9)),
+    categoryLimits: z.record(z.string(), z.number().check(z.minimum(0), z.maximum(1e9)))
+});
+
 // App State
 export const AppStateSchema = z.object({
     transactions: z._default(z.array(TransactionSchema), []),
@@ -184,7 +233,11 @@ export const AppStateSchema = z.object({
     language: z._default(LanguageSchema, 'en'),
     events: z._default(z.array(EventSchema), []),
     sharedExpenses: z._default(z.array(SharedExpenseSchema), []),
-    isGuest: z.optional(z.boolean())
+    isGuest: z.optional(z.boolean()),
+    appearance: z.optional(z.catch(z.optional(AppearanceSchema), undefined)),
+    homeLayout: z.optional(z.catch(z.optional(HomeLayoutSchema), undefined)),
+    budget: z.optional(z.catch(z.optional(z.nullable(BudgetSchema)), undefined)),
+    teams: z.optional(z.catch(z.optional(z.array(TeamSchema)), undefined))
 });
 
 // Validation helper functions
@@ -234,4 +287,5 @@ export type ValidatedAccount = z.infer<typeof AccountSchema>;
 export type ValidatedPerson = z.infer<typeof PersonSchema>;
 export type ValidatedEvent = z.infer<typeof EventSchema>;
 export type ValidatedSharedExpense = z.infer<typeof SharedExpenseSchema>;
+export type ValidatedTeam = z.infer<typeof TeamSchema>;
 export type ValidatedAppState = z.infer<typeof AppStateSchema>;

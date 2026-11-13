@@ -4,7 +4,7 @@ import {
     DollarSign, Euro, PoundSterling, Briefcase, Gem,
     Coins, Building, Vault, Coffee, Car, Home, Gamepad2,
     Activity, TrendingUp, RefreshCw, ArrowRightLeft,
-    ArrowUpRight, ArrowDownLeft, Tag
+    ArrowUpRight, ArrowDownLeft, Tag, type LucideIcon
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -41,24 +41,29 @@ export type IconName = keyof typeof ICONS;
 interface IconPickerProps {
     selectedIcon: string;
     onSelect: (icon: string) => void;
+    /** Icon set to choose from; wallets use the money set by default. */
+    icons?: Record<string, LucideIcon>;
 }
 
-export const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelect }) => {
+export const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelect, icons = ICONS }) => {
     return (
-        <div className="grid grid-cols-5 gap-2">
-            {Object.entries(ICONS).map(([name, Icon]) => (
+        <div className="grid grid-cols-6 gap-1.5">
+            {Object.entries(icons).map(([name, Icon]) => (
                 <button
                     key={name}
+                    type="button"
                     onClick={() => onSelect(name)}
+                    aria-label={name}
+                    aria-pressed={selectedIcon === name}
                     className={clsx(
-                        "p-2 rounded-lg flex items-center justify-center transition-all",
+                        "flex h-10 items-center justify-center rounded-[12px] transition-colors",
                         selectedIcon === name
-                            ? "bg-primary text-on-primary shadow-sm"
-                            : "bg-surface-container-highest text-on-surface hover:bg-surface-container-high"
+                            ? "bg-accent text-on-accent"
+                            : "bg-chip hover:text-accent"
                     )}
                     title={name}
                 >
-                    <Icon size={20} />
+                    <Icon size={19} aria-hidden="true" />
                 </button>
             ))}
         </div>

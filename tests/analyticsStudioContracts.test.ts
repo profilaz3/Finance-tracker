@@ -33,8 +33,9 @@ describe('analytics studio source contracts', () => {
     const anomalyPanel = readSource('components/stats/AnomalyPanel.tsx');
     const header = readSource('components/stats/AnalyticsStudioHeader.tsx');
 
-    expect(kpiGrid).toContain('grid-cols-1');
-    expect(kpiGrid).toContain('sm:grid-cols-2');
+    // Paper redesign: a 2x2 grid on phones, the projected tile spans both columns.
+    expect(kpiGrid).toContain('grid-cols-2');
+    expect(kpiGrid).toContain('col-span-2');
     expect(kpiGrid).toContain('2xl:grid-cols-5');
     expect(categoryPanel).toContain('min-h-[44px]');
     expect(categoryPanel).not.toContain('shrink-0');
@@ -56,7 +57,8 @@ describe('analytics studio source contracts', () => {
     expect(forecastPanel).toContain('normalConfidenceReason');
     expect(forecastPanel).not.toContain('forecast.reason');
     expect(categoryPanel).toContain('type="button"');
-    expect(header).toContain('type="button"');
+    // The period switch is the shared Segmented control, whose buttons carry type="button".
+    expect(header).toContain('<Segmented');
   });
 
   it('keeps anomaly selectors semantic and localizes anomaly copy in the lazy overview', () => {
@@ -170,7 +172,19 @@ describe('analytics studio source contracts', () => {
       const source = readSource(path);
       expect(source).not.toContain('generateInsights');
       expect(source).not.toContain('react-markdown');
-      expect(source).not.toContain('Explain');
+      expect(source).not.toContain('aiService');
+      // Anomaly "why" sentences are passive (no button); every other panel stays AI-free.
+      if (!path.endsWith('AnomalyPanel.tsx') && !path.endsWith('AnalyticsStudioOverview.tsx')) {
+        expect(source).not.toContain('Explain');
+      }
     });
+  });
+
+  it('adds anomaly explanations without controls, shimmering while loading', () => {
+    const anomalyPanel = readSource('components/stats/AnomalyPanel.tsx');
+
+    expect(anomalyPanel).toContain("from '../../services/letterService'");
+    expect(anomalyPanel).toContain('ShimmerLine');
+    expect(anomalyPanel).not.toContain('<button');
   });
 });

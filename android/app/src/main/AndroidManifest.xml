@@ -19,7 +19,31 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Share a receipt photo from the gallery or camera straight into receipt scanning. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
+
+        <!-- Home screen widget: this month's spending and a quick add button. -->
+        <receiver
+            android:name=".FinanceWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/finance_widget_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -32,9 +56,16 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Voice entry (MediaRecorder in the WebView) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Bill and budget reminders -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <!-- Camera permission -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The camera is optional: receipts can also come from the gallery or the share sheet. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     
     <!-- Gallery access for Android 12 and below -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />

@@ -1,42 +1,45 @@
 import { useMemo, useState } from 'react';
-import { Palette, RefreshCw, Settings, Tag, User, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { Bell, Palette, Repeat, Shapes, UserRound, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
 import type { AppState } from '../../types';
-import type { BreadcrumbItem } from '../Breadcrumb';
 
-export type SettingsTabId = 'profile' | 'appearance' | 'wallets' | 'categories' | 'people' | 'recurring';
+export type SettingsTabId = 'profile' | 'appearance' | 'notifications' | 'wallets' | 'categories' | 'people' | 'recurring' | 'team';
 
-interface SettingsTab {
+export interface SettingsTab {
   id: SettingsTabId;
   label: string;
   icon: LucideIcon;
+  /** Solid tile color behind the white icon in the settings list. */
+  tint: string;
+  group: 'app' | 'money' | 'together';
 }
 
+/**
+ * Settings navigation. `activeTab` is null on the phone list screen; on wide
+ * screens the list and the open section sit side by side and null shows Profile.
+ */
 export function useSettingsViewState(language: AppState['language']) {
   const t = TRANSLATIONS[language];
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('profile');
+  const [activeTab, setActiveTab] = useState<SettingsTabId | null>(null);
 
   const tabs = useMemo<SettingsTab[]>(() => ([
-    { id: 'profile', label: t.settingsTabProfile, icon: User },
-    { id: 'appearance', label: t.settingsTabAppearance, icon: Palette },
-    { id: 'wallets', label: t.wallets, icon: Wallet },
-    { id: 'categories', label: t.categories, icon: Tag },
-    { id: 'recurring', label: t.settingsTabRecurring, icon: RefreshCw },
-    { id: 'people', label: t.people, icon: Users },
+    { id: 'profile', label: t.settingsTabProfile, icon: UserRound, tint: '#64748B', group: 'app' },
+    { id: 'appearance', label: t.settingsTabAppearance, icon: Palette, tint: '#7C3AED', group: 'app' },
+    { id: 'notifications', label: t.settingsTabNotifications, icon: Bell, tint: '#DC2626', group: 'app' },
+    { id: 'wallets', label: t.wallets, icon: Wallet, tint: '#0F766E', group: 'money' },
+    { id: 'categories', label: t.categories, icon: Shapes, tint: '#EA580C', group: 'money' },
+    { id: 'recurring', label: t.settingsTabRecurring, icon: Repeat, tint: '#2563EB', group: 'money' },
+    { id: 'people', label: t.people, icon: Users, tint: '#DB2777', group: 'money' },
+    { id: 'team', label: t.settingsTabTeam, icon: UsersRound, tint: '#0891B2', group: 'together' },
   ]), [t]);
 
-  const currentTab = tabs.find(tab => tab.id === activeTab);
-
-  const breadcrumbItems = useMemo<BreadcrumbItem[]>(() => [
-    { label: t.settings, icon: <Settings size={14} /> },
-    ...(currentTab ? [{ label: currentTab.label, icon: <currentTab.icon size={14} /> }] : []),
-  ], [currentTab, t.settings]);
+  const currentTab = tabs.find(tab => tab.id === (activeTab ?? 'profile')) ?? tabs[0];
 
   return {
     t,
     activeTab,
     setActiveTab,
     tabs,
-    breadcrumbItems,
+    currentTab,
   };
 }

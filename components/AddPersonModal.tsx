@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { m, AnimatePresence } from 'motion/react';
-import { X, Check, User, AlertCircle, Palette, Coins, Camera } from 'lucide-react';
+import { X, Check, User, AlertCircle, Camera } from 'lucide-react';
 import { Currency, Person } from '../types';
 import { TRANSLATIONS, CHART_COLORS, CURRENCIES } from '../constants';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
@@ -9,6 +9,8 @@ import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
 import { MOTION } from '../config';
 import { useDialog } from '../hooks/useFocusTrap';
+import { useSheetDrag } from '../hooks/useSheetDrag';
+import { Segmented } from './ui/Segmented';
 import { AVATAR_MAX_DIMENSION } from '../utils/imageResize';
 
 interface AddPersonModalProps {
@@ -28,6 +30,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
     const [touched, setTouched] = useState(false);
     const t = TRANSLATIONS[language];
     const { dialogProps, titleId } = useDialog(isOpen, onClose);
+    const { wrapRef, handleProps } = useSheetDrag(onClose);
 
     const {
         openPicker,
@@ -103,94 +106,76 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
         handleImageResult(result);
     }, [handleFileInputChange, handleImageResult]);
 
+    const title = initialData ? t.editPerson : t.addPerson;
+    const initial = name.trim().charAt(0).toUpperCase();
+
     return (
-        <AnimatePresence>
+        <AnimatePresence propagate>
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center modal-safe-area bg-scrim/60 backdrop-blur-md" onClick={onClose}>
+                <div
+                    className="fixed inset-0 z-[100] flex items-end justify-center modal-safe-area max-md:px-2! max-md:pb-[max(8px,env(safe-area-inset-bottom))]! md:items-center"
+                    data-no-swipe
+                >
+                    <m.div
+                        className="paper-scrim absolute inset-0"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={MOTION.backdrop}
+                        onClick={onClose}
+                        aria-hidden="true"
+                    />
+                    <div ref={wrapRef} className="relative flex max-h-full w-full justify-center">
                     <m.div
                         {...dialogProps}
                         onClick={(e) => e.stopPropagation()}
-                        initial={MOTION.modal.initial}
-                        animate={MOTION.modal.animate}
-                        exit={MOTION.modal.exit}
-                        transition={MOTION.modal.spring}
-                        className="bg-surface-container w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-outline-variant/10"
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={MOTION.sheet.exit}
+                        transition={MOTION.sheet.spring}
+                        className="glass-sheet relative flex max-h-[88dvh] w-full max-w-[440px] flex-col overflow-hidden rounded-[36px] text-on-surface outline-none"
                     >
-                        <div className="relative p-8">
-                            {/* Close Button */}
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                aria-label={t.close}
-                                className="absolute top-4 right-4 p-2 hover:bg-on-surface/10 rounded-full text-on-surface-variant transition-colors"
-                            >
-                                <X size={20} className="opacity-75" aria-hidden="true" />
-                            </button>
+                        <div className="shrink-0 touch-none" {...handleProps}>
+                            <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
+                            <div className="flex items-center gap-2 px-5 pb-1 pt-3">
+                                <h2 id={titleId} className="flex-1 text-[22px] font-semibold tracking-tight">
+                                    {title}
+                                </h2>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    aria-label={t.close}
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                                >
+                                    <X size={18} aria-hidden="true" />
+                                </button>
+                            </div>
+                        </div>
 
-                            <h2 id={titleId} className="text-2xl font-display font-medium text-center mb-8 text-on-surface">
-                                {initialData ? t.editPerson : t.addPerson}
-                            </h2>
-
-                            <form onSubmit={handleSubmit} className="space-y-8">
-                                {/* Avatar & Color Section */}
+                        <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
+                            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 pb-4 pt-2">
+                                {/* Avatar */}
                                 <div className="flex flex-col items-center gap-4">
-                                    <div
-                                        className="relative group cursor-pointer w-28 h-28 rounded-full"
+                                    <button
+                                        type="button"
                                         onClick={openPicker}
-                                        role="button"
-                                        tabIndex={0}
                                         aria-label={t.changePhoto}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                openPicker();
-                                            }
-                                        }}
+                                        className="group relative h-24 w-24 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
                                     >
-                                        <div
-                                            className="w-full h-full rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-xl transition-all duration-300 group-hover:scale-105"
+                                        <span
+                                            className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-[38px] font-bold text-white shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)] transition-[background-color,transform] duration-300 group-active:scale-95"
                                             style={{ backgroundColor: color }}
                                         >
                                             {avatar ? (
-                                                <img src={avatar} alt={t.preview} className="w-full h-full object-cover rounded-full" />
+                                                <img src={avatar} alt="" className="h-full w-full object-cover" />
                                             ) : (
-                                                name.charAt(0).toUpperCase() || <User size={40} />
+                                                initial || <User size={38} aria-hidden="true" />
                                             )}
-                                        </div>
-                                        <div className="absolute inset-0 bg-scrim/40 rounded-full flex items-center justify-center opacity-60 sm:opacity-0 sm:group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
-                                            <span className="text-white text-xs font-medium tracking-wider uppercase">{t.change}</span>
-                                        </div>
-
-                                        {/* Color Dots */}
-                                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex gap-1 p-1 bg-surface-container-high rounded-full shadow-lg border border-outline-variant/10">
-                                            {CHART_COLORS.slice(0, 4).map((c) => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setColor(c);
-                                                    }}
-                                                    className={clsx(
-                                                        "w-4 h-4 rounded-full transition-transform",
-                                                        color === c ? "scale-125 ring-1 ring-on-surface" : "hover:scale-110"
-                                                    )}
-                                                    style={{ backgroundColor: c }}
-                                                />
-                                            ))}
-                                            <button
-                                                type="button"
-                                                className="w-4 h-4 rounded-full bg-surface-container-highest flex items-center justify-center"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const nextColorIndex = (CHART_COLORS.indexOf(color) + 1) % CHART_COLORS.length;
-                                                    setColor(CHART_COLORS[nextColorIndex]);
-                                                }}
-                                            >
-                                                <Palette size={8} className="text-on-surface-variant" />
-                                            </button>
-                                        </div>
-                                    </div>
+                                        </span>
+                                        <span className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full border-[3px] border-[var(--paper-tile)] bg-accent text-on-accent" aria-hidden="true">
+                                            <Camera size={14} strokeWidth={2.4} />
+                                        </span>
+                                    </button>
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -200,73 +185,87 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                     />
                                 </div>
 
-                                {/* Inputs */}
-                                <div className="space-y-5">
-                                    <div className="relative group">
-                                        <input
-                                            type="text"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            onBlur={() => setTouched(true)}
-                                            className="block w-full px-0 py-2 text-lg text-on-surface bg-transparent border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 transition-colors peer placeholder-transparent"
-                                            placeholder={t.name}
-                                            autoFocus
-                                        />
-                                        <label className="absolute left-0 -top-3.5 text-sm text-on-surface-variant transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-on-surface-variant/50 peer-placeholder-shown:top-2 peer-focus:-top-3.5 peer-focus:text-sm peer-focus:text-primary">
-                                            {t.name}
-                                        </label>
-                                        {nameError && (
-                                            <span className="absolute right-0 top-3 text-xs text-error font-medium flex items-center gap-1">
-                                                <AlertCircle size={10} /> {nameError}
-                                            </span>
+                                {/* Name */}
+                                <div>
+                                    <label htmlFor="add-person-name" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">
+                                        {t.name}
+                                    </label>
+                                    <input
+                                        id="add-person-name"
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        onBlur={() => setTouched(true)}
+                                        autoComplete="off"
+                                        enterKeyHint="done"
+                                        aria-invalid={!!nameError}
+                                        aria-describedby={nameError ? 'add-person-name-error' : undefined}
+                                        className={clsx(
+                                            'paper-field h-12 w-full rounded-[14px] border px-4 text-[16px] text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent',
+                                            nameError ? 'border-neg' : 'border-hair'
                                         )}
-                                    </div>
+                                        placeholder={t.name}
+                                        autoFocus={!initialData}
+                                    />
+                                    {nameError && (
+                                        <p id="add-person-name-error" className="mt-1.5 flex items-center gap-1 px-1 text-[12px] font-medium text-neg">
+                                            <AlertCircle size={12} aria-hidden="true" /> {nameError}
+                                        </p>
+                                    )}
+                                </div>
 
-                                    <div>
-                                        <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-2 block flex items-center gap-1">
-                                            <Coins size={12} /> {t.currency}
-                                        </label>
-                                        <div className="flex bg-surface-container-high rounded-xl p-1">
-                                            {CURRENCIES.map((c) => (
+                                {/* Color */}
+                                <div role="radiogroup" aria-label={t.color}>
+                                    <span className="mb-2 block px-1 text-[13px] font-semibold text-muted">{t.color}</span>
+                                    <div className="grid grid-cols-8 justify-items-center gap-1 px-0.5">
+                                        {CHART_COLORS.map((c, index) => {
+                                            const selected = color === c;
+                                            return (
                                                 <button
                                                     key={c}
                                                     type="button"
-                                                    onClick={() => setCurrency(c)}
+                                                    role="radio"
+                                                    aria-checked={selected}
+                                                    aria-label={`${t.color} ${index + 1}`}
+                                                    onClick={() => setColor(c)}
                                                     className={clsx(
-                                                        "flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-300",
-                                                        currency === c
-                                                            ? "bg-primary text-on-primary shadow-sm"
-                                                            : "text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5"
+                                                        'flex h-8 w-8 items-center justify-center rounded-full outline-none transition-transform duration-200 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                                                        selected ? 'scale-110 ring-2 ring-on-surface ring-offset-2 ring-offset-[var(--paper-tile)]' : 'active:scale-90'
                                                     )}
+                                                    style={{ backgroundColor: c }}
                                                 >
-                                                    {c}
+                                                    {selected && <Check size={15} strokeWidth={3} className="text-white drop-shadow" aria-hidden="true" />}
                                                 </button>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
-                                {/* Action Button */}
+                                {/* Currency */}
+                                <div>
+                                    <span className="mb-2 block px-1 text-[13px] font-semibold text-muted">{t.currency}</span>
+                                    <Segmented
+                                        ariaLabel={t.currency}
+                                        value={currency}
+                                        onChange={setCurrency}
+                                        options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="shrink-0 px-5 pb-5 pt-1">
                                 <button
                                     type="submit"
                                     disabled={!name.trim()}
-                                    className="w-full py-4 bg-primary text-on-primary font-medium rounded-xl shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:shadow-none disabled:translate-y-0 transition-all duration-300 flex items-center justify-center gap-2"
+                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent transition-opacity disabled:opacity-40"
                                 >
-                                    {initialData ? (
-                                        <>
-                                            <Check size={20} />
-                                            {t.save}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Check size={20} />
-                                            {t.add}
-                                        </>
-                                    )}
+                                    <Check size={18} strokeWidth={2.6} aria-hidden="true" />
+                                    {initialData ? t.save : t.add}
                                 </button>
-                            </form>
-                        </div>
+                            </div>
+                        </form>
                     </m.div>
+                    </div>
 
                     <ImagePickerSheet
                         isOpen={isPickerOpen}

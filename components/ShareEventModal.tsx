@@ -5,6 +5,7 @@ import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { MOTION } from '../config';
 import { getTranslations } from '../utils/i18n';
 import { useDialog } from '../hooks/useFocusTrap';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 
 // Known share errors raised by the service layer, mapped to translation keys.
 const SHARE_ERROR_KEYS = {
@@ -62,6 +63,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
 
     const { dialogProps, titleId } = useDialog(isOpen, () => handleClose());
     const emailId = `${titleId}-email`;
+    const { wrapRef, handleProps } = useSheetDrag(() => handleClose());
 
     const handleClose = () => {
         setEmail('');
@@ -73,114 +75,118 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
     return (
         <AnimatePresence>
             {isOpen && (
-                <>
+                <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
                     {/* Backdrop */}
                     <m.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
+                        transition={MOTION.backdrop}
                         onClick={handleClose}
-                        className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50"
+                        aria-hidden="true"
+                        className="paper-scrim absolute inset-0"
                     />
 
-                    {/* Modal */}
-                    <div className="fixed inset-0 flex items-center justify-center z-50 modal-safe-area pointer-events-none">
+                    <div ref={wrapRef} className="relative flex w-full justify-center">
                         <m.div
                             {...dialogProps}
-                            initial={MOTION.modal.initial}
-                            animate={MOTION.modal.animate}
-                            exit={MOTION.modal.exit}
-                            transition={MOTION.modal.spring}
-                            className="bg-surface-container-low rounded-2xl shadow-elevation-3 w-full max-w-md border border-outline-variant/20 pointer-events-auto"
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={MOTION.sheet.exit}
+                            transition={MOTION.sheet.spring}
+                            className="glass-sheet flex max-h-[90dvh] w-full max-w-[440px] flex-col overflow-hidden rounded-[36px] text-on-surface outline-none"
                         >
                             {/* Header */}
-                            <div className="flex items-center justify-between p-6 border-b border-outline-variant/20">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                        <UserPlus size={20} className="text-primary" aria-hidden="true" />
+                            <div className="shrink-0 touch-none" {...handleProps}>
+                                <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
+                                <div className="flex items-center gap-3 px-5 pb-3 pt-2 md:pt-5">
+                                    <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-accent-soft text-accent">
+                                        <UserPlus size={21} />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <h2 id={titleId} className="text-[22px] font-bold leading-tight tracking-[-0.4px]">{t.shareEvent}</h2>
+                                        <p className="truncate text-[14px] text-muted">{eventName}</p>
                                     </div>
-                                    <div>
-                                        <h2 id={titleId} className="text-xl font-bold text-on-surface">{t.shareEvent}</h2>
-                                        <p className="text-sm text-on-surface-variant">{eventName}</p>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleClose}
+                                        aria-label={t.close}
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                                    >
+                                        <X size={18} aria-hidden="true" />
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={handleClose}
-                                    aria-label={t.close}
-                                    className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container rounded-full transition-colors"
-                                >
-                                    <X size={20} className="text-on-surface-variant" aria-hidden="true" />
-                                </button>
                             </div>
 
                             {/* Content */}
-                            <div className="p-6">
-                                <p className="text-sm text-on-surface-variant mb-4">
+                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-1">
+                                <p className="mb-4 px-1 text-[14px] leading-snug text-muted">
                                     {t.shareEventDescription}
                                 </p>
 
                                 {error && (
-                                    <div className="bg-error-container text-on-error-container p-3 rounded-lg mb-4 flex items-center gap-2 text-sm">
-                                        <AlertCircle size={16} />
+                                    <div role="alert" className="mb-4 flex items-center gap-2 rounded-[16px] bg-neg/10 px-4 py-3 text-[14px] font-medium text-neg">
+                                        <AlertCircle size={16} className="shrink-0" aria-hidden="true" />
                                         {error}
                                     </div>
                                 )}
 
                                 {success && (
-                                    <div className="bg-primary/10 text-primary p-3 rounded-lg mb-4 flex items-center gap-2 text-sm">
-                                        <CheckCircle size={16} />
+                                    <div role="status" className="mb-4 flex items-center gap-2 rounded-[16px] bg-pos/10 px-4 py-3 text-[14px] font-medium text-pos">
+                                        <CheckCircle size={16} className="shrink-0" aria-hidden="true" />
                                         {t.eventSharedSuccess}
                                     </div>
                                 )}
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
-                                        <label htmlFor={emailId} className="block text-sm font-medium text-on-surface-variant mb-2">
+                                        <label htmlFor={emailId} className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">
                                             {t.emailAddress}
                                         </label>
                                         <div className="relative">
-                                            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" aria-hidden="true" />
+                                            <Mail size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" aria-hidden="true" />
                                             <input
                                                 id={emailId}
                                                 type="email"
+                                                inputMode="email"
+                                                autoComplete="email"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
                                                 placeholder={t.shareEmailPlaceholder}
                                                 required
                                                 disabled={loading || success}
-                                                className="w-full pl-10 pr-4 py-3 bg-surface-container-high border-none rounded-lg text-on-surface placeholder-on-surface-variant/60 focus:ring-2 focus:ring-primary disabled:opacity-50"
+                                                className="h-12 w-full rounded-[14px] border-none bg-chip pl-11 pr-4 text-[16px] text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent disabled:opacity-50"
                                             />
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-3">
+                                    <div className="flex gap-2 pt-1">
                                         <button
                                             type="button"
                                             onClick={handleClose}
                                             disabled={loading}
-                                            className="flex-1 px-4 py-3 bg-surface-container text-on-surface rounded-lg font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50"
+                                            className="h-12 flex-1 rounded-full bg-chip text-[15px] font-semibold text-on-surface transition-colors disabled:opacity-50"
                                         >
                                             {t.cancel}
                                         </button>
                                         <button
                                             type="submit"
                                             disabled={loading || success || !email}
-                                            className="flex-1 px-4 py-3 bg-primary text-on-primary rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent transition-colors disabled:cursor-not-allowed disabled:bg-chip disabled:text-faint"
                                         >
                                             {loading ? (
                                                 <>
-                                                    <div className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin" />
+                                                    <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                                                     {t.sharing}
                                                 </>
                                             ) : success ? (
                                                 <>
-                                                    <CheckCircle size={18} />
+                                                    <CheckCircle size={18} aria-hidden="true" />
                                                     {t.shared}
                                                 </>
                                             ) : (
                                                 <>
-                                                    <UserPlus size={18} />
+                                                    <UserPlus size={18} aria-hidden="true" />
                                                     {t.share}
                                                 </>
                                             )}
@@ -190,7 +196,7 @@ export const ShareEventModal: React.FC<ShareEventModalProps> = ({
                             </div>
                         </m.div>
                     </div>
-                </>
+                </div>
             )}
         </AnimatePresence>
     );

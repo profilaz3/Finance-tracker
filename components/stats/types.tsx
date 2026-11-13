@@ -1,8 +1,8 @@
 import React from 'react';
-import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction } from '../../types';
-import clsx from 'clsx';
+import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction, Event } from '../../types';
 import { isTransferTransaction } from '../../domain/money';
 import { formatDate } from '../../utils/locale';
+import { Segmented } from '../ui/Segmented';
 
 // ─── Public Props (same API as original Stats component) ────────────────────
 
@@ -15,6 +15,8 @@ export interface StatsProps {
   rates: ExchangeRates;
   language: 'en' | 'sr';
   totalExpense: number;
+  /** Lets the anomaly explanations mention trips and events of the period. */
+  events?: Event[];
 }
 
 // ─── Internal Time-Frame Types ──────────────────────────────────────────────
@@ -80,13 +82,25 @@ export interface NetWorthItem {
 export const cssColor = (token: string, alpha?: number) =>
   alpha === undefined ? `rgb(var(${token}))` : `rgb(var(${token}) / ${alpha})`;
 
+/** Paper token with a fallback for the older themes, optionally faded toward transparent. */
+const paperColor = (token: string, fallbackRgbToken: string, alpha?: number) => {
+  const base = `var(${token}, rgb(var(${fallbackRgbToken})))`;
+  return alpha === undefined ? base : `color-mix(in oklab, ${base} ${Math.round(alpha * 100)}%, transparent)`;
+};
+
+const accentColor = (alpha?: number) => (
+  alpha === undefined
+    ? 'rgb(var(--accent-rgb, var(--md-sys-color-tertiary)))'
+    : `rgb(var(--accent-rgb, var(--md-sys-color-tertiary)) / ${alpha})`
+);
+
 export const buildChartColors = () => ({
-  income: cssColor('--md-sys-color-primary'),
-  incomeSoft: cssColor('--md-sys-color-primary', 0.55),
-  expense: cssColor('--md-sys-color-secondary'),
-  expenseSoft: cssColor('--md-sys-color-secondary', 0.55),
-  accent: cssColor('--md-sys-color-tertiary'),
-  accentSoft: cssColor('--md-sys-color-tertiary', 0.55),
+  income: paperColor('--paper-pos', '--md-sys-color-primary'),
+  incomeSoft: paperColor('--paper-pos', '--md-sys-color-primary', 0.55),
+  expense: paperColor('--paper-neg', '--md-sys-color-secondary'),
+  expenseSoft: paperColor('--paper-neg', '--md-sys-color-secondary', 0.55),
+  accent: accentColor(),
+  accentSoft: accentColor(0.55),
   axis: cssColor('--md-sys-color-on-surface-variant', 0.85),
   axisSoft: cssColor('--md-sys-color-on-surface-variant', 0.6),
   grid: cssColor('--md-sys-color-outline-variant', 0.45),
@@ -306,25 +320,49 @@ export const CashflowBarShape: React.FC<{
   return <path d={path} fill={fill} />;
 };
 
-export const ToggleButton: React.FC<{ active: boolean; onClick: () => void; label: string }> = ({ active, onClick, label }) => (
-  <button
-    onClick={onClick}
-    className={clsx(
-      "px-3 py-1 rounded-full text-xs font-medium transition-all",
-      active
-        ? "bg-secondary-container text-on-secondary-container shadow-sm"
-        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
-    )}
-  >
-    {label}
-  </button>
+/** Paper card used by every chart block. */
+export const CHART_CARD = 'paper-tile min-w-0 p-4 sm:p-5';
+
+/** BlockHead-style heading row with an optional subtitle and a control on the right. */
+export const ChartHead: React.FC<{ title: string; subtitle?: React.ReactNode; children?: React.ReactNode }> = ({ title, subtitle, children }) => (
+  <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+    <div className="min-w-0">
+      <h3 className="text-[17px] font-bold tracking-[-0.3px]">{title}</h3>
+      {subtitle != null && <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>}
+    </div>
+    {children}
+  </div>
+);
+
+/** Time-frame switch for chart blocks; full width on a phone, compact beside the title from `sm`. */
+export function ChartToggle<T extends string>({ options, value, onChange, ariaLabel }: {
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <Segmented<T>
+      size="sm"
+      ariaLabel={ariaLabel}
+      value={value}
+      onChange={onChange}
+      options={[...options]}
+      className="scrollbar-none w-full overflow-x-auto sm:w-auto"
+    />
+  );
+}
+
+export const ChartEmpty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="flex h-full min-h-[120px] items-center justify-center text-center text-[14px] text-muted">{children}</p>
 );
 
 export const ChartLegend: React.FC<{ items: Array<{ label: string; color: string; gradient?: string; line?: boolean }> }> = ({ items }) => (
-  <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-on-surface-variant">
+  <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[12px] text-muted">
     {items.map((item) => (
-      <div key={item.label} className="flex items-center gap-2">
+      <div key={item.label} className="flex items-center gap-1.5">
         <span
+          aria-hidden="true"
           className={item.line ? "h-[3px] w-4 rounded-full" : "h-2.5 w-2.5 rounded-full"}
           style={{ background: item.gradient ?? item.color }}
         />

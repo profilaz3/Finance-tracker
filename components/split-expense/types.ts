@@ -8,6 +8,8 @@ export interface SplitExpenseModalProps {
         balanceUpdates: { personId: string; currency: Currency; delta: number }[];
     }) => void;
     people: Person[];
+    /** The user's own profile; it is the built-in "me", so it is not listed again as a person. */
+    userProfile?: Person;
     categories: Category[];
     accounts: Account[];
     baseCurrency: Currency;
@@ -22,6 +24,23 @@ export interface SplitExpenseModalProps {
     // Toast notifications
     onShowToast?: (message: string, type: 'success' | 'error' | 'info') => void;
     rates: ExchangeRates;
+    /** Opens prefilled with exact per-person amounts, e.g. from splitting a scanned receipt. */
+    prefill?: SplitPrefill;
+}
+
+/** Exact split amounts worked out elsewhere (components/receipt-scan/SplitAssign.tsx). */
+export interface SplitPrefill {
+    amount: number;
+    currency: Currency;
+    categoryId: string;
+    accountId: string;
+    date: string;
+    note: string;
+    receiptData?: Transaction['receiptData'];
+    /** 'self' (I paid: "I paid" mode) or a person id ("Someone paid for me" mode). */
+    payerId: string;
+    /** Amount per participant, keyed by 'self' or person id; sums to `amount`. */
+    amounts: Record<string, number>;
 }
 
 export interface Recipient {

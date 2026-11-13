@@ -10,6 +10,8 @@ export interface Category {
   subcategories: string[];
   color: string;
   icon?: string;
+  /** Team this item is shared with; null asks the server to take it out of its team. */
+  teamId?: string | null;
 }
 
 export interface Account {
@@ -21,6 +23,8 @@ export interface Account {
   initialBalance?: number;
   icon?: string;
   order?: number;
+  /** Team this item is shared with; null asks the server to take it out of its team. */
+  teamId?: string | null;
 }
 
 export interface Person {
@@ -30,6 +34,8 @@ export interface Person {
   color: string;
   defaultCurrency: Currency;
   balances: Record<Currency, number>; // positive = they owe you, negative = you owe them
+  /** Team this item is shared with; null asks the server to take it out of its team. */
+  teamId?: string | null;
 }
 
 export interface Transaction {
@@ -58,6 +64,8 @@ export interface Transaction {
     shares: { personId: string; amount: number; percentage?: number; isPaid?: boolean }[];
     splitMethod: 'equal' | 'exact' | 'percentage';
   };
+  /** Team this item is shared with; null asks the server to take it out of its team. */
+  teamId?: string | null;
 }
 
 export interface ExchangeRates {
@@ -81,6 +89,8 @@ export interface Event {
   imageUrl?: string;
   status: 'active' | 'completed' | 'archived';
   userId?: string; // Owner ID
+  /** Team this item is shared with; null asks the server to take it out of its team. */
+  teamId?: string | null;
 }
 
 export interface SharedExpense {
@@ -174,6 +184,10 @@ export interface RecurringTransaction {
   lastGenerated?: string; // Last time a transaction was auto-generated
   nextDue: string; // Next due date
   isActive: boolean;
+  /** Creator's user id; on a team item only the creator's device generates occurrences. */
+  userId?: string;
+  /** Team this item is shared with; null asks the server to take it out of its team. */
+  teamId?: string | null;
 }
 
 export interface AppState {
@@ -193,6 +207,74 @@ export interface AppState {
   events: Event[];
   sharedExpenses: SharedExpense[];
   isGuest?: boolean;
+
+  /** Paper look: light/dark/system, accent and glass level. */
+  appearance?: Appearance;
+  /** Ordered Home blocks; undefined means the default layout. */
+  homeLayout?: HomeBlock[];
+  /** Monthly budget in the base currency; null or undefined means none set. */
+  budget?: Budget | null;
+  /** Teams the signed-in user belongs to; undefined until fetched. */
+  teams?: Team[];
 }
 
-export type View = 'dashboard' | 'transactions' | 'analytics' | 'settings' | 'insights' | 'people' | 'calendar' | 'events';
+export type TeamRole = 'owner' | 'admin' | 'member';
+
+export interface TeamMember {
+  /** Lower-cased invite email; membership is matched on the signed-in email. */
+  email: string;
+  /** Set once the member is linked to an account (always for the owner). */
+  userId?: string;
+  role: TeamRole;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  ownerId: string;
+  color?: string;
+  createdAt?: string;
+  members: TeamMember[];
+}
+
+export type AppearanceMode = 'light' | 'dark' | 'system';
+export type AccentName = 'teal' | 'ember' | 'iris' | 'ink';
+export type GlassLevel = 'frosted' | 'clear' | 'solid';
+
+export interface Appearance {
+  mode: AppearanceMode;
+  accent: AccentName;
+  glass: GlassLevel;
+}
+
+export type HomeBlockType =
+  | 'budget'
+  | 'networth'
+  | 'categories'
+  | 'daily'
+  | 'wallets'
+  | 'people'
+  | 'event'
+  | 'upcoming'
+  | 'recent'
+  | 'rates'
+  | 'quickadd';
+
+export type HomeBlockSize = 's' | 'm' | 'l';
+
+export interface HomeBlock {
+  id: string;
+  type: HomeBlockType;
+  /** Style key; valid values depend on the block type (see components/home/blockRegistry). */
+  style: string;
+  size: HomeBlockSize;
+}
+
+export interface Budget {
+  /** Monthly total in the base currency. */
+  monthly: number;
+  /** Optional per-category monthly limits, keyed by category id, in the base currency. */
+  categoryLimits: Record<string, number>;
+}
+
+export type View = 'dashboard' | 'transactions' | 'analytics' | 'settings' | 'insights' | 'people' | 'calendar' | 'events' | 'budgets';

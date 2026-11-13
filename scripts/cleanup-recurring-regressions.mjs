@@ -46,15 +46,15 @@ const openRecurringSettings = async page => {
 };
 
 const getRegressionCount = async page => page.evaluate(prefixes => {
-  const titles = Array.from(document.querySelectorAll('p.font-medium')).map(element => element.textContent || '');
+  const titles = Array.from(document.querySelectorAll('[data-recurring-title]')).map(element => element.textContent || '');
   return titles.filter(title => prefixes.some(prefix => title.includes(prefix))).length;
 }, recurringPrefixes);
 
 const deleteFirstRegressionRow = async page => {
   const deleted = await page.evaluate(prefixes => {
-    const titles = Array.from(document.querySelectorAll('p.font-medium'));
+    const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
     const title = titles.find(element => prefixes.some(prefix => element.textContent?.includes(prefix)));
-    const row = title?.closest('div.bg-surface-container-low');
+    const row = title?.closest('[data-recurring-row]');
     if (!(row instanceof HTMLDivElement)) {
       return false;
     }

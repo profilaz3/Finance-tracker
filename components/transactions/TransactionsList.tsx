@@ -2,7 +2,7 @@ import React from 'react';
 import { m } from 'motion/react';
 import clsx from 'clsx';
 import { GroupedVirtuoso } from 'react-virtuoso';
-import { CheckSquare, Receipt, SearchX, Square } from 'lucide-react';
+import { CheckSquare, Receipt, SearchX, FilterX, Square } from 'lucide-react';
 import { AppState, Transaction } from '../../types';
 import { EmptyState } from '../EmptyState';
 import { TransactionItem } from '../TransactionItem';
@@ -76,6 +76,7 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
           action={{
             label: TRANSLATIONS[state.language].clearAllFilters,
             onClick: clearAllFilters,
+            icon: FilterX,
           }}
         />
       ) : (
@@ -95,11 +96,10 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
         onScroll={handleScroll}
         groupCounts={groupCounts}
         groupContent={index => (
-          <div className="sticky top-[env(safe-area-inset-top)] md:top-0 z-10 px-1 py-2 bg-surface/95 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-primary">{groupedData[index]?.label}</span>
-              <div className="flex-1 h-px bg-gradient-to-r from-outline-variant/30 to-transparent" />
-              <span className="text-xs text-on-surface-variant/60 bg-surface-container px-2 py-0.5 rounded-full">
+          <div className="sticky top-[env(safe-area-inset-top)] z-10 bg-paper/95 px-2 pb-2 pt-4 backdrop-blur-sm md:top-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[17px] font-bold tracking-[-0.2px]">{groupedData[index]?.label}</span>
+              <span className="text-[13px] text-faint">
                 {groupedData[index]?.transactions.length} {groupedData[index]?.transactions.length === 1
                   ? TRANSLATIONS[state.language].transactionSingular
                   : TRANSLATIONS[state.language].transactionPlural}
@@ -142,19 +142,18 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
             >
               <div
                 className={clsx(
-                  'bg-surface-container overflow-hidden',
-                  isFirst && 'rounded-t-2xl shadow-elevation-1',
-                  isLast && 'rounded-b-2xl shadow-elevation-1',
-                  !isFirst && !isLast && 'shadow-none'
+                  'overflow-hidden bg-[var(--paper-tile)]',
+                  isFirst && 'rounded-t-[22px]',
+                  isLast && 'rounded-b-[22px] shadow-[var(--paper-tile-shadow)]',
                 )}
               >
                 <div className="flex items-center gap-2">
                   {isSelectionMode && (
-                    <button onClick={() => toggleSelection(transaction.id)} className="flex-shrink-0 p-1">
+                    <button onClick={() => toggleSelection(transaction.id)} className="ml-3 flex-shrink-0 p-1" aria-pressed={selectedIds.has(transaction.id)}>
                       {selectedIds.has(transaction.id) ? (
-                        <CheckSquare size={22} className="text-primary" />
+                        <CheckSquare size={22} className="text-accent" aria-hidden="true" />
                       ) : (
-                        <Square size={22} className="text-on-surface-variant" />
+                        <Square size={22} className="text-muted" aria-hidden="true" />
                       )}
                     </button>
                   )}

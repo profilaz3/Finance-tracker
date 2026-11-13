@@ -36,38 +36,124 @@ const getTypeStyles = (type: DialogType) => {
     switch (type) {
         case 'danger':
             return {
-                iconBg: 'bg-error/10',
+                iconBg: 'bg-error/12',
                 iconColor: 'text-error',
-                buttonBg: 'bg-error hover:bg-error/90',
+                buttonBg: 'bg-error',
                 buttonText: 'text-on-error',
                 Icon: Trash2
             };
         case 'warning':
             return {
-                iconBg: 'bg-warning/10',
+                iconBg: 'bg-warning/12',
                 iconColor: 'text-warning',
-                buttonBg: 'bg-warning hover:bg-warning/90',
+                buttonBg: 'bg-warning',
                 buttonText: 'text-on-warning',
                 Icon: AlertTriangle
             };
         case 'success':
             return {
-                iconBg: 'bg-tertiary/10',
-                iconColor: 'text-tertiary',
-                buttonBg: 'bg-tertiary hover:bg-tertiary/90',
+                iconBg: 'bg-pos/12',
+                iconColor: 'text-pos',
+                buttonBg: 'bg-tertiary',
                 buttonText: 'text-on-tertiary',
                 Icon: CheckCircle
             };
         case 'info':
         default:
             return {
-                iconBg: 'bg-primary/10',
-                iconColor: 'text-primary',
-                buttonBg: 'bg-primary hover:bg-primary/90',
-                buttonText: 'text-on-primary',
+                iconBg: 'bg-accent-soft',
+                iconColor: 'text-accent',
+                buttonBg: 'bg-accent',
+                buttonText: 'text-on-accent',
                 Icon: Info
             };
     }
+};
+
+const SCRIM_CLASS = 'fixed inset-0 z-[200] flex items-center justify-center modal-safe-area paper-scrim backdrop-blur-[2px]';
+
+interface DialogCardProps {
+    type: DialogType;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    icon?: React.ReactNode;
+    dialogProps: ReturnType<typeof useDialog>['dialogProps'];
+    titleId: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+}
+
+/** The centered paper card shared by the provider and the standalone dialog. */
+const DialogCard: React.FC<DialogCardProps> = ({
+    type,
+    title,
+    message,
+    confirmLabel,
+    cancelLabel,
+    icon,
+    dialogProps,
+    titleId,
+    onConfirm,
+    onCancel,
+}) => {
+    const typeStyles = getTypeStyles(type);
+    const IconComponent = typeStyles.Icon;
+    const isDanger = type === 'danger';
+    const messageId = useId();
+
+    return (
+        <m.div
+            initial={MOTION.modal.initial}
+            animate={MOTION.modal.animate}
+            exit={MOTION.modal.exit}
+            transition={MOTION.modal.spring}
+            onClick={(e) => e.stopPropagation()}
+            {...dialogProps}
+            role="alertdialog"
+            aria-describedby={messageId}
+            className="paper-tile w-full max-w-[340px] overflow-hidden !rounded-[32px] text-on-surface outline-none"
+        >
+            <div className="flex justify-center pt-7" aria-hidden="true">
+                <div className={clsx('flex h-14 w-14 items-center justify-center rounded-full', typeStyles.iconBg)}>
+                    {icon || <IconComponent size={26} strokeWidth={2.2} className={typeStyles.iconColor} />}
+                </div>
+            </div>
+
+            <div className="px-6 pb-6 pt-4 text-center">
+                <h3 id={titleId} className="text-[20px] font-semibold leading-tight tracking-tight">
+                    {title}
+                </h3>
+                <p id={messageId} className="mt-2 text-[15px] leading-snug text-muted">
+                    {message}
+                </p>
+            </div>
+
+            <div className="flex gap-2.5 px-5 pb-5">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    autoFocus={isDanger}
+                    className="h-12 flex-1 rounded-full bg-chip text-[15px] font-semibold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                    {cancelLabel}
+                </button>
+                <button
+                    type="button"
+                    onClick={onConfirm}
+                    autoFocus={!isDanger}
+                    className={clsx(
+                        'h-12 flex-1 rounded-full text-[15px] font-semibold outline-none transition-[filter] hover:brightness-105 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--paper-tile)]',
+                        typeStyles.buttonBg,
+                        typeStyles.buttonText
+                    )}
+                >
+                    {confirmLabel}
+                </button>
+            </div>
+        </m.div>
+    );
 };
 
 export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -100,11 +186,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
     // Memoized so consumers of useConfirmDialog do not re-render whenever the dialog opens.
     const contextValue = useMemo(() => ({ confirm }), [confirm]);
 
-    const typeStyles = options?.type ? getTypeStyles(options.type) : getTypeStyles('info');
-    const IconComponent = typeStyles.Icon;
-    const isDanger = options?.type === 'danger';
     const { dialogProps, titleId } = useDialog(isOpen && !!options, handleCancel);
-    const messageId = useId();
 
     return (
         <ConfirmDialogContext.Provider value={contextValue}>
@@ -116,64 +198,22 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[200] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
+                        transition={MOTION.backdrop}
+                        className={SCRIM_CLASS}
                         onClick={handleCancel}
                     >
-                    <m.div
-                            initial={MOTION.modal.initial}
-                            animate={MOTION.modal.animate}
-                            exit={MOTION.modal.exit}
-                            transition={MOTION.modal.spring}
-                            onClick={(e) => e.stopPropagation()}
-                            {...dialogProps}
-                            role="alertdialog"
-                            aria-describedby={messageId}
-                            className="bg-surface-container w-full max-w-sm rounded-2xl shadow-elevation-3 overflow-hidden"
-                        >
-                            {/* Icon */}
-                            <div className="pt-6 flex justify-center" aria-hidden="true">
-                                <div className={clsx(
-                                    "w-16 h-16 rounded-full flex items-center justify-center",
-                                    typeStyles.iconBg
-                                )}>
-                                    {options.icon || <IconComponent size={32} className={typeStyles.iconColor} />}
-                                </div>
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-6 text-center">
-                                <h3 id={titleId} className="text-xl font-display font-medium text-on-surface mb-2">
-                                    {options.title}
-                                </h3>
-                                <p id={messageId} className="text-on-surface-variant">
-                                    {options.message}
-                                </p>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="px-6 pb-6 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={handleCancel}
-                                    autoFocus={isDanger}
-                                    className="flex-1 py-3 bg-surface-container-high text-on-surface rounded-xl font-medium hover:bg-surface-container-highest transition-colors"
-                                >
-                                    {options.cancelLabel || t.cancel}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleConfirm}
-                                    autoFocus={!isDanger}
-                                    className={clsx(
-                                        "flex-1 py-3 rounded-xl font-medium transition-colors",
-                                        typeStyles.buttonBg,
-                                        typeStyles.buttonText
-                                    )}
-                                >
-                                    {options.confirmLabel || t.confirm}
-                                </button>
-                            </div>
-                        </m.div>
+                        <DialogCard
+                            type={options.type ?? 'info'}
+                            title={options.title}
+                            message={options.message}
+                            confirmLabel={options.confirmLabel || t.confirm}
+                            cancelLabel={options.cancelLabel || t.cancel}
+                            icon={options.icon}
+                            dialogProps={dialogProps}
+                            titleId={titleId}
+                            onConfirm={handleConfirm}
+                            onCancel={handleCancel}
+                        />
                     </m.div>
                 )}
             </AnimatePresence>
@@ -203,11 +243,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     cancelLabel = 'Cancel',
     type = 'info'
 }) => {
-    const typeStyles = getTypeStyles(type);
-    const IconComponent = typeStyles.Icon;
-    const isDanger = type === 'danger';
     const { dialogProps, titleId } = useDialog(isOpen, onCancel);
-    const messageId = useId();
 
     // Portalled so a transformed ancestor (animated view, reorder item) cannot clip the fixed overlay.
     return createPortal(
@@ -217,61 +253,21 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[200] flex items-center justify-center modal-safe-area bg-scrim/50 backdrop-blur-sm"
+                    transition={MOTION.backdrop}
+                    className={SCRIM_CLASS}
                     onClick={(e) => { e.stopPropagation(); onCancel(); }}
                 >
-                    <m.div
-                        initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                        onClick={(e) => e.stopPropagation()}
-                        {...dialogProps}
-                        role="alertdialog"
-                        aria-describedby={messageId}
-                        className="bg-surface-container w-full max-w-sm rounded-2xl shadow-elevation-3 overflow-hidden"
-                    >
-                        <div className="pt-6 flex justify-center" aria-hidden="true">
-                            <div className={clsx(
-                                "w-16 h-16 rounded-full flex items-center justify-center",
-                                typeStyles.iconBg
-                            )}>
-                                <IconComponent size={32} className={typeStyles.iconColor} />
-                            </div>
-                        </div>
-
-                        <div className="p-6 text-center">
-                            <h3 id={titleId} className="text-xl font-display font-medium text-on-surface mb-2">
-                                {title}
-                            </h3>
-                            <p id={messageId} className="text-on-surface-variant">
-                                {message}
-                            </p>
-                        </div>
-
-                        <div className="px-6 pb-6 flex gap-3">
-                            <button
-                                type="button"
-                                onClick={onCancel}
-                                autoFocus={isDanger}
-                                className="flex-1 py-3 bg-surface-container-high text-on-surface rounded-xl font-medium hover:bg-surface-container-highest transition-colors"
-                            >
-                                {cancelLabel}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={onConfirm}
-                                autoFocus={!isDanger}
-                                className={clsx(
-                                    "flex-1 py-3 rounded-xl font-medium transition-colors",
-                                    typeStyles.buttonBg,
-                                    typeStyles.buttonText
-                                )}
-                            >
-                                {confirmLabel}
-                            </button>
-                        </div>
-                    </m.div>
+                    <DialogCard
+                        type={type}
+                        title={title}
+                        message={message}
+                        confirmLabel={confirmLabel}
+                        cancelLabel={cancelLabel}
+                        dialogProps={dialogProps}
+                        titleId={titleId}
+                        onConfirm={onConfirm}
+                        onCancel={onCancel}
+                    />
                 </m.div>
             )}
         </AnimatePresence>,

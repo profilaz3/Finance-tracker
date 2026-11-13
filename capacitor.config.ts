@@ -16,6 +16,10 @@ const config: CapacitorConfig = {
     },
     Camera: {
       permissions: ['camera', 'photos']
+    },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_finance',
+      iconColor: '#0F766E',
     }
   }
 };

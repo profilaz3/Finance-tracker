@@ -3,7 +3,8 @@ import { lazyWithReload } from '../utils/lazyWithReload';
 import { m, Variants } from 'motion/react';
 import { exportToCSV } from '../services/storageService';
 import { AppState, Transaction, TransactionType } from '../types';
-import { parseTransaction, isAIAvailable, ParsedTransaction } from '../services/aiService';
+import { isAIAvailable, ParsedTransaction } from '../services/aiService';
+import { parseWithHabits } from '../services/smartEntry';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TRANSLATIONS } from '../constants';
 import { TransactionsToolbar } from './transactions/TransactionsToolbar';
@@ -124,7 +125,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     setParseError(null);
 
     try {
-      const result = await parseTransaction(smartInput, state.categories, state.accounts, state.people);
+      const result = await parseWithHabits(smartInput, state);
       if (result) {
         onParsedTransaction(result);
         setSmartInput('');

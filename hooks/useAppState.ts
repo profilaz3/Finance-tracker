@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { applyAppearanceToRoot, resolveAppearance } from '../utils/appearance';
 import { AppState, Category } from '../types';
 import { applyExternalSegmentChange, flushSaveState, loadState, saveState } from '../services/storageService';
 import { getOfflineQueue, getSupabaseService, getSyncManager } from '../services/runtimeServices';
@@ -102,14 +103,17 @@ export function useAppState(isAuthenticated: boolean | null = null) {
     }
   }, [state.categories]);
 
-  // Apply theme class to <html>
+  // Apply the paper appearance (mode, accent, glass) to <html>; follow the OS in "system" mode.
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.forEach(cls => {
-      if (cls.startsWith('theme-')) root.classList.remove(cls);
-    });
-    root.classList.add(`theme-${state.theme}`);
-  }, [state.theme]);
+    const appearance = resolveAppearance(state.appearance);
+    const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    const apply = () => applyAppearanceToRoot(root, appearance, media?.matches ?? false);
+    apply();
+    if (appearance.mode !== 'system' || !media) return;
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [state.appearance]);
 
   /**
    * Hydrate from Supabase without losing local work:

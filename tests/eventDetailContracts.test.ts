@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { TRANSLATIONS } from '../constants';
 
 describe('event detail contracts', () => {
-  it('renders shared tab content as a single AnimatePresence child', () => {
+  it('renders the shared tab once, with Add expense in the action row instead of a floating button', () => {
     const eventDetailView = readFileSync('components/event-detail/EventDetailView.tsx', 'utf8');
     const sharedBranchCount = (eventDetailView.match(/activeTab === 'shared' && \(/g) || []).length;
 
     expect(sharedBranchCount).toBe(1);
     expect(eventDetailView).toContain('<ExpensesList');
-    expect(eventDetailView).toContain('<ExpensesFab');
+    expect(eventDetailView).not.toContain('<ExpensesFab');
+    expect(eventDetailView).toContain('onClick={openAddExpense}');
   });
 
   it('resolves event participants through the shared resolver before rendering event detail', () => {

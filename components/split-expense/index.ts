@@ -1,2 +1,2 @@
 export { SplitExpenseModal } from './SplitExpenseModal';
-export type { SplitExpenseModalProps } from './types';
+export type { SplitExpenseModalProps, SplitPrefill } from './types';

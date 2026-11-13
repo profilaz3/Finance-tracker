@@ -8,7 +8,10 @@ import {
   ChartColors,
   ChartLegend,
   NetWorthTimeFrame,
-  ToggleButton,
+  CHART_CARD,
+  ChartEmpty,
+  ChartHead,
+  ChartToggle,
   formatCompactNumber,
   getAlignedStartDate,
   getCutoffDate,
@@ -111,22 +114,17 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.35 }}
-      className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1 lg:col-span-2"
+      className={`${CHART_CARD} lg:col-span-2`}
     >
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <h3 className="text-lg font-medium text-on-surface">{t.netWorthTrend}</h3>
-        <div className="bg-surface-container rounded-full p-1 flex gap-1">
-          {(['weekly', 'monthly', 'quarterly'] as const).map((timeFrame) => (
-            <ToggleButton
-              key={timeFrame}
-              active={netWorthTimeFrame === timeFrame}
-              onClick={() => setNetWorthTimeFrame(timeFrame)}
-              label={t[timeFrame]}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="h-[320px] w-full">
+      <ChartHead title={t.netWorthTrend}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={netWorthTimeFrame}
+            onChange={setNetWorthTimeFrame}
+            options={(['weekly', 'monthly', 'quarterly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
+      <div className="h-[260px] w-full sm:h-[320px]">
         {netWorthData.length > 0 ? (
           <StackedAreaLineChart
             rows={netWorthData}
@@ -143,7 +141,7 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
             valueFormatter={(value) => formatCurrency(value, baseCurrency)}
           />
         ) : (
-          <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
+          <ChartEmpty>{t.noData}</ChartEmpty>
         )}
       </div>
       {netWorthData.length > 0 ? (

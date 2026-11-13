@@ -27,7 +27,7 @@ const waitForSyncWindow = async page => page.waitForTimeout(2600);
 const waitForRecurringRowCount = async (page, expectedCount) => {
   await page.waitForFunction(
     ({ prefix, count }) => {
-      const titles = Array.from(document.querySelectorAll('p.font-medium'));
+      const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
       return titles.filter(element => element.textContent?.includes(prefix)).length >= count;
     },
     { prefix: recurringPrefix, count: expectedCount },
@@ -38,11 +38,11 @@ const waitForRecurringRowCount = async (page, expectedCount) => {
 const waitForRowPausedState = async (page, rowIndex, shouldBePaused) => {
   await page.waitForFunction(
     ({ prefix, index, paused }) => {
-      const titles = Array.from(document.querySelectorAll('p.font-medium'));
+      const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
       const matchingTitles = titles.filter(element => element.textContent?.includes(prefix));
       const title = matchingTitles[index];
-      const row = title?.closest('div.bg-surface-container-low');
-      return row ? row.className.includes('opacity-50') === paused : false;
+      const row = title?.closest('[data-recurring-row]');
+      return row ? (row.getAttribute('data-paused') === 'true') === paused : false;
     },
     { prefix: recurringPrefix, index: rowIndex, paused: shouldBePaused },
     { timeout: 15000 },
@@ -52,10 +52,10 @@ const waitForRowPausedState = async (page, rowIndex, shouldBePaused) => {
 const clickRowAction = async (page, rowIndex, buttonIndex) => {
   await page.evaluate(
     ({ prefix, recurringIndex, buttonActionIndex }) => {
-      const titles = Array.from(document.querySelectorAll('p.font-medium'));
+      const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
       const matchingTitles = titles.filter(element => element.textContent?.includes(prefix));
       const title = matchingTitles[recurringIndex];
-      const row = title?.closest('div.bg-surface-container-low');
+      const row = title?.closest('[data-recurring-row]');
       if (!(row instanceof HTMLDivElement)) {
         throw new Error(`Could not resolve recurring row at index ${recurringIndex}.`);
       }
@@ -99,7 +99,7 @@ const openRecurringSettings = async page => {
 const createRecurring = async page => {
   await page.waitForTimeout(2500);
   const existingRows = await page.evaluate(prefix => (
-    Array.from(document.querySelectorAll('p.font-medium')).filter(element => element.textContent?.includes(prefix)).length
+    Array.from(document.querySelectorAll('[data-recurring-title]')).filter(element => element.textContent?.includes(prefix)).length
   ), recurringPrefix);
 
   await page.getByRole('button', { name: /add recurring transaction|dodaj ponavljajuću transakciju|dodaj ponavljajucu transakciju/i }).click();
@@ -123,16 +123,16 @@ const deleteRecurring = async (page, rowIndex, expectedCountAfterDelete) => {
   await waitForSyncWindow(page);
 
   const remainingRowCount = await page.evaluate(prefix => (
-    Array.from(document.querySelectorAll('p.font-medium')).filter(element => element.textContent?.includes(prefix)).length
+    Array.from(document.querySelectorAll('[data-recurring-title]')).filter(element => element.textContent?.includes(prefix)).length
   ), recurringPrefix);
   if (remainingRowCount !== expectedCountAfterDelete) {
     throw new Error(`Expected ${expectedCountAfterDelete} recurring regression rows after delete, got ${remainingRowCount}.`);
   }
 
   const remainingRow = await page.evaluate(recurringLabel => {
-    const titles = Array.from(document.querySelectorAll('p.font-medium'));
+    const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
     const title = titles.find(element => element.textContent?.includes(recurringLabel));
-    const row = title?.closest('div.bg-surface-container-low');
+    const row = title?.closest('[data-recurring-row]');
     return row instanceof HTMLDivElement;
   }, recurringName);
   if (remainingRow) {
@@ -165,7 +165,7 @@ try {
   await page.waitForTimeout(2500);
 
   const remainingRows = await page.evaluate(prefix => (
-    Array.from(document.querySelectorAll('p.font-medium')).filter(element => element.textContent?.includes(prefix)).length
+    Array.from(document.querySelectorAll('[data-recurring-title]')).filter(element => element.textContent?.includes(prefix)).length
   ), recurringPrefix);
   if (remainingRows !== createdRowIndex) {
     throw new Error(`Recurring regression row count changed after reload. Expected ${createdRowIndex}, got ${remainingRows}.`);

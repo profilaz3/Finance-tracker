@@ -1,5 +1,6 @@
-import { Account, AppState, Currency, Event, Person, RecurringTransaction, SharedExpense, Transaction } from '../types';
+import { Account, AppState, Category, Currency, Event, Person, RecurringTransaction, SharedExpense, Team, TeamMember, TeamRole, Transaction } from '../types';
 import { normalizeUserProfileId } from '../utils/remotePeople';
+import { parseSettingsPrefs } from '../utils/settingsPrefs';
 
 type SupabaseRecord = Record<string, unknown>;
 
@@ -15,6 +16,7 @@ export interface SupabaseSettingsRow {
         defaultCurrency: string;
         balances: Record<string, number>;
     } | null;
+    prefs?: unknown;
 }
 
 export type SupabaseTransactionRow = SupabaseRecord & {
@@ -25,11 +27,17 @@ export type SupabaseTransactionRow = SupabaseRecord & {
     split_details?: unknown;
     event_id?: string | null;
     transfer_id?: string | null;
+    team_id?: string | null;
 };
 
 export type SupabaseAccountRow = SupabaseRecord & {
     initial_balance?: number;
     order_index?: number;
+    team_id?: string | null;
+};
+
+export type SupabaseCategoryRow = SupabaseRecord & {
+    team_id?: string | null;
 };
 
 export type SupabaseEventRow = SupabaseRecord & {
@@ -39,6 +47,7 @@ export type SupabaseEventRow = SupabaseRecord & {
     shared_emails?: string[] | null;
     image_url?: string;
     user_id?: string;
+    team_id?: string | null;
 };
 
 export type SupabaseSharedExpenseRow = SupabaseRecord & {
@@ -66,7 +75,25 @@ export type SupabaseRecurringTransactionRow = SupabaseRecord & {
     last_generated?: string;
     next_due: string;
     is_active: boolean;
+    user_id?: string;
+    team_id?: string | null;
 };
+
+export interface SupabaseTeamMemberRow {
+    team_id?: string;
+    email: string;
+    user_id?: string | null;
+    role: string;
+}
+
+export interface SupabaseTeamRow {
+    id: string;
+    name: string;
+    owner_id: string;
+    color?: string | null;
+    created_at?: string | null;
+    team_members?: SupabaseTeamMemberRow[] | null;
+}
 
 const VALID_CURRENCIES: Currency[] = ['EUR', 'USD', 'RSD'];
 const VALID_LANGUAGES: AppState['language'][] = ['en', 'sr'];
@@ -96,6 +123,18 @@ const LEGACY_THEME_MAP: Record<string, AppState['theme']> = {
     'monochrome-light': 'mist'
 };
 
+const VALID_TEAM_ROLES: TeamRole[] = ['owner', 'admin', 'member'];
+
+/** Spread into a mapped entity: adds `teamId` only for team rows, so personal rows keep their shape. */
+const teamIdField = (teamId: unknown): { teamId?: string } =>
+    typeof teamId === 'string' && teamId ? { teamId } : {};
+
+/** Database columns for an entity's team link: omitted when unset (works before the column exists), null to detach. */
+export const teamIdColumn = (teamId: string | null | undefined): { team_id?: string | null } => {
+    if (teamId === null) return { team_id: null };
+    return teamId ? { team_id: teamId } : {};
+};
+
 const normalizeCurrency = (currency?: string, fallback: Currency = 'RSD'): Currency =>
     VALID_CURRENCIES.includes(currency as Currency) ? (currency as Currency) : fallback;
 
@@ -117,7 +156,8 @@ export function mapTransactionRow(row: SupabaseTransactionRow): Transaction {
         personId: row.person_id,
         splitDetails: row.split_details || undefined,
         eventId: row.event_id || undefined,
-        transferId: row.transfer_id || undefined
+        transferId: row.transfer_id || undefined,
+        ...teamIdField(row.team_id)
     } as Transaction;
 }
 
@@ -125,8 +165,16 @@ export function mapAccountRow(row: SupabaseAccountRow): Account {
     return {
         ...row,
         initialBalance: row.initial_balance,
-        order: row.order_index
+        order: row.order_index,
+        ...teamIdField(row.team_id)
     } as Account;
+}
+
+export function mapCategoryRow(row: SupabaseCategoryRow): Category {
+    return {
+        ...row,
+        ...teamIdField(row.team_id)
+    } as unknown as Category;
 }
 
 export function mapEventRow(row: SupabaseEventRow): Event {
@@ -137,7 +185,8 @@ export function mapEventRow(row: SupabaseEventRow): Event {
         personIds: row.person_ids || [],
         sharedEmails: row.shared_emails || [],
         imageUrl: row.image_url,
-        userId: row.user_id
+        userId: row.user_id,
+        ...teamIdField(row.team_id)
     } as Event;
 }
 
@@ -169,14 +218,44 @@ export function mapRecurringTransactionRow(row: SupabaseRecurringTransactionRow)
         endDate: row.end_date,
         lastGenerated: row.last_generated,
         nextDue: row.next_due,
-        isActive: row.is_active
+        isActive: row.is_active,
+        ...(row.user_id ? { userId: row.user_id } : {}),
+        ...teamIdField(row.team_id)
+    };
+}
+
+const normalizeTeamRole = (role: string): TeamRole =>
+    VALID_TEAM_ROLES.includes(role as TeamRole) ? (role as TeamRole) : 'member';
+
+const TEAM_ROLE_ORDER: Record<TeamRole, number> = { owner: 0, admin: 1, member: 2 };
+
+export function mapTeamMemberRow(row: SupabaseTeamMemberRow): TeamMember {
+    return {
+        email: row.email,
+        role: normalizeTeamRole(row.role),
+        ...(row.user_id ? { userId: row.user_id } : {})
+    };
+}
+
+/** Members are ordered owner, admins, members, then by email. */
+export function mapTeamRow(row: SupabaseTeamRow): Team {
+    const members = (row.team_members ?? [])
+        .map(mapTeamMemberRow)
+        .sort((a, b) => TEAM_ROLE_ORDER[a.role] - TEAM_ROLE_ORDER[b.role] || a.email.localeCompare(b.email));
+    return {
+        id: row.id,
+        name: row.name,
+        ownerId: row.owner_id,
+        ...(row.color ? { color: row.color } : {}),
+        ...(row.created_at ? { createdAt: row.created_at } : {}),
+        members
     };
 }
 
 export function mapSettingsRow(
     row: SupabaseSettingsRow | null | undefined,
     userId: string
-): Pick<AppState, 'baseCurrency' | 'theme' | 'language' | 'userProfile'> {
+): Pick<AppState, 'baseCurrency' | 'theme' | 'language' | 'userProfile' | 'appearance' | 'homeLayout' | 'budget'> {
     const rawUserProfile = row?.user_profile;
     const userProfile: Person | undefined = rawUserProfile ? {
         id: normalizeUserProfileId(rawUserProfile.id, userId) ?? userId,
@@ -191,7 +270,8 @@ export function mapSettingsRow(
         baseCurrency: normalizeCurrency(row?.base_currency),
         theme: normalizeTheme(row?.theme),
         language: normalizeLanguage(row?.language),
-        userProfile
+        userProfile,
+        ...parseSettingsPrefs(row?.prefs)
     };
 }
 

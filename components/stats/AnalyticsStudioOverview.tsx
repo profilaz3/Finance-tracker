@@ -17,6 +17,7 @@ export interface AnalyticsStudioOverviewProps {
   rates: StatsProps['rates'];
   baseCurrency: StatsProps['baseCurrency'];
   language: StatsProps['language'];
+  events?: StatsProps['events'];
 }
 
 export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = ({
@@ -26,6 +27,7 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
   rates,
   baseCurrency,
   language,
+  events,
 }) => {
   const t = TRANSLATIONS[language];
   const localLabels = ANALYTICS_STUDIO_LABELS[language];
@@ -46,6 +48,11 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
     [transactions, categories, recurringTransactions, rates, baseCurrency, analyticsPeriod, now]
   );
 
+  const categoryLookup = useMemo(
+    () => new Map(categories.map(category => [category.id, category])),
+    [categories]
+  );
+
   const focusedCategoryId = useMemo(() => {
     const selectedStillExists = selectedCategoryId
       ? studioSummary.categories.some(category => category.categoryId === selectedCategoryId)
@@ -59,17 +66,18 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
   return (
     <>
       <AnalyticsStudioHeader
-        title={t.analyticsStudio}
-        description={t.analyticsStudioDesc}
         period={analyticsPeriod}
         periodRange={studioSummary.period}
         labels={{ month: t.periodMonth, quarter: t.periodQuarter, year: t.periodYear }}
+        ariaLabel={t.timePeriod}
+        language={language}
         onPeriodChange={setAnalyticsPeriod}
       />
 
       <AnalyticsKpiGrid
         summary={studioSummary}
         baseCurrency={baseCurrency}
+        language={language}
         labels={{
           income: t.income,
           expense: t.expense,
@@ -85,11 +93,13 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
         }}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)] gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)] gap-3 sm:gap-4">
         <CategoryDrilldownPanel
           categories={studioSummary.categories}
           selectedCategoryId={focusedCategoryId}
           baseCurrency={baseCurrency}
+          language={language}
+          categoryLookup={categoryLookup}
           labels={{
             topCategories: t.topCategories,
             selectedCategory: t.selectedCategory,
@@ -104,10 +114,11 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
           }}
           onSelectCategory={setSelectedCategoryId}
         />
-        <div className="space-y-4 sm:space-y-6 min-w-0">
+        <div className="space-y-3 sm:space-y-4 min-w-0">
           <CashFlowForecastPanel
             forecast={studioSummary.forecast}
             baseCurrency={baseCurrency}
+            language={language}
             labels={{
               cashFlowForecast: t.cashFlowForecast,
               forecastEstimate: t.forecastEstimate,
@@ -121,6 +132,7 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
           <AnomalyPanel
             anomalies={studioSummary.anomalies}
             baseCurrency={baseCurrency}
+            language={language}
             labels={{
               observations: t.observations,
               noObservations: t.noObservations,
@@ -129,6 +141,15 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
               largeTransactionDetail: localLabels.largeTransactionDetail,
               highFeesDetail: localLabels.highFeesDetail,
             }}
+            explain={{
+              transactions,
+              categories,
+              recurringTransactions,
+              events,
+              rates,
+              period: studioSummary.period,
+              loadingLabel: t.anomalyWhyLoading,
+            }}
           />
         </div>
       </div>
@@ -136,6 +157,7 @@ export const AnalyticsStudioOverview: React.FC<AnalyticsStudioOverviewProps> = (
       <AnalyticsSummaryPanel
         summary={studioSummary}
         baseCurrency={baseCurrency}
+        language={language}
         label={t.localSummary}
         labels={{
           income: t.income,

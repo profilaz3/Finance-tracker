@@ -9,7 +9,10 @@ import {
   ChartColors,
   ChartDataItem,
   ComparisonTimeFrame,
-  ToggleButton,
+  CHART_CARD,
+  ChartEmpty,
+  ChartHead,
+  ChartToggle,
   TrendTimeFrame,
   formatCompactNumber,
   getCutoffDate,
@@ -188,22 +191,17 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
       <m.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
+        className={CHART_CARD}
       >
-        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-          <h3 className="text-lg font-medium text-on-surface">{t.spendingTrend}</h3>
-          <div className="bg-surface-container rounded-full p-1 flex gap-1">
-            {(['daily', 'weekly', 'monthly'] as const).map((timeFrame) => (
-              <ToggleButton
-                key={timeFrame}
-                active={trendTimeFrame === timeFrame}
-                onClick={() => setTrendTimeFrame(timeFrame)}
-                label={t[timeFrame]}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="h-[300px] w-full">
+        <ChartHead title={t.spendingTrend}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={trendTimeFrame}
+            onChange={setTrendTimeFrame}
+            options={(['daily', 'weekly', 'monthly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
+        <div className="h-[240px] w-full sm:h-[300px]">
           <LineAreaChart
             rows={trendData}
             labelKey="label"
@@ -216,27 +214,22 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
         </div>
       </m.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
         <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
+          className={CHART_CARD}
         >
-          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-            <h3 className="text-lg font-medium text-on-surface">{t.incomeVsExpense}</h3>
-            <div className="bg-surface-container rounded-full p-1 flex gap-1 overflow-x-auto custom-scrollbar max-w-full">
-              {(['weekly', 'monthly', 'quarterly', 'yearly'] as const).map((timeFrame) => (
-                <ToggleButton
-                  key={timeFrame}
-                  active={comparisonTimeFrame === timeFrame}
-                  onClick={() => setComparisonTimeFrame(timeFrame)}
-                  label={t[timeFrame]}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="h-[300px] w-full">
+          <ChartHead title={t.incomeVsExpense}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={comparisonTimeFrame}
+            onChange={setComparisonTimeFrame}
+            options={(['weekly', 'monthly', 'quarterly', 'yearly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
+          <div className="h-[240px] w-full sm:h-[300px]">
             <GroupedBarChart
               rows={comparisonData}
               labelKey="label"
@@ -260,27 +253,17 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
+          className={CHART_CARD}
         >
-          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-            <div>
-              <h3 className="text-lg font-medium text-on-surface">{t.savingsRate}</h3>
-              <p className="text-sm text-on-surface-variant mt-1">
-                {t.savingsTarget}: {savingsTarget}%
-              </p>
-            </div>
-            <div className="bg-surface-container rounded-full p-1 flex gap-1 overflow-x-auto custom-scrollbar max-w-full">
-              {(['monthly', 'quarterly', 'yearly'] as const).map((timeFrame) => (
-                <ToggleButton
-                  key={timeFrame}
-                  active={savingsTimeFrame === timeFrame}
-                  onClick={() => setSavingsTimeFrame(timeFrame)}
-                  label={t[timeFrame]}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="h-[300px] w-full">
+          <ChartHead title={t.savingsRate} subtitle={`${t.savingsTarget}: ${savingsTarget}%`}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={savingsTimeFrame}
+            onChange={setSavingsTimeFrame}
+            options={(['monthly', 'quarterly', 'yearly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
+          <div className="h-[240px] w-full sm:h-[300px]">
             {savingsRateData.length > 0 ? (
               <LineAreaChart
                 rows={savingsRateData}
@@ -293,7 +276,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
                 referenceLine={{ value: savingsTarget, color: chartColors.gridStrong, dashed: true }}
               />
             ) : (
-              <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
+              <ChartEmpty>{t.noData}</ChartEmpty>
             )}
           </div>
         </m.div>
@@ -302,25 +285,20 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1 lg:col-span-2"
+          className={`${CHART_CARD} lg:col-span-2`}
         >
-          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-            <h3 className="text-lg font-medium text-on-surface">{t.cashflowByAccount}</h3>
-            <div className="bg-surface-container rounded-full p-1 flex gap-1 overflow-x-auto custom-scrollbar max-w-full">
-              {(['monthly', 'quarterly', 'yearly'] as const).map((timeFrame) => (
-                <ToggleButton
-                  key={timeFrame}
-                  active={accountCashflowTimeFrame === timeFrame}
-                  onClick={() => setAccountCashflowTimeFrame(timeFrame)}
-                  label={t[timeFrame]}
-                />
-              ))}
-            </div>
-          </div>
+          <ChartHead title={t.cashflowByAccount}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={accountCashflowTimeFrame}
+            onChange={setAccountCashflowTimeFrame}
+            options={(['monthly', 'quarterly', 'yearly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
           <div className="w-full">
             {accountCashflowData.length > 0 ? (
               <>
-                <div className="h-[300px] w-full">
+                <div className="h-[240px] w-full sm:h-[300px]">
                   <StackedSignedBarChart
                     rows={accountCashflowData}
                     labelKey="name"
@@ -340,7 +318,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
                 />
               </>
             ) : (
-              <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
+              <ChartEmpty>{t.noData}</ChartEmpty>
             )}
           </div>
         </m.div>

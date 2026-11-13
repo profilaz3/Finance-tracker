@@ -117,6 +117,10 @@ export const buildSettlementDraft = ({
   if (!balance) {
     return null;
   }
+  // A partial payment must be positive and cannot flip who owes whom.
+  if (settleAmount !== undefined && (!(settleAmount > 0) || roundAmount(settleAmount) > roundAmount(Math.abs(balance)))) {
+    return null;
+  }
 
   const type = balance > 0 ? 'income' : 'expense';
   const amount = settleAmount !== undefined ? settleAmount : Math.abs(balance);
@@ -149,4 +153,20 @@ export const buildSettlementDraft = ({
       note: isPartial ? `Partial settlement (${currency})` : `Settled ${currency} balance`,
     },
   };
+};
+
+/**
+ * People to offer in flows that already have a built-in "me" (splitting a bill, moving money):
+ * the user's own profile can also sit in the people list, so it is dropped to keep the user
+ * listed once. Ids in `keepIds` stay (existing records that already reference the profile).
+ */
+export const excludeOwnProfile = (
+  people: Person[],
+  userProfile?: Pick<Person, 'id'> | null,
+  keepIds: Iterable<string> = [],
+): Person[] => {
+  if (!userProfile?.id) return people;
+  const keep = new Set(keepIds);
+  if (keep.has(userProfile.id)) return people;
+  return people.filter(person => person.id !== userProfile.id);
 };

@@ -7,12 +7,15 @@ const distIndexHtml = path.resolve('dist', 'index.html');
 const budgets = [
   { label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false },
   // Raised from 360 KB: the complete EN+SR translation table (~50 KB raw, ~122 KB gzip startup total) is eager by design.
-  { label: 'startup-js', prefix: null, maxBytes: 400 * 1024, aggregate: false },
+  // Raised from 400 KB for the redesign: EN+SR strings for the new screens (+34 KB, eager by design)
+  // and the new app shell (add sheet, home, notifications, swipe pager). AI features stay lazy.
+  { label: 'startup-js', prefix: null, maxBytes: 520 * 1024, aggregate: false },
   { label: 'transactions-route', prefix: 'TransactionsView-', maxBytes: 80 * 1024, aggregate: false },
   { label: 'stats-shell', prefix: 'Stats-', maxBytes: 12 * 1024, aggregate: false },
   { label: 'export-modal', prefix: 'ExportModal-', maxBytes: 8 * 1024, aggregate: false },
   { label: 'pdf-export', prefix: 'pdfExport-', maxBytes: 8 * 1024, aggregate: false },
-  { label: 'supabase-service', prefix: 'supabaseService-', maxBytes: 16 * 1024, aggregate: false },
+  // Raised from 16 KB: teams and avatar storage calls.
+  { label: 'supabase-service', prefix: 'supabaseService-', maxBytes: 18 * 1024, aggregate: false },
   { label: 'icons', prefix: 'icons-', maxBytes: 48 * 1024, aggregate: false },
   { label: 'motion', prefix: 'motion-', maxBytes: 128 * 1024, aggregate: false },
   { label: 'motion-max-features', prefix: 'motionMaxFeatures-', maxBytes: 56 * 1024, aggregate: false },

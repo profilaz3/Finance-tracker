@@ -1,19 +1,24 @@
 import { createClient, isAuthRetryableFetchError, SupabaseClient, User } from '@supabase/supabase-js';
-import { AppState, Transaction, Category, Account, Person, Event, SharedExpense, RecurringTransaction } from '../types';
+import { AppState, Transaction, Category, Account, Person, Event, SharedExpense, RecurringTransaction, Team, TeamMember, TeamRole } from '../types';
 import { CONFIG } from '../config';
 import { SettingsSyncPayload } from '../utils/settingsSync';
 import { collectReferencedPersonIds, normalizeRemotePersonRecord } from '../utils/remotePeople';
 import {
     mapAccountRow,
+    mapCategoryRow,
     mapEventRow,
     mapRecurringTransactionRow,
     mapSettingsRow,
     mapSharedExpenseRow,
+    mapTeamMemberRow,
+    mapTeamRow,
     mapTransactionRow,
-    sortAccountsByOrder
+    sortAccountsByOrder,
+    teamIdColumn
 } from './supabaseMappers';
-import type { SupabaseRecurringTransactionRow, SupabaseSettingsRow } from './supabaseMappers';
+import type { SupabaseRecurringTransactionRow, SupabaseSettingsRow, SupabaseTeamMemberRow, SupabaseTeamRow } from './supabaseMappers';
 import { toSyncError } from './syncErrors';
+import { normalizeInviteEmail, normalizeTeamName } from '../domain/teams';
 
 export type { RemoteSlice, RemoteStateResult } from './hydration';
 import type { RemoteSlice, RemoteStateResult } from './hydration';
@@ -21,6 +26,13 @@ import type { RemoteSlice, RemoteStateResult } from './hydration';
 export type UserVerification = 'valid' | 'invalid' | 'unknown';
 
 type Row = Record<string, unknown>;
+
+const TEAM_SELECT = 'id, name, owner_id, color, created_at, team_members(team_id, email, user_id, role)';
+const TEAM_MEMBER_SELECT = 'team_id, email, user_id, role';
+
+/** PostgREST "relation does not exist": the teams migration has not reached this database yet. */
+const isMissingRelationError = (error: { code?: string } | null | undefined): boolean =>
+    error?.code === 'PGRST205' || error?.code === '42P01';
 type ListResult<T> = { data: T[]; error: null } | { data: null; error: Error };
 
 const supabaseUrl = CONFIG.SUPABASE_URL;
@@ -264,7 +276,8 @@ export class SupabaseService {
         const user = await this.getUser();
         if (!user) throw new Error('User not authenticated');
 
-        const own = { column: 'user_id', value: user.id };
+        // RLS returns the user's own rows plus rows of teams they belong to (and, for
+        // events and people, rows shared by email), so list tables are not filtered here.
         const [
             transactionsResult,
             categoriesResult,
@@ -274,15 +287,17 @@ export class SupabaseService {
             eventsResult,
             sharedExpensesResult,
             recurringResult,
+            teamsResult,
         ] = await Promise.all([
-            this.fetchAllRows('transactions', own),
-            this.fetchAllRows('categories', own),
-            this.fetchAllRows('accounts', own),
-            this.fetchAllRows('people'), // Rely on RLS for shared event access
+            this.fetchAllRows('transactions'),
+            this.fetchAllRows('categories'),
+            this.fetchAllRows('accounts'),
+            this.fetchAllRows('people'),
             this.client.from('settings').select('*').eq('user_id', user.id).maybeSingle(),
-            this.fetchAllRows('events'), // Rely on RLS to fetch owned + shared events
+            this.fetchAllRows('events'),
             this.fetchAllRows('shared_expenses'),
-            this.fetchAllRows<SupabaseRecurringTransactionRow>('recurring_transactions', own),
+            this.fetchAllRows<SupabaseRecurringTransactionRow>('recurring_transactions'),
+            this.fetchTeamsResult(),
         ]);
 
         const failedSlices: RemoteSlice[] = [];
@@ -303,6 +318,7 @@ export class SupabaseService {
         const sharedExpenses = track('sharedExpenses', sharedExpensesResult);
         const recurringTransactions = track('recurringTransactions', recurringResult);
         const settings = track('settings', settingsResult) as SupabaseSettingsRow | null;
+        const teams = track('teams', teamsResult);
 
         let people: Row[] | null = peopleResult.error ? null : peopleResult.data;
         const referencedPersonIds = collectReferencedPersonIds({
@@ -328,12 +344,13 @@ export class SupabaseService {
 
         const state: Partial<AppState> = {};
         if (transactions) state.transactions = transactions.map(mapTransactionRow);
-        if (categories) state.categories = categories as unknown as Category[];
+        if (categories) state.categories = categories.map(mapCategoryRow);
         if (accounts) state.accounts = sortAccountsByOrder(accounts.map(mapAccountRow));
         if (people) state.people = people.map(p => normalizeRemotePersonRecord(p as Parameters<typeof normalizeRemotePersonRecord>[0])) as Person[];
         if (events) state.events = events.map(mapEventRow);
         if (sharedExpenses) state.sharedExpenses = sharedExpenses.map(mapSharedExpenseRow);
         if (recurringTransactions) state.recurringTransactions = recurringTransactions.map(mapRecurringTransactionRow);
+        if (teams) state.teams = teams;
         const hasSettingsRow = !settingsResult.error && settings !== null;
         if (hasSettingsRow) Object.assign(state, mapSettingsRow(settings, user.id));
 
@@ -363,7 +380,8 @@ export class SupabaseService {
             split_details: transaction.splitDetails || null,
             event_id: transaction.eventId || null,
             // Only sent when set, so non-transfer rows work before the column exists.
-            ...(transaction.transferId ? { transfer_id: transaction.transferId } : {})
+            ...(transaction.transferId ? { transfer_id: transaction.transferId } : {}),
+            ...teamIdColumn(transaction.teamId)
         });
 
         if (error) throw toSyncError(error, status);
@@ -385,7 +403,8 @@ export class SupabaseService {
             type: category.type,
             subcategories: category.subcategories,
             color: category.color,
-            icon: category.icon
+            icon: category.icon,
+            ...teamIdColumn(category.teamId)
         });
 
         if (error) throw toSyncError(error, status);
@@ -409,7 +428,8 @@ export class SupabaseService {
             color: account.color,
             initial_balance: account.initialBalance,
             icon: account.icon,
-            order_index: account.order
+            order_index: account.order,
+            ...teamIdColumn(account.teamId)
         });
 
         if (error) throw toSyncError(error, status);
@@ -431,7 +451,8 @@ export class SupabaseService {
             avatar: person.avatar,
             color: person.color,
             default_currency: person.defaultCurrency,
-            balances: person.balances
+            balances: person.balances,
+            ...teamIdColumn(person.teamId)
         });
 
         if (error) throw toSyncError(error, status);
@@ -491,7 +512,8 @@ export class SupabaseService {
                 color: settings.userProfile.color,
                 defaultCurrency: settings.userProfile.defaultCurrency,
                 balances: settings.userProfile.balances
-            } : null
+            } : null,
+            ...(settings.prefs ? { prefs: settings.prefs } : {})
         }, { onConflict: 'user_id' });
 
         if (error) {
@@ -541,7 +563,8 @@ export class SupabaseService {
             icon: event.icon,
             color: event.color,
             image_url: event.imageUrl,
-            status: event.status
+            status: event.status,
+            ...teamIdColumn(event.teamId)
         });
 
         if (error) throw toSyncError(error, status);
@@ -644,7 +667,8 @@ export class SupabaseService {
             end_date: recurring.endDate,
             last_generated: recurring.lastGenerated,
             next_due: recurring.nextDue,
-            is_active: recurring.isActive
+            is_active: recurring.isActive,
+            ...teamIdColumn(recurring.teamId)
         });
 
         if (error) throw toSyncError(error, status);
@@ -710,6 +734,127 @@ export class SupabaseService {
         // User is participant if their email is in shared_emails (but not the owner)
         return event.user_id !== user.id &&
             (event.shared_emails || []).includes(user.email);
+    }
+
+    // Teams. Membership changes are online-only actions (not queued); the
+    // server enforces roles, so these throw when RLS or a trigger refuses.
+
+    private async fetchTeamsResult(): Promise<{ data: Team[]; error: null } | { data: null; error: Error }> {
+        const { data, error, status } = await this.client
+            .from('teams')
+            .select(TEAM_SELECT)
+            .order('created_at', { ascending: true });
+        if (error) {
+            // Before the teams migration is deployed there are simply no teams.
+            if (isMissingRelationError(error)) return { data: [], error: null };
+            return { data: null, error: toSyncError(error, status) };
+        }
+        return { data: ((data ?? []) as unknown as SupabaseTeamRow[]).map(mapTeamRow), error: null };
+    }
+
+    async fetchTeams(): Promise<Team[]> {
+        const result = await this.fetchTeamsResult();
+        if (result.error) throw result.error;
+        return result.data;
+    }
+
+    async fetchTeam(teamId: string): Promise<Team | null> {
+        const { data, error, status } = await this.client
+            .from('teams')
+            .select(TEAM_SELECT)
+            .eq('id', teamId)
+            .maybeSingle();
+        if (error) throw toSyncError(error, status);
+        return data ? mapTeamRow(data as unknown as SupabaseTeamRow) : null;
+    }
+
+    /** Creates a team owned by the signed-in user; the server adds the owner member row. */
+    async createTeam(name: string, color?: string): Promise<Team> {
+        const user = await this.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data, error, status } = await this.client
+            .from('teams')
+            .insert({ name: normalizeTeamName(name), owner_id: user.id, ...(color ? { color } : {}) })
+            .select('id')
+            .single();
+        if (error) throw toSyncError(error, status);
+
+        const team = await this.fetchTeam((data as { id: string }).id);
+        if (!team) throw new Error('The new team could not be loaded');
+        return team;
+    }
+
+    async renameTeam(teamId: string, name: string, color?: string | null): Promise<void> {
+        const { data, error, status } = await this.client
+            .from('teams')
+            .update({ name: normalizeTeamName(name), ...(color !== undefined ? { color } : {}) })
+            .eq('id', teamId)
+            .select('id');
+        if (error) throw toSyncError(error, status);
+        if (!data || data.length === 0) throw new Error('Only the team owner or an admin can rename this team');
+    }
+
+    /** Owner only. Items shared with the team stay with their creators (team_id becomes null). */
+    async deleteTeam(teamId: string): Promise<void> {
+        const { data, error, status } = await this.client
+            .from('teams')
+            .delete()
+            .eq('id', teamId)
+            .select('id');
+        if (error) throw toSyncError(error, status);
+        if (!data || data.length === 0) throw new Error('Only the team owner can delete this team');
+    }
+
+    async inviteTeamMember(teamId: string, email: string, role: Exclude<TeamRole, 'owner'> = 'member'): Promise<TeamMember> {
+        const user = await this.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const normalized = normalizeInviteEmail(email);
+        if (!normalized) throw new Error('Enter a valid email address');
+        if (user.email && normalized === user.email.toLowerCase()) {
+            throw new Error('You are already a member of this team');
+        }
+
+        const { data, error, status } = await this.client
+            .from('team_members')
+            .insert({ team_id: teamId, email: normalized, role })
+            .select(TEAM_MEMBER_SELECT)
+            .single();
+        if (error) {
+            if (error.code === '23505') throw new Error('This email is already a member of the team');
+            throw toSyncError(error, status);
+        }
+        return mapTeamMemberRow(data as SupabaseTeamMemberRow);
+    }
+
+    async updateTeamMemberRole(teamId: string, email: string, role: Exclude<TeamRole, 'owner'>): Promise<void> {
+        const { data, error, status } = await this.client
+            .from('team_members')
+            .update({ role })
+            .eq('team_id', teamId)
+            .eq('email', email.trim().toLowerCase())
+            .select('email');
+        if (error) throw toSyncError(error, status);
+        if (!data || data.length === 0) throw new Error('Only the team owner or an admin can change roles');
+    }
+
+    async removeTeamMember(teamId: string, email: string): Promise<void> {
+        const { data, error, status } = await this.client
+            .from('team_members')
+            .delete()
+            .eq('team_id', teamId)
+            .eq('email', email.trim().toLowerCase())
+            .select('email');
+        if (error) throw toSyncError(error, status);
+        if (!data || data.length === 0) throw new Error('This member could not be removed');
+    }
+
+    /** Leave a team you were invited to. The owner cannot leave (delete the team instead). */
+    async leaveTeam(teamId: string): Promise<void> {
+        const user = await this.getUser();
+        if (!user?.email) throw new Error('User not authenticated');
+        await this.removeTeamMember(teamId, user.email);
     }
 }
 

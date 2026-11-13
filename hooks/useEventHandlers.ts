@@ -10,6 +10,7 @@ import {
   upsertEventInCollection,
   upsertSharedExpenseInCollection,
 } from '../domain/events';
+import { isSettlementExpense } from '../domain/settle';
 import { normalizeParticipantEmail } from '../utils/eventParticipants';
 import { getTranslations } from '../utils/i18n';
 import { TRANSLATIONS } from '../constants';
@@ -81,15 +82,33 @@ export function useEventHandlers({
 
     setState(prev => ({ ...prev, sharedExpenses: expenses }));
 
+    const settlement = !isUpdate && isSettlementExpense(expense);
+    if (settlement) {
+      // Recording a payment is one tap, so it gets an Undo right away (sync failures still toast).
+      const t = TRANSLATIONS[state.language];
+      addToast(t.settlementRecorded, 'success', {
+        label: t.undo,
+        onClick: () => {
+          setState(prev => ({ ...prev, sharedExpenses: deleteSharedExpenseFromCollection(prev.sharedExpenses, expense.id) }));
+          addToast(t.settlementRemoved, 'info');
+          void getSyncManager()
+            .then(syncManager => syncManager.deleteSharedExpense(expense.id))
+            .catch(error => console.error('Failed to undo settlement:', error));
+        },
+      });
+    }
+
     try {
       const syncManager = await getSyncManager();
       await syncManager.syncSharedExpense(expense);
-      addToast(isUpdate ? getTranslations().sharedExpenseUpdated : getTranslations().sharedExpenseAdded, 'success');
+      if (!settlement) {
+        addToast(isUpdate ? getTranslations().sharedExpenseUpdated : getTranslations().sharedExpenseAdded, 'success');
+      }
     } catch (error) {
       console.error('Failed to sync shared expense:', error);
       addToast(getTranslations().savedLocallySyncFailed, 'error');
     }
-  }, [addToast, setState, state.sharedExpenses]);
+  }, [addToast, setState, state.language, state.sharedExpenses]);
 
   // Single-item delete: no confirm, an Undo toast restores the expense.
   const handleDeleteSharedExpense = useCallback(async (id: string) => {

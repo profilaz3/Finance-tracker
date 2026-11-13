@@ -1,7 +1,20 @@
-import React from 'react';
+import React, { useId } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { CURRENCIES } from '../../constants';
 import { Currency } from '../../types';
 import { CommonFieldsProps } from './types';
+import { CategoryGlyph } from '../ui/CategoryGlyph';
+
+const label = 'mb-1.5 block px-1 text-[13px] font-semibold text-muted';
+const field = 'h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent';
+const select = `${field} appearance-none pr-10`;
+
+const SelectChevron = () => (
+    <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted" />
+);
+
+const stripLeadingZeros = (val: string) =>
+    val.length > 1 && val.startsWith('0') && !val.includes('.') ? val.replace(/^0+/, '') : val;
 
 export const CommonFields: React.FC<CommonFieldsProps> = ({
     mode,
@@ -24,57 +37,61 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
     language,
     t
 }) => {
+    const id = useId();
+    const expenseCategories = categories.filter(c => c.type === 'expense');
+    const selectedCategory = expenseCategories.find(c => c.id === categoryId);
+
     return (
         <>
-            {/* Amount */}
-            {mode === 'i_paid' && (
-                <div>
-                    <label className="block text-sm font-medium text-on-surface-variant mb-2">
-                        {t.total}
-                    </label>
-                    <div className="flex gap-2">
+            {/* Amount and currency */}
+            <div className="flex gap-2">
+                {mode === 'i_paid' && (
+                    <div className="min-w-0 flex-1">
+                        <label htmlFor={`${id}-amount`} className={label}>
+                            {t.total}
+                        </label>
                         <input
+                            id={`${id}-amount`}
                             type="number"
+                            inputMode="decimal"
                             value={amount}
-                            onChange={(e) => {
-                                let val = e.target.value;
-                                if (val.length > 1 && val.startsWith('0') && !val.includes('.')) {
-                                    val = val.replace(/^0+/, '');
-                                }
-                                setAmount(val);
-                            }}
+                            onChange={(e) => setAmount(stripLeadingZeros(e.target.value))}
                             placeholder="0.00"
-                            className="flex-1 px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20 text-lg font-medium"
+                            className="h-14 w-full rounded-[16px] border-none bg-chip px-4 text-[24px] font-semibold tabular-nums tracking-tight text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
                             autoFocus
                             step="0.01"
                             onFocus={(e) => e.target.select()}
                         />
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Currency */}
-            <div>
-                <label className="block text-sm font-medium text-on-surface-variant mb-2">
-                    {t.currency}
-                </label>
-                <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value as Currency)}
-                    className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20 font-medium"
-                >
-                    {CURRENCIES.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                    ))}
-                </select>
+                <div className={mode === 'i_paid' ? 'w-[104px] shrink-0' : 'w-full'}>
+                    <label htmlFor={`${id}-currency`} className={label}>
+                        {t.currency}
+                    </label>
+                    <div className="relative">
+                        <select
+                            id={`${id}-currency`}
+                            value={currency}
+                            onChange={(e) => setCurrency(e.target.value as Currency)}
+                            className={`${select} ${mode === 'i_paid' ? 'h-14 font-semibold' : 'font-semibold'}`}
+                        >
+                            {CURRENCIES.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                        <SelectChevron />
+                    </div>
+                </div>
             </div>
 
             {/* Date & Time - Only for I Paid mode */}
             {mode === 'i_paid' && (
-                <div className="flex gap-4">
-                    <div className="flex-1">
-                        <label className="text-xs text-primary mb-1 block">{t.date}</label>
+                <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
+                        <label htmlFor={`${id}-date`} className={label}>{t.date}</label>
                         <input
+                            id={`${id}-date`}
                             type="date"
                             value={(() => {
                                 const date = new Date(transactionDate);
@@ -90,12 +107,13 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
                                 newDate.setHours(current.getHours(), current.getMinutes(), 0, 0);
                                 setTransactionDate(newDate.toISOString());
                             }}
-                            className="w-full bg-surface-container border-none rounded-lg px-4 py-2 text-on-surface"
+                            className={field}
                         />
                     </div>
-                    <div className="w-32">
-                        <label className="text-xs text-primary mb-1 block">{t.time}</label>
+                    <div className="w-[118px] shrink-0">
+                        <label htmlFor={`${id}-time`} className={label}>{t.time}</label>
                         <input
+                            id={`${id}-time`}
                             type="time"
                             value={(() => {
                                 const date = new Date(transactionDate);
@@ -109,7 +127,7 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
                                 current.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
                                 setTransactionDate(current.toISOString());
                             }}
-                            className="w-full bg-surface-container border-none rounded-lg px-4 py-2 text-on-surface"
+                            className={field}
                         />
                     </div>
                 </div>
@@ -117,21 +135,17 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
 
             {/* Fees - Only for I Paid mode */}
             {mode === 'i_paid' && (
-                <div className="flex-1">
-                    <label className="text-xs text-primary mb-1 block">{t.feesUsd}</label>
+                <div>
+                    <label htmlFor={`${id}-fees`} className={label}>{t.feesUsd}</label>
                     <input
+                        id={`${id}-fees`}
                         type="number"
+                        inputMode="decimal"
                         value={fees}
-                        onChange={(e) => {
-                            let val = e.target.value;
-                            if (val.length > 1 && val.startsWith('0') && !val.includes('.')) {
-                                val = val.replace(/^0+/, '');
-                            }
-                            setFees(val);
-                        }}
+                        onChange={(e) => setFees(stripLeadingZeros(e.target.value))}
                         onFocus={(e) => e.target.select()}
                         placeholder="0.00"
-                        className="w-full bg-surface-container border-none rounded-lg px-4 py-2 text-on-surface"
+                        className={`${field} tabular-nums`}
                     />
                 </div>
             )}
@@ -140,42 +154,56 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
                 <>
                     {/* Note */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.note}</label>
+                        <label htmlFor={`${id}-note`} className={label}>{t.note}</label>
                         <input
+                            id={`${id}-note`}
                             type="text"
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                             placeholder={t.splitNotePlaceholder}
-                            className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20"
+                            className={field}
                         />
                     </div>
 
                     {/* Category */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.category}</label>
-                        <select
-                            value={categoryId}
-                            onChange={(e) => setCategoryId(e.target.value)}
-                            className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20"
-                        >
-                            {categories.filter(c => c.type === 'expense').map(cat => (
-                                <option key={cat.id} value={cat.id}>{cat.name}</option>
-                            ))}
-                        </select>
+                        <label htmlFor={`${id}-category`} className={label}>{t.category}</label>
+                        <div className="relative">
+                            <CategoryGlyph
+                                category={selectedCategory}
+                                size={32}
+                                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 !rounded-[10px]"
+                            />
+                            <select
+                                id={`${id}-category`}
+                                value={categoryId}
+                                onChange={(e) => setCategoryId(e.target.value)}
+                                className={`${select} pl-[50px]`}
+                            >
+                                {expenseCategories.map(cat => (
+                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
                     </div>
 
                     {/* Account */}
                     <div>
-                        <label className="block text-sm font-medium text-on-surface-variant mb-2">{t.account}</label>
-                        <select
-                            value={accountId}
-                            onChange={(e) => setAccountId(e.target.value)}
-                            className="w-full px-4 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary/20"
-                        >
-                            {accounts.map(acc => (
-                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
-                            ))}
-                        </select>
+                        <label htmlFor={`${id}-account`} className={label}>{t.account}</label>
+                        <div className="relative">
+                            <select
+                                id={`${id}-account`}
+                                value={accountId}
+                                onChange={(e) => setAccountId(e.target.value)}
+                                className={select}
+                            >
+                                {accounts.map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </div>
                     </div>
                 </>
             )}

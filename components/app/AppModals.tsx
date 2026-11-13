@@ -1,7 +1,10 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { lazyWithReload } from '../../utils/lazyWithReload';
 import { AppState, Currency, Event, Person, Transaction } from '../../types';
-import { TRANSLATIONS } from '../../constants';
+import { CHART_COLORS, TRANSLATIONS } from '../../constants';
+import type { SplitPrefill } from '../split-expense/types';
+import { useAskRequests } from '../ask/askBus';
 
 const AddPersonModal = lazyWithReload(() => import('../AddPersonModal').then(m => ({ default: m.AddPersonModal })));
 const PersonDetail = lazyWithReload(() => import('../PersonDetail').then(m => ({ default: m.PersonDetail })));
@@ -11,6 +14,7 @@ const SplitModal = lazyWithReload(() => import('../SplitModal').then(m => ({ def
 const EventCreationModal = lazyWithReload(() => import('../EventCreationModal').then(m => ({ default: m.EventCreationModal })));
 const ReceiptScanModal = lazyWithReload(() => import('../ReceiptScanModal').then(m => ({ default: m.ReceiptScanModal })));
 const SplitExpenseModal = lazyWithReload(() => import('../split-expense').then(m => ({ default: m.SplitExpenseModal })));
+const AskSheet = lazyWithReload(() => import('../ask/AskSheet').then(m => ({ default: m.AskSheet })));
 
 interface AppModalsState {
   isEditModalOpen: boolean;
@@ -29,6 +33,8 @@ interface AppModalsState {
   setIsSplitExpenseModalOpen: (isOpen: boolean) => void;
   isUserProfileModalOpen: boolean;
   setIsUserProfileModalOpen: (isOpen: boolean) => void;
+  isAskOpen: boolean;
+  setIsAskOpen: (isOpen: boolean) => void;
 }
 
 interface AppModalsProps {
@@ -61,9 +67,14 @@ interface AppModalsProps {
   }) => Promise<void>;
   addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   t: typeof TRANSLATIONS.en;
+  /** A receipt image shared into the app; opens the receipt scanner preloaded. */
+  sharedReceiptImage?: string | null;
+  clearSharedReceiptImage?: () => void;
 }
 
 export const AppModals: React.FC<AppModalsProps> = ({
+  sharedReceiptImage,
+  clearSharedReceiptImage,
   modals,
   state,
   selectedTransaction,
@@ -92,14 +103,28 @@ export const AppModals: React.FC<AppModalsProps> = ({
   t,
 }) => {
   const isNewTransaction = !!selectedTransaction && !state.transactions.some(transaction => transaction.id === selectedTransaction.id);
+  // Exact amounts from "Split this receipt", handed from the receipt scanner to the split flow.
+  const [splitPrefill, setSplitPrefill] = useState<SplitPrefill | undefined>(undefined);
+  // Ask sheet: mounted on first open, then kept so the conversation survives closing it.
+  const [askMounted, setAskMounted] = useState(false);
+  const [askSeed, setAskSeed] = useState<{ question: string; nonce: number } | null>(null);
+  useAskRequests((question) => {
+    setAskMounted(true);
+    if (question) setAskSeed({ question, nonce: Date.now() });
+    modals.setIsAskOpen(true);
+  });
 
   return (
     <Suspense fallback={null}>
+      {/* Modals stay mounted while their exit animation plays. */}
+      <AnimatePresence>
       {modals.isSplitModalOpen && (
         <SplitModal
+          key="split"
           isOpen={modals.isSplitModalOpen}
           onClose={() => modals.setIsSplitModalOpen(false)}
           people={state.people}
+          userProfile={state.userProfile}
           accounts={state.accounts}
           onSplit={handleSplitTransaction}
           t={t}
@@ -108,6 +133,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {selectedPerson && (
         <PersonDetail
+          key="person"
           person={state.people.find(person => person.id === selectedPerson.id) ?? selectedPerson}
           transactions={state.transactions}
           categories={state.categories}
@@ -127,6 +153,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {modals.isAddPersonModalOpen && (
         <AddPersonModal
+          key="add-person"
           isOpen={modals.isAddPersonModalOpen}
           onClose={() => {
             modals.setIsAddPersonModalOpen(false);
@@ -141,6 +168,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {modals.isUserProfileModalOpen && (
         <AddPersonModal
+          key="user-profile"
           isOpen={modals.isUserProfileModalOpen}
           onClose={() => modals.setIsUserProfileModalOpen(false)}
           onAdd={createUserProfile}
@@ -152,6 +180,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {modals.isReceiptModalOpen && (
         <ReceiptModal
+          key="receipt"
           isOpen={modals.isReceiptModalOpen}
           onClose={() => modals.setIsReceiptModalOpen(false)}
           transaction={selectedTransaction}
@@ -162,6 +191,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {modals.isEditModalOpen && (
         <EditTransactionModal
+          key="edit"
           isOpen={modals.isEditModalOpen}
           onClose={() => modals.setIsEditModalOpen(false)}
           transaction={selectedTransaction}
@@ -173,11 +203,13 @@ export const AppModals: React.FC<AppModalsProps> = ({
           onSave={updateTransaction}
           onDelete={deleteTransaction}
           t={t}
+          transactions={state.transactions}
         />
       )}
 
       {modals.isEventCreationModalOpen && (
         <EventCreationModal
+          key="event-create"
           isOpen={modals.isEventCreationModalOpen}
           onClose={() => modals.setIsEventCreationModalOpen(false)}
           onCreate={handleCreateEvent}
@@ -188,39 +220,63 @@ export const AppModals: React.FC<AppModalsProps> = ({
 
       {modals.isReceiptScanModalOpen && (
         <ReceiptScanModal
+          key="receipt-scan"
           isOpen={modals.isReceiptScanModalOpen}
-          onClose={() => modals.setIsReceiptScanModalOpen(false)}
+          onClose={() => {
+            modals.setIsReceiptScanModalOpen(false);
+            clearSharedReceiptImage?.();
+          }}
           categories={state.categories}
           accounts={state.accounts}
           baseCurrency={state.baseCurrency}
           language={state.language}
+          initialImage={sharedReceiptImage}
+          people={state.people}
+          userProfile={state.userProfile}
+          onAddPerson={name => addPerson(name, state.baseCurrency, CHART_COLORS[state.people.length % CHART_COLORS.length])}
+          onSplitRequested={(prefill) => {
+            modals.setIsReceiptScanModalOpen(false);
+            clearSharedReceiptImage?.();
+            setSplitTransactionContext(undefined);
+            setSplitPrefill(prefill);
+            modals.setIsSplitExpenseModalOpen(true);
+          }}
           onTransactionCreated={(transaction) => {
             addTransaction(transaction);
             modals.setIsReceiptScanModalOpen(false);
+            clearSharedReceiptImage?.();
           }}
         />
       )}
 
       {modals.isSplitExpenseModalOpen && (
         <SplitExpenseModal
+          key="split-expense"
           isOpen={modals.isSplitExpenseModalOpen}
           onClose={() => {
             modals.setIsSplitExpenseModalOpen(false);
             setSplitTransactionContext(undefined);
+            setSplitPrefill(undefined);
           }}
           onSplit={handleUnifiedSplit}
           people={state.people}
+          userProfile={state.userProfile}
           categories={state.categories}
           accounts={state.accounts}
           baseCurrency={state.baseCurrency}
           rates={state.rates}
           language={state.language}
           transaction={splitTransactionContext || undefined}
+          prefill={splitPrefill}
           onShowToast={addToast}
           events={state.events}
           activeEvent={activeEvent}
           linkToActiveEvent={linkToActiveEvent}
         />
+      )}
+      </AnimatePresence>
+      {(askMounted || modals.isAskOpen) && (
+        <AskSheet isOpen={modals.isAskOpen} onClose={() => modals.setIsAskOpen(false)} state={state} seed={askSeed} />
       )}
     </Suspense>
   );

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { RecurringTransaction } from '../types';
 import { CONFIG } from '../config';
 import { flushSaveState } from '../services/storageService';
+import { shouldGenerateRecurring } from '../domain/teams';
 import {
   buildRecurringProcessingKey,
   getRecurringTransactionsToProcess,
@@ -18,6 +19,11 @@ interface UseRecurringProcessorOptions {
   isHydrated: boolean;
   recurringTransactions: RecurringTransaction[];
   processRecurringTransactions: (dueRecurrings?: RecurringTransaction[]) => void;
+  /**
+   * Signed-in user id. Team recurring rules are generated only on their
+   * creator's devices; without an id they are skipped (personal rules still run).
+   */
+  currentUserId?: string | null;
   pollIntervalMs?: number;
 }
 
@@ -44,10 +50,13 @@ export function useRecurringProcessor({
   isHydrated,
   recurringTransactions,
   processRecurringTransactions,
+  currentUserId,
   pollIntervalMs = CONFIG.RECURRING_POLL_INTERVAL_MS,
 }: UseRecurringProcessorOptions) {
   const processedKeysRef = useRef<Set<string>>(new Set());
   const recurringRef = useRef(recurringTransactions);
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
   const processRef = useRef(processRecurringTransactions);
   processRef.current = processRecurringTransactions;
   const runningRef = useRef(false);
@@ -62,7 +71,7 @@ export function useRecurringProcessor({
 
   const processDue = useCallback((): boolean => {
     const dueRecurrings = getRecurringTransactionsToProcess(
-      recurringRef.current,
+      recurringRef.current.filter(recurring => shouldGenerateRecurring(recurring, currentUserIdRef.current)),
       processedKeysRef.current
     );
 

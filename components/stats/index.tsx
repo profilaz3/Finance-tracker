@@ -65,11 +65,11 @@ const CategoryBreakdownSection = lazyWithReload(async () => {
 
 const StatsPanelFallback: React.FC<{ className?: string }> = ({ className }) => (
   <div
-    className={`animate-pulse rounded-3xl border border-outline/10 bg-surface-container-low p-6 shadow-elevation-1 ${className ?? ''}`}
+    className={`paper-tile animate-pulse p-4 sm:p-5 ${className ?? ''}`}
     aria-hidden="true"
   >
-    <div className="h-5 w-36 rounded-full bg-surface-container-high mb-4" />
-    <div className="h-64 rounded-2xl bg-surface-container-highest/60" />
+    <div className="mb-4 h-5 w-36 rounded-full bg-chip" />
+    <div className="h-56 rounded-[18px] bg-chip" />
   </div>
 );
 
@@ -110,7 +110,7 @@ const DeferredStatsSection: React.FC<{
   }, [shouldRender]);
 
   return (
-    <div ref={sentinelRef}>
+    <div ref={sentinelRef} className="flex min-w-0 flex-col gap-3 sm:gap-4">
       {shouldRender ? (
         <Suspense fallback={<StatsPanelFallback className={fallbackClassName} />}>
           {children}
@@ -130,7 +130,8 @@ export const Stats: React.FC<StatsProps> = ({
   baseCurrency,
   rates,
   language,
-  totalExpense
+  totalExpense,
+  events
 }) => {
   const t = TRANSLATIONS[language];
   const now = useMemo(() => new Date(), []);
@@ -146,10 +147,11 @@ export const Stats: React.FC<StatsProps> = ({
   const axisProps = buildAxisProps(chartColors);
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
-        <h2 className="text-2xl font-display font-medium text-on-surface">{t.analytics}</h2>
-      </div>
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-1 pb-20 sm:gap-4">
+      <header className="min-w-0">
+        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.6px]">{t.analytics}</h1>
+        <p className="text-[13px] text-muted">{t.analyticsStudioDesc}</p>
+      </header>
 
       <Suspense fallback={<StatsPanelFallback />}>
         <AnalyticsStudioOverviewSection
@@ -159,6 +161,7 @@ export const Stats: React.FC<StatsProps> = ({
           rates={rates}
           baseCurrency={baseCurrency}
           language={language}
+          events={events}
         />
       </Suspense>
 
@@ -189,7 +192,7 @@ export const Stats: React.FC<StatsProps> = ({
       </DeferredStatsSection>
 
       {/* Sections 5-8: Category Breakdown, Volatility, Net Worth, Paid for Others */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
         {/* Category Breakdown (section 5) + Category Volatility (section 6) */}
         <DeferredStatsSection fallbackClassName="min-h-[34rem]">
           <CategoryBreakdownSection

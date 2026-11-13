@@ -1,9 +1,9 @@
 import React from 'react';
 import clsx from 'clsx';
-import { AlertCircle, Check } from 'lucide-react';
+import { AlertCircle, Check, Sparkles } from 'lucide-react';
 import { CURRENCIES, TRANSLATIONS } from '../../constants';
 import { Account, Category, Currency, Transaction } from '../../types';
-import { getContrastText } from '../../utils/colorUtils';
+import { CategoryGlyph } from '../ui/CategoryGlyph';
 import { parseRequiredNumberInput } from '../../utils/numberInput';
 
 type FieldState = {
@@ -23,6 +23,10 @@ interface AmountFieldsProps {
     validateOnBlur: (field: string, value: unknown) => boolean;
     getFieldState: (field: string) => FieldState;
     t: typeof TRANSLATIONS['en'];
+    /** Shown beside the category label when the selection came from the user's habit. */
+    usualHint?: string | null;
+    /** The user chose a category themselves (habit suggestions stop). */
+    onCategoryPicked?: () => void;
 }
 
 export const AmountFields: React.FC<AmountFieldsProps> = ({
@@ -35,7 +39,9 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
     setTargetAccountId,
     validateOnBlur,
     getFieldState,
-    t
+    t,
+    usualHint,
+    onCategoryPicked
 }) => {
     const isInternalTransfer = edited.categoryId === 'internal-transfer';
     const selectedCategory = categories.find(c => c.id === edited.categoryId);
@@ -49,7 +55,7 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
         <>
             <div className="flex gap-3 items-end">
                 <div className="flex-1">
-                    <label htmlFor="edit-tx-amount" className="text-xs text-on-surface-variant mb-1 block">{t.amount}</label>
+                    <label htmlFor="edit-tx-amount" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">{t.amount}</label>
                     <input
                         ref={amountInputRef}
                         id="edit-tx-amount"
@@ -66,14 +72,14 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
                         onFocus={e => e.target.select()}
                         onBlur={() => validateOnBlur('amount', edited.amount)}
                         className={clsx(
-                            "w-full bg-surface-container rounded-xl px-4 py-3 text-2xl font-semibold text-on-surface transition-all",
+                            "h-14 w-full rounded-[16px] bg-chip px-4 text-[28px] font-bold tracking-[-0.5px] text-on-surface outline-none transition-shadow",
                             amountState.error
-                                ? 'border-2 border-error ring-2 ring-error/20'
-                                : 'border border-outline-variant/30 focus:border-primary focus:ring-2 focus:ring-primary/20'
+                                ? 'ring-2 ring-neg'
+                                : 'focus:ring-2 focus:ring-accent'
                         )}
                     />
                     {amountState.error && (
-                        <div className="flex items-center gap-1 mt-1 text-error text-xs">
+                        <div className="mt-1 flex items-center gap-1 px-1 text-[12px] text-neg">
                             <AlertCircle size={12} aria-hidden="true" />
                             <span>{amountState.error}</span>
                         </div>
@@ -84,7 +90,7 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
                         id="edit-tx-currency"
                         value={edited.currency}
                         onChange={e => setEdited({ ...edited, currency: e.target.value as Currency })}
-                        className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-2 py-3 text-lg font-medium text-on-surface text-center"
+                        className="h-14 w-full px-2 text-center text-[17px] font-semibold rounded-[14px] border-none bg-chip text-on-surface outline-none focus:ring-2 focus:ring-accent"
                     >
                         {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -92,30 +98,35 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
             </div>
 
             <div>
-                <label className="text-xs text-on-surface-variant mb-2 block">{t.category}</label>
-                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
+                <div className="mb-2 flex min-w-0 items-center justify-between gap-2 px-1">
+                    <label className="text-[13px] font-semibold text-muted">{t.category}</label>
+                    {usualHint && (
+                        <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
+                            <Sparkles size={11} aria-hidden="true" className="shrink-0" />
+                            <span className="truncate">{usualHint}</span>
+                        </span>
+                    )}
+                </div>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
                     {chipCategories.map(cat => {
                         const isSelected = edited.categoryId === cat.id;
                         return (
                             <button
                                 key={cat.id}
                                 type="button"
-                                onClick={() => setEdited({ ...edited, categoryId: cat.id, type: cat.type, subcategory: '' })}
-                                className={clsx(
-                                    "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap min-h-[40px] shrink-0",
-                                    isSelected
-                                        ? 'ring-2 ring-offset-1 ring-offset-surface-container-high scale-[1.02]'
-                                        : 'opacity-60 sm:opacity-70 hover:opacity-100 active:scale-95'
-                                )}
-                                style={{
-                                    backgroundColor: isSelected ? cat.color : `${cat.color}18`,
-                                    color: isSelected ? getContrastText(cat.color) : cat.color,
-                                    borderColor: cat.color,
-                                    ['--tw-ring-color' as string]: cat.color,
+                                aria-pressed={isSelected}
+                                onClick={() => {
+                                    onCategoryPicked?.();
+                                    setEdited({ ...edited, categoryId: cat.id, type: cat.type, subcategory: '' });
                                 }}
+                                className={clsx(
+                                    'flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full py-1 pl-1 pr-3.5 text-[14px] font-semibold transition-colors',
+                                    isSelected ? 'bg-accent text-on-accent' : 'bg-chip text-on-surface hover:bg-[var(--paper-tile)]'
+                                )}
                             >
-                                {isSelected && <Check size={12} strokeWidth={3} aria-hidden="true" />}
+                                <CategoryGlyph category={cat} size={34} className="!rounded-full" />
                                 {cat.name}
+                                {isSelected && <Check size={14} strokeWidth={3} aria-hidden="true" />}
                             </button>
                         );
                     })}
@@ -125,6 +136,7 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
                         id="edit-tx-category"
                         value={edited.categoryId}
                         onChange={e => {
+                            onCategoryPicked?.();
                             const newCategory = categories.find(c => c.id === e.target.value);
                             setEdited({
                                 ...edited,
@@ -133,7 +145,7 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
                                 subcategory: ''
                             });
                         }}
-                        className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2 text-sm text-on-surface mt-2"
+                        className="mt-2 h-11 w-full px-4 text-[15px] rounded-[14px] border-none bg-chip text-on-surface outline-none focus:ring-2 focus:ring-accent"
                     >
                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
@@ -142,12 +154,12 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
 
             {selectedCategory?.subcategories && selectedCategory.subcategories.length > 0 && (
                 <div>
-                    <label htmlFor="edit-tx-subcategory" className="text-xs text-on-surface-variant mb-1 block">{t.subcategory}</label>
+                    <label htmlFor="edit-tx-subcategory" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">{t.subcategory}</label>
                     <select
                         id="edit-tx-subcategory"
                         value={edited.subcategory || ''}
                         onChange={e => setEdited({ ...edited, subcategory: e.target.value })}
-                        className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-on-surface"
+                        className="h-12 w-full px-4 text-[16px] rounded-[14px] border-none bg-chip text-on-surface outline-none focus:ring-2 focus:ring-accent"
                     >
                         <option value="">{t.selectSubcategory}</option>
                         {selectedCategory.subcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
@@ -156,7 +168,7 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
             )}
 
             <div>
-                <label htmlFor="edit-tx-account" className="text-xs text-on-surface-variant mb-1 block">
+                <label htmlFor="edit-tx-account" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">
                     {isInternalTransfer ? t.fromAccount : t.account}
                 </label>
                 <select
@@ -165,16 +177,16 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
                     onChange={e => setEdited({ ...edited, accountId: e.target.value })}
                     onBlur={() => validateOnBlur('accountId', edited.accountId)}
                     className={clsx(
-                        "w-full bg-surface-container rounded-xl px-4 py-2.5 text-on-surface transition-all",
+                        "h-12 w-full rounded-[14px] bg-chip px-4 text-[16px] text-on-surface outline-none transition-shadow",
                         accountState.error
-                            ? 'border-2 border-error ring-2 ring-error/20'
-                            : 'border border-outline-variant/30'
+                            ? 'ring-2 ring-neg'
+                            : 'focus:ring-2 focus:ring-accent'
                     )}
                 >
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
                 </select>
                 {accountState.error && (
-                    <div className="flex items-center gap-1 mt-1 text-error text-xs">
+                    <div className="mt-1 flex items-center gap-1 px-1 text-[12px] text-neg">
                         <AlertCircle size={12} aria-hidden="true" />
                         <span>{accountState.error}</span>
                     </div>
@@ -183,12 +195,12 @@ export const AmountFields: React.FC<AmountFieldsProps> = ({
 
             {isInternalTransfer && (
                 <div>
-                    <label htmlFor="edit-tx-target-account" className="text-xs text-on-surface-variant mb-1 block">{t.toAccount}</label>
+                    <label htmlFor="edit-tx-target-account" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">{t.toAccount}</label>
                     <select
                         id="edit-tx-target-account"
                         value={targetAccountId}
                         onChange={e => setTargetAccountId(e.target.value)}
-                        className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-on-surface"
+                        className="h-12 w-full px-4 text-[16px] rounded-[14px] border-none bg-chip text-on-surface outline-none focus:ring-2 focus:ring-accent"
                     >
                         <option value="">{t.selectAccountPlaceholder}</option>
                         {accounts.filter(a => a.id !== edited.accountId).map(a => (

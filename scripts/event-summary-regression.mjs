@@ -40,11 +40,12 @@ const openEventSummary = async page => {
     await eventsHeading.waitFor({ timeout: 15000 });
   }
 
-  const eventHeading = page.getByRole('heading', { name: EVENT_SUMMARY_REGRESSION_EVENT, exact: true }).first();
-  await eventHeading.waitFor({ timeout: 15000 });
-  await eventHeading.click();
+  // Event cards are buttons; their title is part of the button name, not a heading.
+  const eventCard = page.getByRole('button', { name: new RegExp(EVENT_SUMMARY_REGRESSION_EVENT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first();
+  await eventCard.waitFor({ timeout: 15000 });
+  await eventCard.click();
   await page.getByRole('heading', { name: EVENT_SUMMARY_REGRESSION_EVENT, exact: true }).waitFor({ timeout: 15000 });
-  await page.getByRole('button', { name: 'Summary', exact: true }).click();
+  await page.getByRole('radio', { name: 'Summary', exact: true }).click();
   await page.getByText('Spending Breakdown', { exact: true }).waitFor({ timeout: 15000 });
 };
 
@@ -64,11 +65,10 @@ const verifySummary = async page => {
     throw new Error(`Expected event summary charts/icons to render SVG output, found ${svgCount}.`);
   }
 
-  const usdButton = page.getByRole('button', { name: 'USD', exact: true }).first();
+  const usdButton = page.getByRole('radio', { name: 'USD', exact: true }).first();
   await usdButton.click();
   await page.waitForTimeout(300);
-  const usdClass = (await usdButton.getAttribute('class')) ?? '';
-  if (!usdClass.includes('bg-primary')) {
+  if ((await usdButton.getAttribute('aria-checked')) !== 'true') {
     throw new Error('Summary currency toggle did not activate USD.');
   }
 

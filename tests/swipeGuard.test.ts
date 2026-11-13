@@ -69,6 +69,9 @@ describe('shouldIgnoreSwipeStart', () => {
 
   it('is wired into the main swipe handler', () => {
     const app = readFileSync('App.tsx', 'utf8');
-    expect(app).toContain('shouldIgnoreSwipeStart(e.target, mainRef.current)');
+    const pager = readFileSync('hooks/useSwipePager.ts', 'utf8');
+    expect(pager).toContain('shouldIgnoreSwipeStart(event.target, opts.getRoot?.() ?? null)');
+    expect(app).toContain('getRoot: () => mainRef.current');
+    expect(app).toContain('{...swipeHandlers}');
   });
 });

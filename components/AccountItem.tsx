@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Account } from '../types';
 import { useDragControls } from 'motion/react';
 import { Reorder } from 'motion/react-m';
-import { List, Banknote, CreditCard, Wallet, Edit2, Trash2 } from 'lucide-react';
+import { GripVertical, Banknote, CreditCard, Trash2 } from 'lucide-react';
 import { ICONS, IconName, IconPicker } from './IconPicker';
 import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
@@ -37,6 +37,8 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
 
     // Calculate current balance (initial + transactions)
     const currentBalance = getAccountBalance(account);
+    const tint = account.color || (account.type === 'cash' ? '#15803D' : account.type === 'bank' ? '#2563EB' : '#7C3AED');
+    const typeLabel = account.type === 'cash' ? t.cash : account.type === 'bank' ? t.bank : t.other;
 
     return (
         <Reorder.Item
@@ -46,114 +48,116 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
             dragControls={dragControls}
             className="touch-none"
         >
-            <div className="flex flex-col gap-2 bg-surface-container p-3 rounded-2xl relative group border border-transparent hover:border-outline-variant/20 transition-all">
-                <div className="flex flex-row gap-3 items-center">
-                    {/* Drag Handle */}
-                    <div
-                        onPointerDown={(e) => dragControls.start(e)}
-                        className="cursor-grab active:cursor-grabbing text-on-surface-variant/30 hover:text-on-surface-variant flex items-center justify-center p-1.5 rounded-lg hover:bg-surface-container-high transition-colors"
+            <div className="paper-tile group relative flex items-center gap-2.5 py-3 pl-2 pr-3">
+                {/* Drag handle */}
+                <div
+                    onPointerDown={(e) => dragControls.start(e)}
+                    aria-hidden="true"
+                    className="flex h-10 w-7 shrink-0 cursor-grab items-center justify-center rounded-lg text-faint active:cursor-grabbing"
+                >
+                    <GripVertical size={18} />
+                </div>
+
+                {/* Icon and picker */}
+                <div className="relative shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setIsEditingIcon(!isEditingIcon)}
+                        aria-label={t.chooseIcon}
+                        title={t.chooseIcon}
+                        className="flex h-11 w-11 items-center justify-center rounded-[14px] transition-transform active:scale-95"
+                        style={{
+                            background: `color-mix(in oklab, ${tint} 16%, var(--paper-tile))`,
+                            color: `color-mix(in oklab, ${tint} 72%, var(--paper-text))`,
+                        }}
                     >
-                        <List size={18} />
-                    </div>
-
-                    {/* Icon & Picker */}
-                    <div className="relative flex-shrink-0">
-                        <button
-                            onClick={() => setIsEditingIcon(!isEditingIcon)}
-                            className="w-10 h-10 rounded-full bg-surface-container-highest text-primary flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container transition-all hover:scale-105 active:scale-95 shadow-sm"
-                            style={{ color: account.color }}
-                        >
-                            <Icon size={20} />
-                        </button>
-                        {isEditingIcon && (
-                            <div className="absolute top-12 left-0 z-20 bg-surface-container-high p-4 rounded-2xl shadow-xl w-72 border border-outline-variant/20 animate-in fade-in zoom-in-95 duration-200">
-                                <IconPicker
-                                    selectedIcon={account.icon || 'wallet'}
-                                    onSelect={(icon) => {
-                                        onUpdate(account.id, { icon });
-                                        setIsEditingIcon(false);
-                                    }}
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Name & Type */}
-                    <div className="flex-1 min-w-0">
-                        <input
-                            value={account.name}
-                            onChange={e => onUpdate(account.id, { name: e.target.value })}
-                            className="bg-transparent border-none text-base font-medium text-on-surface w-full focus:ring-0 p-0 placeholder-on-surface-variant/50"
-                            placeholder={t.accountName}
-                        />
-                    </div>
-
-                    {/* Balance - Compact */}
-                    {!isEditingBalance ? (
-                        <div
-                            onClick={() => setIsEditingBalance(true)}
-                            className="cursor-pointer text-right flex-shrink-0"
-                        >
-                            <span className={clsx(
-                                "text-base font-mono font-semibold tabular-nums",
-                                currentBalance < 0 ? "text-error" : "text-on-surface"
-                            )}>
-                                {formatCurrency(currentBalance, account.currency)}
-                            </span>
-                        </div>
-                    ) : (
-                        <div className="w-36 flex-shrink-0">
-                            <BalanceInput
-                                currency={account.currency}
-                                initialAmount={account.initialBalance || 0}
-                                onSave={(val) => {
-                                    const newInitial = calculateAdjustedInitialBalance({
-                                        currentBalance,
-                                        currentInitialBalance: account.initialBalance || 0,
-                                        desiredDisplayedBalance: val,
-                                    });
-                                    onUpdate(account.id, { initialBalance: newInitial });
-                                    setIsEditingBalance(false);
+                        <Icon size={21} aria-hidden="true" />
+                    </button>
+                    {isEditingIcon && (
+                        <div className="glass-sheet absolute left-0 top-12 z-20 w-72 rounded-[22px] p-4">
+                            <IconPicker
+                                selectedIcon={account.icon || 'wallet'}
+                                onSelect={(icon) => {
+                                    onUpdate(account.id, { icon });
+                                    setIsEditingIcon(false);
                                 }}
-                                onCancel={() => setIsEditingBalance(false)}
-                                language={language}
                             />
                         </div>
                     )}
+                </div>
 
-                    {/* Delete Action */}
-                    {onDelete && (
-                        <button
-                            type="button"
-                            onClick={() => setIsConfirmingDelete(true)}
-                            aria-label={`${t.delete}: ${account.name}`}
-                            className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error-container/20 rounded-lg transition-colors flex-shrink-0"
-                        >
-                            <Trash2 size={18} className="opacity-70" aria-hidden="true" />
-                        </button>
-                    )}
-                    {onDelete && (
-                        <ConfirmDialog
-                            isOpen={isConfirmingDelete}
-                            type="danger"
-                            title={t.deleteWalletTitle}
-                            message={t.deleteWalletMessage}
-                            confirmLabel={t.delete}
-                            cancelLabel={t.cancel}
-                            onCancel={() => setIsConfirmingDelete(false)}
-                            onConfirm={() => {
-                                setIsConfirmingDelete(false);
-                                onDelete(account.id);
+                {/* Name and type */}
+                <div className="flex min-w-0 flex-1 flex-col">
+                    <input
+                        value={account.name}
+                        onChange={e => onUpdate(account.id, { name: e.target.value })}
+                        aria-label={t.accountName}
+                        className="w-full border-none bg-transparent p-0 text-[16px] font-semibold focus:ring-0"
+                        placeholder={t.accountName}
+                    />
+                    <span className="text-[12px] text-muted">{typeLabel} · {account.currency}</span>
+                </div>
+
+                {/* Balance */}
+                {!isEditingBalance ? (
+                    <button
+                        type="button"
+                        onClick={() => setIsEditingBalance(true)}
+                        className="shrink-0 rounded-lg px-1 text-right"
+                    >
+                        <span className={clsx(
+                            "text-[15px] font-semibold tabular-nums",
+                            currentBalance < 0 ? "text-neg" : ""
+                        )}>
+                            {formatCurrency(currentBalance, account.currency)}
+                        </span>
+                    </button>
+                ) : (
+                    <div className="w-36 shrink-0">
+                        <BalanceInput
+                            currency={account.currency}
+                            initialAmount={account.initialBalance || 0}
+                            onSave={(val) => {
+                                const newInitial = calculateAdjustedInitialBalance({
+                                    currentBalance,
+                                    currentInitialBalance: account.initialBalance || 0,
+                                    desiredDisplayedBalance: val,
+                                });
+                                onUpdate(account.id, { initialBalance: newInitial });
+                                setIsEditingBalance(false);
                             }}
+                            onCancel={() => setIsEditingBalance(false)}
+                            language={language}
                         />
-                    )}
-                </div>
-                {/* Type badge - on separate row */}
-                <div className="flex items-center gap-2 ml-12">
-                    <span className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider px-2 py-0.5 bg-surface-container-high rounded-full">
-                        {account.type}
-                    </span>
-                </div>
+                    </div>
+                )}
+
+                {/* Delete */}
+                {onDelete && (
+                    <button
+                        type="button"
+                        onClick={() => setIsConfirmingDelete(true)}
+                        aria-label={`${t.delete}: ${account.name}`}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-faint transition-colors hover:bg-chip hover:text-neg"
+                    >
+                        <Trash2 size={17} aria-hidden="true" />
+                    </button>
+                )}
+                {onDelete && (
+                    <ConfirmDialog
+                        isOpen={isConfirmingDelete}
+                        type="danger"
+                        title={t.deleteWalletTitle}
+                        message={t.deleteWalletMessage}
+                        confirmLabel={t.delete}
+                        cancelLabel={t.cancel}
+                        onCancel={() => setIsConfirmingDelete(false)}
+                        onConfirm={() => {
+                            setIsConfirmingDelete(false);
+                            onDelete(account.id);
+                        }}
+                    />
+                )}
             </div>
         </Reorder.Item>
     );

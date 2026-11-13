@@ -19,6 +19,12 @@ export const CONFIG = {
   SAVE_DEBOUNCE_MS: 300,
   STORAGE_KEY: 'gemini_finance_data_v5',
   OFFLINE_QUEUE_KEY: 'offline_operation_queue',
+  /** Active workspace: a team id, or absent for personal. */
+  WORKSPACE_KEY: 'finance_workspace_v1',
+  /** Notification preferences (per device) and the bookkeeping that keeps alerts once-only. */
+  NOTIFICATIONS_KEY: 'finance_notifications_v1',
+  /** Re-fetch shared data when the app returns after this long, so new event expenses show up. */
+  RESUME_REFRESH_AFTER_MS: 5 * 60 * 1000,
   EXCHANGE_RATE_CACHE_KEY: 'exchange_rates_cache',
   EXCHANGE_RATE_CACHE_DURATION_MS: 60 * 60 * 1000,
   EXCHANGE_RATE_API_URL: 'https://api.exchangerate-api.com/v4/latest/EUR',

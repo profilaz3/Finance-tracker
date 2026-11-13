@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { Suspense, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { lazyWithReload } from '../../utils/lazyWithReload';
 import { AppState, Event, Person, Transaction, View } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { ParsedTransaction } from '../../services/aiService';
-import { createLinkedExpenseDraft, createRepeatTransactionDraft, createTransactionDraft, duplicateTransactionDraft } from '../../domain/transactions';
+import { duplicateTransactionDraft } from '../../domain/transactions';
+import { Segmented } from '../ui/Segmented';
+import { PAGE_GAP, type SwipeDirection } from '../../hooks/useSwipePager';
 
 const Stats = lazyWithReload(() => import('../Stats').then(m => ({ default: m.Stats })));
-const DashboardView = lazyWithReload(() => import('../DashboardView').then(m => ({ default: m.DashboardView })));
+const HomeView = lazyWithReload(() => import('../home').then(m => ({ default: m.HomeView })));
+const BudgetsView = lazyWithReload(() => import('../BudgetsView').then(m => ({ default: m.BudgetsView })));
+const PeopleView = lazyWithReload(() => import('../PeopleView').then(m => ({ default: m.PeopleView })));
 const TransactionsView = lazyWithReload(() => import('../TransactionsView').then(m => ({ default: m.TransactionsView })));
 const SettingsView = lazyWithReload(() => import('../settings').then(m => ({ default: m.SettingsView })));
 const CalendarView = lazyWithReload(() => import('../CalendarView').then(m => ({ default: m.CalendarView })));
@@ -14,13 +18,304 @@ const EventsView = lazyWithReload(() => import('../EventsView').then(m => ({ def
 const EventDetailView = lazyWithReload(() => import('../event-detail').then(m => ({ default: m.EventDetailView })));
 const InsightsView = lazyWithReload(() => import('../InsightsView').then(m => ({ default: m.InsightsView })));
 
-type DashboardTab = 'wallets' | 'debts' | 'loans' | 'people';
+/** Fetch every page in the background so the first swipe or tap to each one is instant. */
+export const preloadViews = (): Promise<unknown> =>
+  [HomeView, TransactionsView, CalendarView, EventsView, PeopleView, Stats, InsightsView, EventDetailView, SettingsView, BudgetsView]
+    .reduce<Promise<unknown>>((chain, view) => chain.then(() => view.preload()).catch(() => undefined), Promise.resolve());
+
+type Strings = (typeof TRANSLATIONS)['en'];
+type StringKey = { [K in keyof Strings]: Strings[K] extends string ? K : never }[keyof Strings];
+
+const ACTIVITY: Array<[View, StringKey]> = [['transactions', 'tabList'], ['calendar', 'calendar']];
+const EVENTS: Array<[View, StringKey]> = [['events', 'events'], ['people', 'people']];
+const INSIGHTS: Array<[View, StringKey]> = [['analytics', 'analytics'], ['insights', 'aiInsights']];
+
+/** The two views behind each tab, switched with a segmented control at the top. */
+const SUB_VIEWS: Partial<Record<View, { label: StringKey; views: Array<[View, StringKey]> }>> = {
+  transactions: { label: 'navActivity', views: ACTIVITY },
+  calendar: { label: 'navActivity', views: ACTIVITY },
+  events: { label: 'navEvents', views: EVENTS },
+  people: { label: 'navEvents', views: EVENTS },
+  analytics: { label: 'navInsights', views: INSIGHTS },
+  insights: { label: 'navInsights', views: INSIGHTS },
+};
+
+/** The header group a view belongs to, or null when it shows no sub-view switch. */
+export const subViewGroup = (view: View, selectedEvent: Event | null): string | null =>
+  SUB_VIEWS[view] && !(view === 'events' && selectedEvent) ? SUB_VIEWS[view]!.label : null;
+
+/** A neighbouring page rendered beside the current one while it is being swiped. */
+export interface PagePeek {
+  view: View;
+  dir: SwipeDirection;
+  /** Offset from the pager's top, so the page lands where it will sit once it is current. */
+  top: number;
+  /** Render the view's own sub-view switch (the current page's switch belongs to another group). */
+  header: boolean;
+}
+/** A neighbour mounted ahead of time, hidden, so a swipe only has to reveal it. */
+export interface ParkedPage {
+  view: View;
+  header: boolean;
+}
+export interface PeekControl {
+  /** Shows the live neighbour beside the current page, or hides it with null. */
+  show: (peek: PagePeek | null) => void;
+  /** Keeps exactly these neighbours mounted and hidden (an empty list drops them). */
+  park: (pages: ParkedPage[]) => void;
+}
+
+const offscreen = (dir: SwipeDirection) => `translate3d(calc(${dir} * (100% + ${PAGE_GAP}px)), 0, 0)`;
+
+/** Shows a parked page as the live neighbour without a React render. */
+const revealParked = (el: HTMLElement, peek: PagePeek) => {
+  el.style.transition = 'none';
+  el.style.top = `${peek.top}px`;
+  el.style.transform = offscreen(peek.dir);
+  el.style.willChange = 'transform';
+  el.setAttribute('data-pager-peek', String(peek.dir));
+};
+
+const concealParked = (el: HTMLElement) => {
+  el.removeAttribute('data-pager-peek');
+  el.style.transition = '';
+  el.style.top = '0px';
+  el.style.transform = '';
+  el.style.willChange = '';
+};
+
+const SubViewHeader: React.FC<{ view: View; language: AppState['language']; onNavigate: (view: View) => void; className?: string }> = ({
+  view,
+  language,
+  onNavigate,
+  className = '',
+}) => (
+  <div className={`mx-auto mb-3 mt-2 flex max-w-[420px] justify-center px-2 md:mt-0 ${className}`}>
+    <Segmented<View>
+      ariaLabel={TRANSLATIONS[language][SUB_VIEWS[view]!.label]}
+      value={view}
+      onChange={onNavigate}
+      className="w-full"
+      options={SUB_VIEWS[view]!.views.map(([option, key]) => ({ value: option, label: TRANSLATIONS[language][key] }))}
+    />
+  </div>
+);
+
+/**
+ * A page's body. While parked, app updates reach it at background priority: the urgent render
+ * keeps its previous element (React skips the subtree) and the catch-up render is interruptible.
+ * The same component wraps every role, so a page changing role never remounts.
+ */
+const PageBody: React.FC<{ content: React.ReactNode; defer: boolean }> = ({ content, defer }) => {
+  const deferred = useDeferredValue(content);
+  return <>{defer ? deferred : content}</>;
+};
+
+interface PagerPagesProps {
+  currentView: View;
+  current: React.ReactNode;
+  renderPeek: (view: View) => React.ReactNode;
+  renderHeader: (view: View) => React.ReactNode;
+  peekControlRef?: React.MutableRefObject<PeekControl | null>;
+  fallback?: React.ReactNode;
+}
+
+/**
+ * The current page, the neighbours parked beside it, and (during a swipe) the live neighbour.
+ * All live in one keyed list in a stable order, so when a swipe commits the neighbour's
+ * instance simply becomes the page and the old page becomes a parked neighbour: nothing
+ * remounts and no DOM node moves.
+ *
+ * Parked pages are mounted while the app is idle and kept hidden (no paint, no height, so they
+ * add no scroll range); revealing one at the start of a swipe is a few style writes instead of
+ * rendering a whole page. A neighbour that is not parked yet is mounted on demand as before.
+ */
+const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPeek, renderHeader, peekControlRef, fallback }) => {
+  const [peek, setPeek] = useState<PagePeek | null>(null);
+  const [parked, setParked] = useState<ParkedPage[]>([]);
+  const parkedRef = useRef(parked);
+  parkedRef.current = parked;
+  const peekRef = useRef(peek);
+  peekRef.current = peek;
+  const elements = useRef(new Map<View, HTMLDivElement>());
+  const revealed = useRef<HTMLElement | null>(null);
+  // A park request that arrived while a neighbour was on screen; applied once it is hidden.
+  const pendingPark = useRef<ParkedPage[] | null>(null);
+  // The neighbours still to be parked, one step at a time.
+  const targetPark = useRef<ParkedPage[] | null>(null);
+  // Stable first-seen order, so pages never swap places in the DOM when their roles change.
+  const order = useRef<View[]>([]);
+
+  // The page being left stays mounted as a parked neighbour (swiping straight back is then
+  // instant and keeps its state); the next park request decides whether it is still needed.
+  const [lastView, setLastView] = useState(currentView);
+  if (lastView !== currentView) {
+    setLastView(currentView);
+    const group = SUB_VIEWS[lastView]?.label ?? null;
+    const header = !!group && group !== (SUB_VIEWS[currentView]?.label ?? null);
+    setParked(prev => (prev.some(page => page.view === lastView) ? prev : [...prev, { view: lastView, header }]));
+  }
+
+  const conceal = useCallback(() => {
+    if (revealed.current) concealParked(revealed.current);
+    revealed.current = null;
+  }, []);
+
+  // Parks toward the requested list one page per step, so each mount is its own short commit
+  // instead of one long one. Renders run in a transition: a touch arriving mid-render is handled.
+  const stepPark = useCallback(() => {
+    const target = targetPark.current;
+    if (!target) return;
+    const current = parkedRef.current;
+    // Pages already mounted stay (a changed header flag just toggles the switch above them).
+    const kept = target.filter(t => current.some(page => page.view === t.view));
+    const missing = target.filter(t => !kept.includes(t));
+    const next = missing.length ? [...kept, missing[0]] : kept;
+    if (missing.length <= 1) targetPark.current = null;
+    const same = next.length === current.length
+      && next.every((page, index) => page.view === current[index].view && page.header === current[index].header);
+    if (!same) {
+      startTransition(() => setParked(next));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!targetPark.current) return;
+    const run = () => {
+      if (!revealed.current && !peekRef.current) stepPark();
+    };
+    const idle = 'requestIdleCallback' in window
+      ? window.requestIdleCallback(run, { timeout: 1000 })
+      : (window as Window).setTimeout(run, 50);
+    return () => {
+      if ('cancelIdleCallback' in window) window.cancelIdleCallback(idle);
+      else (window as Window).clearTimeout(idle);
+    };
+  }, [parked, stepPark]);
+
+  useLayoutEffect(() => {
+    if (!peekControlRef) return;
+    const applyPark = (pages: ParkedPage[]) => {
+      targetPark.current = pages;
+      stepPark();
+    };
+    peekControlRef.current = {
+      show: next => {
+        const el = next && parkedRef.current.some(page => page.view === next.view) ? elements.current.get(next.view) : undefined;
+        if (el && el !== revealed.current) conceal();
+        if (el) {
+          revealParked(el, next!);
+          revealed.current = el;
+          setPeek(prev => (prev === null ? prev : null));
+          return;
+        }
+        conceal();
+        if (!next) {
+          setPeek(prev => (prev === null ? prev : null));
+          const pending = pendingPark.current;
+          pendingPark.current = null;
+          if (pending) applyPark(pending);
+          else if (targetPark.current) stepPark();
+          return;
+        }
+        startTransition(() => setPeek(next));
+      },
+      park: pages => {
+        // Never restyle a page while it rides beside the finger.
+        if (revealed.current || peekRef.current) {
+          pendingPark.current = pages;
+          return;
+        }
+        pendingPark.current = null;
+        applyPark(pages);
+      },
+    };
+    return () => {
+      peekControlRef.current = null;
+    };
+  }, [peekControlRef, conceal, stepPark]);
+
+  // The page that just became current may have been revealed imperatively: hand it back to React.
+  useLayoutEffect(() => {
+    const el = elements.current.get(currentView);
+    if (el && el === revealed.current) {
+      el.removeAttribute('data-pager-peek');
+      revealed.current = null;
+    }
+    setPeek(prev => (prev && prev.view === currentView ? null : prev));
+  }, [currentView]);
+
+  // Neighbour bodies are built once per router render, so peek/park updates (which re-render
+  // only this list) never re-render the pages themselves.
+  const contentCache = useMemo(() => new Map<View, React.ReactNode>(), [renderPeek]);
+  const contentFor = (view: View) => {
+    if (!contentCache.has(view)) contentCache.set(view, renderPeek(view));
+    return contentCache.get(view);
+  };
+
+  const shell = (view: View, content: React.ReactNode, role: 'current' | 'peek' | 'parked', header: boolean, spec?: PagePeek) => (
+    <div
+      key={view}
+      ref={(el: HTMLDivElement) => {
+        elements.current.set(view, el);
+        return () => {
+          if (elements.current.get(view) === el) elements.current.delete(view);
+        };
+      }}
+      data-pager-page={role === 'current' ? '' : undefined}
+      data-pager-peek={role === 'peek' ? String(spec!.dir) : undefined}
+      data-pager-park={role === 'parked' ? view : undefined}
+      aria-hidden={role === 'current' ? undefined : true}
+      inert={role === 'current' ? undefined : true}
+      className={role === 'current' ? 'app-view-enter' : 'pointer-events-none'}
+      style={role === 'peek' ? {
+        position: 'absolute',
+        top: spec!.top,
+        left: 0,
+        right: 0,
+        transform: offscreen(spec!.dir),
+        willChange: 'transform',
+      } : role === 'parked' ? {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+      } : undefined}
+    >
+      {role !== 'current' && header ? renderHeader(view) : null}
+      <div data-pager-content="">
+        <Suspense fallback={role === 'current' ? fallback : null}>
+          <PageBody content={content} defer={role === 'parked'} />
+        </Suspense>
+      </div>
+    </div>
+  );
+
+  const byView = new Map<View, React.ReactNode>();
+  byView.set(currentView, shell(currentView, current, 'current', false));
+  parked.forEach(page => {
+    if (!byView.has(page.view)) byView.set(page.view, shell(page.view, contentFor(page.view), 'parked', page.header));
+  });
+  if (peek && !byView.has(peek.view)) byView.set(peek.view, shell(peek.view, contentFor(peek.view), 'peek', peek.header, peek));
+  byView.forEach((_, view) => {
+    if (!order.current.includes(view)) order.current.push(view);
+  });
+  order.current = order.current.filter(view => byView.has(view));
+  return <>{order.current.map(view => byView.get(view))}</>;
+};
 
 interface AppViewRouterProps {
   currentView: View;
+  /** Lets the app show a live neighbouring page during a swipe. */
+  peekControlRef?: React.MutableRefObject<PeekControl | null>;
+  /** Shown while the current page's code is still loading. */
+  pageFallback?: React.ReactNode;
   state: AppState;
-  dashboardTab: DashboardTab;
-  setDashboardTab: (tab: DashboardTab) => void;
+  homeEditing: boolean;
+  setHomeEditing: (editing: boolean) => void;
+  onNavigate: (view: View) => void;
+  onOpenProfile: () => void;
+  onOpenAdd: () => void;
   selectedEvent: Event | null;
   setSelectedEvent: (event: Event | null) => void;
   setSelectedPerson: (person: Person | null) => void;
@@ -70,15 +365,42 @@ interface AppViewRouterProps {
   handleDeleteRecurring: (id: string) => Promise<void>;
   handleToggleRecurring: (id: string) => Promise<void>;
   handleSettleUp: (personId: string, currency: AppState['baseCurrency'], amount?: number) => void;
-  addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  workspaceId: string | null;
+  onWorkspaceChange: (teamId: string | null) => void;
+  addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info', action?: { label: string; onClick: () => void }) => void;
   handleOpenAddTransaction: (type?: Transaction['type'], personId?: string) => void;
 }
 
-export const AppViewRouter: React.FC<AppViewRouterProps> = ({
+export const AppViewRouter: React.FC<AppViewRouterProps> = props => {
+  const { currentView, state, selectedEvent, onNavigate, peekControlRef, pageFallback } = props;
+  const group = subViewGroup(currentView, selectedEvent);
+  return (
+    <>
+      {/* Outside the keyed page so the switch persists and its pill glides between sibling views. */}
+      {group && (
+        <SubViewHeader key={group} view={currentView} language={state.language} onNavigate={onNavigate} className="app-view-enter" />
+      )}
+      <PagerPages
+        currentView={currentView}
+        current={<PageContent {...props} />}
+        renderPeek={view => <PageContent {...props} currentView={view} />}
+        renderHeader={view => <SubViewHeader view={view} language={state.language} onNavigate={onNavigate} />}
+        peekControlRef={peekControlRef}
+        fallback={pageFallback}
+      />
+    </>
+  );
+};
+
+/** The body of one page. Also rendered for the live neighbour while swiping. */
+const PageContent: React.FC<AppViewRouterProps> = ({
   currentView,
   state,
-  dashboardTab,
-  setDashboardTab,
+  homeEditing,
+  setHomeEditing,
+  onNavigate,
+  onOpenProfile,
+  onOpenAdd,
   selectedEvent,
   setSelectedEvent,
   setSelectedPerson,
@@ -86,15 +408,12 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
   setCurrentView,
   setSplitTransactionContext,
   activeEvent,
-  linkToActiveEvent,
-  setLinkToActiveEvent,
-  addTransaction,
-  deleteTransaction,
   handleOpenAddTransaction,
   handleParsedTransaction,
   handleSaveAsTemplate,
   handleUseTemplate,
-  handleDeleteTemplate,
+  addTransaction,
+  deleteTransaction,
   handleUpdateEvent,
   handleShareEvent,
   handleDeleteEvent,
@@ -103,7 +422,6 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
   batchDeleteTransactions,
   createId,
   totalBalance,
-  totalIncome,
   totalExpense,
   getAccountBalance,
   processRecurringTransactions,
@@ -118,7 +436,6 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
   setIsReceiptModalOpen,
   setIsSplitModalOpen,
   setIsEventCreationModalOpen,
-  setIsReceiptScanModalOpen,
   setIsSplitExpenseModalOpen,
   setIsUserProfileModalOpen,
   handleAddCategory,
@@ -129,61 +446,65 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
   handleDeleteRecurring,
   handleToggleRecurring,
   handleSettleUp,
+  workspaceId,
+  onWorkspaceChange,
   addToast,
 }) => (
-  <div key={currentView} className="app-view-enter">
+  <>
     {currentView === 'dashboard' && (
-      <DashboardView
+      <HomeView
         state={state}
-        dashboardTab={dashboardTab}
-        setDashboardTab={setDashboardTab}
-        setSelectedPerson={setSelectedPerson}
-        addTransaction={addTransaction}
-        setCurrentView={setCurrentView}
+        activeTeam={workspaceId ? state.teams?.find(team => team.id === workspaceId) : undefined}
+        netWorth={totalBalance}
         getAccountBalance={getAccountBalance}
-        totalBalance={totalBalance}
-        totalIncome={totalIncome}
-        totalExpense={totalExpense}
-        handleOpenAddTransaction={(type = 'expense') => {
-          const accountId = state.accounts[0]?.id || '';
-          const eventId = linkToActiveEvent && activeEvent ? activeEvent.id : undefined;
-          const newTransaction = type === 'income'
-            ? (() => {
-                const incomeDraft = createTransactionDraft({
-                  createId,
-                  baseCurrency: state.baseCurrency,
-                  accountId,
-                  type: 'income',
-                });
-                return eventId ? { ...incomeDraft, eventId } : incomeDraft;
-              })()
-            : createLinkedExpenseDraft({
-                createId,
-                baseCurrency: state.baseCurrency,
-                accountId,
-                categories: state.categories,
-                eventId,
-              });
-          setSelectedTransaction(newTransaction);
-          setIsEditModalOpen(true);
-        }}
-        onParsedTransaction={handleParsedTransaction}
-        onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
-        onOpenQuickSplit={() => setIsSplitExpenseModalOpen(true)}
         activeEvent={activeEvent}
-        linkToActiveEvent={linkToActiveEvent}
-        setLinkToActiveEvent={setLinkToActiveEvent}
-        onViewEvent={(event) => {
-          setSelectedEvent(event);
-          setCurrentView('events');
+        editing={homeEditing}
+        onEditingChange={setHomeEditing}
+        onLayoutChange={homeLayout => setState(prev => ({ ...prev, homeLayout }))}
+        onOpenProfile={onOpenProfile}
+        actions={{
+          openBudgets: () => onNavigate('budgets'),
+          openActivity: () => onNavigate('transactions'),
+          openInsights: () => onNavigate('analytics'),
+          openEvents: () => onNavigate('events'),
+          openEvent: event => {
+            setSelectedEvent(event);
+            onNavigate('events');
+          },
+          createEvent: () => setIsEventCreationModalOpen(true),
+          openPeople: () => onNavigate('people'),
+          openPerson: person => setSelectedPerson(person),
+          openWallets: () => onNavigate('settings'),
+          openTransaction: transaction => {
+            setSelectedTransaction(transaction);
+            setIsEditModalOpen(true);
+          },
+          openRecurring: () => onNavigate('settings'),
+          useTemplate: handleUseTemplate,
+          addEntry: onOpenAdd,
         }}
-        onUseTemplate={handleUseTemplate}
-        onDeleteTemplate={handleDeleteTemplate}
-        onRepeatTransaction={(transaction) => {
-          const repeated = createRepeatTransactionDraft(transaction, { createId });
-          setSelectedTransaction(repeated);
-          setIsEditModalOpen(true);
-        }}
+      />
+    )}
+    {currentView === 'budgets' && (
+      <BudgetsView
+        state={state}
+        setState={setState}
+        onBack={() => onNavigate('dashboard')}
+        onSaved={message => addToast(message, 'success')}
+        onAddRecurring={handleAddRecurring}
+        onToast={addToast}
+      />
+    )}
+    {currentView === 'people' && (
+      <PeopleView
+        people={state.people}
+        onAddPerson={() => setIsAddPersonModalOpen(true)}
+        onSelectPerson={setSelectedPerson}
+        onAddTransaction={handleOpenAddTransaction}
+        onSettleUp={handleSettleUp}
+        baseCurrency={state.baseCurrency}
+        rates={state.rates}
+        language={state.language}
       />
     )}
     {currentView === 'transactions' && (
@@ -263,6 +584,7 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
         rates={state.rates}
         language={state.language}
         totalExpense={totalExpense}
+        events={state.events}
       />
     )}
     {currentView === 'insights' && (
@@ -271,6 +593,7 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
         categories={state.categories}
         baseCurrency={state.baseCurrency}
         language={state.language}
+        letterState={state}
       />
     )}
     {currentView === 'settings' && (
@@ -311,7 +634,10 @@ export const AppViewRouter: React.FC<AppViewRouterProps> = ({
         onToggleRecurring={handleToggleRecurring}
         onProcessRecurring={processRecurringTransactions}
         onSettleUp={handleSettleUp}
+        onToast={addToast}
+        workspaceId={workspaceId}
+        onWorkspaceChange={onWorkspaceChange}
       />
     )}
-  </div>
+  </>
 );

@@ -1,7 +1,7 @@
 import { consumeQuota, requireUser } from '../_shared/auth.ts';
 import { boundedList, oneOf, requireRecord } from '../_shared/input.ts';
 import { jsonResponse, readJsonBody, serveJson } from '../_shared/http.ts';
-import { chatCompletion, promptSafe } from '../_shared/openai.ts';
+import { chatCompletion, FAST_MODEL, promptSafe } from '../_shared/openai.ts';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_TRANSACTIONS_IN_PROMPT = 400;
@@ -61,7 +61,7 @@ Transaction Data (last ${days} days, ${rows.length} transactions):
 ${JSON.stringify(rows)}`;
 
   const content = await chatCompletion({
-    model: Deno.env.get('OPENAI_MODEL_FAST') ?? 'gpt-4o-mini',
+    model: Deno.env.get('OPENAI_MODEL_FAST') ?? FAST_MODEL,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Generate my ${periodLabel} financial report.` },

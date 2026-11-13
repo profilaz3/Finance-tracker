@@ -280,7 +280,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         {isToday(selectedDate) ? t.today : formatDate(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' }, state.language)}
                                     </h3>
                                     {dailyTotals[format(selectedDate, 'yyyy-MM-dd')] && (
-                                        <div className="text-sm font-mono">
+                                        <div className="text-sm font-semibold tabular-nums">
                                             <span className="text-tertiary mr-3">+{formatCurrency(dailyTotals[format(selectedDate, 'yyyy-MM-dd')].income, state.baseCurrency)}</span>
                                             <span className="text-error">-{formatCurrency(dailyTotals[format(selectedDate, 'yyyy-MM-dd')].expense, state.baseCurrency)}</span>
                                         </div>

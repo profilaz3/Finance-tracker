@@ -8,6 +8,8 @@ type RemotePersonLike = {
   default_currency?: string | null;
   defaultCurrency?: string | null;
   balances?: Partial<Record<'EUR' | 'USD' | 'RSD', number>> | null;
+  team_id?: string | null;
+  teamId?: string | null;
   [key: string]: unknown;
 };
 
@@ -100,6 +102,7 @@ export const normalizeRemotePersonRecord = (person: RemotePersonLike) => ({
     USD: person.balances?.USD ?? 0,
     RSD: person.balances?.RSD ?? 0,
   },
+  ...((person.team_id ?? person.teamId) ? { teamId: (person.team_id ?? person.teamId) as string } : {}),
 });
 
 export { LEGACY_USER_PROFILE_ID };

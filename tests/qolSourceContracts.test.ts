@@ -5,20 +5,14 @@ import { TRANSLATIONS } from '../constants';
 const readSource = (path: string) => readFileSync(path, 'utf8');
 
 describe('QOL source contracts', () => {
-  it('wires dashboard quick actions, template shortcuts, and repeat handler through the app router', () => {
-    const dashboard = readSource('components/DashboardView.tsx');
+  it('wires Home quick add and the Add sheet template shortcuts through the app router', () => {
     const router = readSource('components/app/AppViewRouter.tsx');
+    const addSheet = readSource('components/app/AddSheet.tsx');
 
-    expect(dashboard).toContain('DashboardQuickActions');
-    expect(dashboard).toContain('DashboardTemplateShortcuts');
-    expect(dashboard).toContain('getRepeatLastCandidate');
-    expect(dashboard).toContain('selectDashboardTemplates');
-    expect(dashboard).toContain('onRepeatTransaction?: (transaction: Transaction) => void');
-
-    expect(router).toContain('createRepeatTransactionDraft');
-    expect(router).toContain('onRepeatTransaction={(transaction) => {');
-    expect(router).toContain('const incomeDraft = createTransactionDraft');
-    expect(router).toContain('eventId ? { ...incomeDraft, eventId } : incomeDraft');
+    expect(addSheet).toContain('selectDashboardTemplates');
+    expect(addSheet).toContain('onUseTemplate(template.id)');
+    expect(router).toContain('useTemplate: handleUseTemplate');
+    expect(router).toContain('addEntry: onOpenAdd');
   });
 
   it('wires transaction common filters and duplicate hints into the transactions view', () => {

@@ -1,134 +1,92 @@
 import React from 'react';
-import { Globe, Zap, Flame, Monitor, Coffee, Crown, Gem, Cpu, Sun, Moon, Waves, Star, Heart, Palette, Cloud } from 'lucide-react';
 import clsx from 'clsx';
-import { AppState } from '../../types';
+import { Check } from 'lucide-react';
+import type { AccentName, AppState, Appearance, AppearanceMode, GlassLevel } from '../../types';
 import { TRANSLATIONS } from '../../constants';
+import { ACCENT_NAMES, ACCENT_SWATCHES, GLASS_LEVELS, isDarkAppearance, resolveAppearance } from '../../utils/appearance';
+import { Segmented } from '../ui/Segmented';
 
 interface AppearanceSettingsProps {
-    state: AppState;
-    setState: React.Dispatch<React.SetStateAction<AppState>>;
+  state: AppState;
+  setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
+const MODES: AppearanceMode[] = ['light', 'dark', 'system'];
+const MODE_KEYS = { light: 'modeLight', dark: 'modeDark', system: 'modeSystem' } as const;
+
+/** Mode, accent, glass and language. Used in Settings and in the Appearance sheet. */
 export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, setState }) => {
-    const t = TRANSLATIONS[state.language];
+  const t = TRANSLATIONS[state.language];
+  const appearance = resolveAppearance(state.appearance);
+  const systemDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const dark = isDarkAppearance(appearance, systemDark);
 
-    return (
-        <div className="space-y-8">
-            {/* Language Section */}
-            <section className="space-y-4">
-                <h3 className="text-lg font-medium text-on-surface">{t.language}</h3>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, language: 'en' }))}
-                        className={clsx(
-                            "px-4 py-2 rounded-xl font-medium transition-all border flex items-center gap-2",
-                            state.language === 'en'
-                                ? "bg-secondary-container text-on-secondary-container border-secondary-container"
-                                : "bg-surface-container-low text-on-surface border-outline/20 hover:bg-surface-container-high"
-                        )}
-                    >
-                        <Globe size={18} /> English
-                    </button>
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, language: 'sr' }))}
-                        className={clsx(
-                            "px-4 py-2 rounded-xl font-medium transition-all border flex items-center gap-2",
-                            state.language === 'sr'
-                                ? "bg-secondary-container text-on-secondary-container border-secondary-container"
-                                : "bg-surface-container-low text-on-surface border-outline/20 hover:bg-surface-container-high"
-                        )}
-                    >
-                        <Globe size={18} /> Srpski
-                    </button>
-                </div>
-            </section>
+  const update = (changes: Partial<Appearance>) =>
+    setState(prev => ({ ...prev, appearance: { ...resolveAppearance(prev.appearance), ...changes } }));
 
-            {/* Theme Section */}
-            <section className="space-y-4">
-                <h3 className="text-lg font-medium text-on-surface">{t.appTheme}</h3>
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[13px] font-semibold text-muted">{t.modeLabel}</h3>
+        <Segmented<AppearanceMode>
+          ariaLabel={t.modeLabel}
+          value={appearance.mode}
+          onChange={mode => update({ mode })}
+          options={MODES.map(mode => ({ value: mode, label: t[MODE_KEYS[mode]] }))}
+        />
+      </section>
 
-                {/* Quick Light/Dark Toggle */}
-                <div className="flex items-center justify-between bg-surface-container-low p-4 rounded-xl">
-                    <span className="text-on-surface font-medium">
-                        {t.quickToggle}
-                    </span>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setState(prev => ({ ...prev, theme: 'light' }))}
-                            className={clsx(
-                                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
-                                state.theme === 'light'
-                                    ? "bg-primary text-on-primary"
-                                    : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
-                            )}
-                            aria-label={t.lightModeLabel}
-                        >
-                            <Sun size={18} />
-                            <span className="hidden sm:inline">{t.themeLight}</span>
-                        </button>
-                        <button
-                            onClick={() => setState(prev => ({ ...prev, theme: 'galaxy' }))}
-                            className={clsx(
-                                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
-                                state.theme !== 'light'
-                                    ? "bg-primary text-on-primary"
-                                    : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
-                            )}
-                            aria-label={t.darkModeLabel}
-                        >
-                            <Moon size={18} />
-                            <span className="hidden sm:inline">{t.themeDark}</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Theme Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {[
-                        { id: 'light', name: t.themeLight, icon: Sun, colors: ['#3b82f6', '#8b5cf6', '#f8fafc'] },
-                        { id: 'linen', name: 'Linen', icon: Palette, colors: ['#006d77', '#d97706', '#fcf8f2'] },
-                        { id: 'mist', name: 'Mist', icon: Cloud, colors: ['#0e7490', '#3b82f6', '#f4f8fc'] },
-                        { id: 'galaxy', name: 'Galaxy', icon: Star, colors: ['#8b5cf6', '#d946ef', '#0a0a1a'] },
-                        { id: 'harbor', name: 'Harbor', icon: Waves, colors: ['#2dd4bf', '#fbbf24', '#070c16'] },
-                        { id: 'evergreen', name: 'Evergreen', icon: Heart, colors: ['#22c55e', '#f97316', '#08100c'] },
-                        { id: 'neon', name: 'Terminal', icon: Zap, colors: ['#22c55e', '#a855f7', '#0a0a0a'] },
-                        { id: 'racing-orange', name: 'Racing Orange', icon: Flame, colors: ['#f97316', '#fb923c', '#0a0a0a'] },
-                        { id: 'graphite', name: 'Graphite', icon: Monitor, colors: ['#22d3ee', '#facc15', '#08090b'] },
-                        { id: 'coffee', name: 'Coffee', icon: Coffee, colors: ['#d97706', '#92400e', '#1c1917'] },
-                        { id: 'gilded', name: 'Gilded', icon: Crown, colors: ['#facc15', '#14b8a6', '#0c0a08'] },
-                        { id: 'crimson-red', name: 'Crimson Red', icon: Gem, colors: ['#ef4444', '#dc2626', '#1a0a0a'] },
-                        { id: 'lime-dark', name: 'Lime Dark', icon: Cpu, colors: ['#84cc16', '#65a30d', '#0a0f0a'] },
-                        { id: 'sterling', name: 'Sterling', icon: Gem, colors: ['#60a5fa', '#fb923c', '#0a0e16'] },
-                        { id: 'canyon', name: 'Canyon', icon: Flame, colors: ['#ea580c', '#84a98c', '#140c0a'] },
-                        { id: 'cyberpunk-pink', name: 'Cyberpunk Pink', icon: Gem, colors: ['#ec4899', '#f472b6', '#1a0a14'] },
-                    ].map(theme => (
-                        <button
-                            key={theme.id}
-                            onClick={() => setState(prev => ({ ...prev, theme: theme.id as AppState['theme'] }))}
-                            className={clsx(
-                                "flex flex-col items-center gap-2 p-4 rounded-xl font-medium transition-all border",
-                                "bg-surface-container-low text-on-surface border-outline/20 hover:bg-surface-container-high hover:scale-[1.02]",
-                                state.theme === theme.id && "ring-2 ring-primary ring-offset-2 ring-offset-surface"
-                            )}
-                        >
-                            {/* Color swatches */}
-                            <div className="flex gap-1">
-                                {theme.colors.map((color, i) => (
-                                    <div
-                                        key={i}
-                                        className="w-5 h-5 rounded-full border border-outline-variant/30 shadow-sm"
-                                        style={{ backgroundColor: color }}
-                                    />
-                                ))}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <theme.icon size={14} />
-                                <span className="text-sm">{theme.name}</span>
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </section>
+      <section className="flex flex-col gap-2">
+        <h3 id="appearance-accent" className="text-[13px] font-semibold text-muted">{t.accentLabel}</h3>
+        <div role="radiogroup" aria-labelledby="appearance-accent" className="grid grid-cols-4 gap-2">
+          {ACCENT_NAMES.map((accent: AccentName) => {
+            const selected = appearance.accent === accent;
+            const swatch = ACCENT_SWATCHES[accent][dark ? 1 : 0];
+            return (
+              <button
+                key={accent}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => update({ accent })}
+                className={clsx(
+                  'flex flex-col items-center gap-1.5 rounded-[20px] py-3 text-[13px] font-semibold',
+                  selected ? 'bg-tile shadow-[0_0_0_2px_rgb(var(--accent-rgb))]' : 'bg-chip text-muted',
+                )}
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: swatch }} aria-hidden="true">
+                  {selected && <Check size={18} strokeWidth={3} className={accent === 'ink' && dark ? 'text-black' : 'text-white'} />}
+                </span>
+                {t[`accent_${accent}` as const]}
+              </button>
+            );
+          })}
         </div>
-    );
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[13px] font-semibold text-muted">{t.glassLabel}</h3>
+        <Segmented<GlassLevel>
+          ariaLabel={t.glassLabel}
+          value={appearance.glass}
+          onChange={glass => update({ glass })}
+          options={GLASS_LEVELS.map(glass => ({ value: glass, label: t[`glass_${glass}` as const] }))}
+        />
+        <p className="text-[13px] text-muted">{t.glassHint}</p>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[13px] font-semibold text-muted">{t.languageLabel}</h3>
+        <Segmented<AppState['language']>
+          ariaLabel={t.languageLabel}
+          value={state.language}
+          onChange={language => setState(prev => ({ ...prev, language }))}
+          options={[
+            { value: 'en', label: 'English' },
+            { value: 'sr', label: 'Srpski' },
+          ]}
+        />
+      </section>
+    </div>
+  );
 };

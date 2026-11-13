@@ -2,6 +2,7 @@ import { Category, Account, Person, Transaction, Currency } from '../types';
 import { CONFIG } from '../config';
 import { getSupabaseService } from './runtimeServices';
 import {
+  MerchantHint,
   ParsedReceipt,
   ParsedTransaction,
   validateParsedReceipt,
@@ -9,9 +10,9 @@ import {
 } from '../utils/aiShared';
 import { classifyAiStatus, emitAiError } from './aiErrors';
 
-export type { ParsedReceipt, ParsedTransaction } from '../utils/aiShared';
+export type { MerchantHint, ParsedReceipt, ParsedTransaction } from '../utils/aiShared';
 
-type EdgeFunctionName = 'parse-transaction' | 'scan-receipt' | 'generate-insights';
+type EdgeFunctionName = 'parse-transaction' | 'scan-receipt' | 'generate-insights' | 'transcribe';
 
 interface EdgeFunctionEnvelope<T> {
   data?: T;
@@ -93,13 +94,46 @@ export const parseTransaction = async (
   categories: Category[],
   accounts: Account[],
   people: Person[],
+  hints: MerchantHint[] = [],
 ): Promise<ParsedTransaction | null> =>
   invokeAiFunction(
     'parse-transaction',
     // Only what the parser needs: avatars (URLs or inline images) never leave the device.
-    { input, categories, accounts, people: people.map(toAiPerson) },
+    { input, categories, accounts, people: people.map(toAiPerson), hints },
     validateParsedTransaction,
     'Transaction parsing failed',
+  );
+
+export interface VoiceEntryResult {
+  transcript: string;
+  parsed: ParsedTransaction | null;
+}
+
+export const validateVoiceEntry = (value: unknown): VoiceEntryResult | null => {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (!isNonEmptyString(record.transcript)) return null;
+  return {
+    transcript: record.transcript.trim().slice(0, 500),
+    parsed: record.parsed == null ? null : validateParsedTransaction(record.parsed),
+  };
+};
+
+/** Voice entry: one round trip that transcribes the recording and parses the transcript. */
+export const transcribeTransaction = async (
+  audioBase64: string,
+  mimeType: string,
+  language: 'en' | 'sr',
+  categories: Category[],
+  accounts: Account[],
+  people: Person[],
+  hints: MerchantHint[] = [],
+): Promise<VoiceEntryResult | null> =>
+  invokeAiFunction(
+    'transcribe',
+    { audio: audioBase64, mimeType, language, categories, accounts, people: people.map(toAiPerson), hints },
+    validateVoiceEntry,
+    'Voice entry failed',
   );
 
 export const scanReceipt = async (

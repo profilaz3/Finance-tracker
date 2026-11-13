@@ -28,7 +28,7 @@ interface UsePeopleHandlersOptions {
   setSelectedPerson: Dispatch<SetStateAction<Person | null>>;
   closeUserProfileModal: () => void;
   addToast: AddToast;
-  addTransaction: (transaction: Transaction) => Promise<void>;
+  addTransaction: (transaction: Transaction, options?: { silent?: boolean }) => Promise<void>;
   createId: () => string;
 }
 
@@ -251,9 +251,21 @@ export function usePeopleHandlers({
     }
 
     // The settlement transaction itself moves the derived balance; nothing else to write.
-    await addTransaction(settlement.transaction);
+    await addTransaction(settlement.transaction, { silent: true });
 
-    addToast(settlement.isPartial ? getTranslations().partialSettlementRecorded : getTranslations().debtSettled, 'success');
+    // Undo removes exactly the recorded settlement (the balance is derived, so it comes back).
+    const t = getTranslations();
+    const settlementId = settlement.transaction.id;
+    addToast(settlement.isPartial ? t.partialSettlementRecorded : t.debtSettled, 'success', {
+      label: t.undo,
+      onClick: () => {
+        setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => entry.id !== settlementId) }));
+        addToast(t.settlementRemoved, 'info');
+        void getSyncManager()
+          .then(syncManager => syncManager.deleteTransaction(settlementId))
+          .catch(error => console.error('Failed to undo settlement:', error));
+      },
+    });
   }, [addToast, addTransaction, createId, setState, state.accounts, state.categories, state.people, state.transactions]);
 
   const handleAddCategory = useCallback(async (category: Category) => {

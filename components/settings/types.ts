@@ -27,6 +27,11 @@ export interface SettingsViewProps {
     onProcessRecurring?: () => void;
     // Settle up
     onSettleUp?: (personId: string, currency: Currency) => void;
+    // Toasts with an action (clean-up undo)
+    onToast?: (message: string, type: 'success' | 'error' | 'info' | 'warning', action?: { label: string; onClick: () => void }) => void;
+    // Teams: which workspace the app shows (null is personal)
+    workspaceId?: string | null;
+    onWorkspaceChange?: (teamId: string | null) => void;
 }
 
 export const containerVariants: Variants = {

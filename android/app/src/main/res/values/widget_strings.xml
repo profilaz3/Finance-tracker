@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">This month</string>
+    <string name="widget_description">This month\'s spending and budget, with a quick add button.</string>
+    <string name="widget_add">Add expense</string>
+    <string name="widget_placeholder_title">This month</string>
+    <string name="widget_placeholder_body">Open the app to load your numbers</string>
+    <string name="widget_preview_spent">€1,240</string>
+    <string name="widget_preview_secondary">Budget left · €760</string>
+</resources>

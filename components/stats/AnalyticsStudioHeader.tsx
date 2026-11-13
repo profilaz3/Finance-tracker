@@ -1,47 +1,46 @@
 import React from 'react';
-import clsx from 'clsx';
 import type { AnalyticsPeriod, AnalyticsPeriodRange } from '../../utils/analyticsSelectors';
+import { getIntlLocale, type AppLanguage } from '../../utils/locale';
+import { Segmented } from '../ui/Segmented';
 
 export interface AnalyticsStudioHeaderProps {
-  title: string;
-  description: string;
   period: AnalyticsPeriod;
   periodRange: AnalyticsPeriodRange;
   labels: Record<AnalyticsPeriod, string>;
+  ariaLabel: string;
+  language: AppLanguage;
   onPeriodChange: (period: AnalyticsPeriod) => void;
 }
 
+/** "November 2026", "Q4 2026" or "2026" for the selected analytics period. */
+export const formatPeriodLabel = (range: AnalyticsPeriodRange, language: AppLanguage): string => {
+  const start = range.currentStart;
+  const locale = getIntlLocale(language);
+  if (range.period === 'year') return String(start.getFullYear());
+  if (range.period === 'quarter') return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
+  const label = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(start);
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+};
+
+/** Period row under the page title: the human period on the left, Month / Quarter / Year on the right. */
 export const AnalyticsStudioHeader: React.FC<AnalyticsStudioHeaderProps> = ({
-  title,
-  description,
   period,
   periodRange,
   labels,
+  ariaLabel,
+  language,
   onPeriodChange,
 }) => (
-  <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 min-w-0">
-    <div className="min-w-0">
-      <h2 className="text-2xl font-display font-medium text-on-surface break-words">{title}</h2>
-      <p className="text-sm text-on-surface-variant mt-1 break-words">{description}</p>
-      <p className="text-xs text-on-surface-variant mt-2 break-words">{periodRange.currentKey}</p>
-    </div>
-    <div className="bg-surface-container rounded-full p-1 flex gap-1 overflow-x-auto custom-scrollbar max-w-full">
-      {(['month', 'quarter', 'year'] as const).map(option => (
-        <button
-          type="button"
-          key={option}
-          onClick={() => onPeriodChange(option)}
-          aria-pressed={period === option}
-          className={clsx(
-            'px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-            period === option
-              ? 'bg-secondary-container text-on-secondary-container'
-              : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
-          )}
-        >
-          {labels[option]}
-        </button>
-      ))}
-    </div>
+  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0">
+    <p className="min-w-0 truncate text-[17px] font-bold tracking-[-0.3px]" aria-live="polite">
+      {formatPeriodLabel(periodRange, language)}
+    </p>
+    <Segmented<AnalyticsPeriod>
+      size="sm"
+      ariaLabel={ariaLabel}
+      value={period}
+      onChange={onPeriodChange}
+      options={(['month', 'quarter', 'year'] as const).map(option => ({ value: option, label: labels[option] }))}
+    />
   </div>
 );

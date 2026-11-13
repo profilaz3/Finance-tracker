@@ -2,11 +2,14 @@ import React, { Suspense, useState } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
 import { m, Variants } from 'motion/react';
 import { Sparkles, RefreshCw, Calendar, Loader2, AlertCircle } from 'lucide-react';
-import clsx from 'clsx';
+import { Segmented } from './ui/Segmented';
 import { Transaction, Category, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { formatDate } from '../utils/locale';
 import { generateInsights, isAIAvailable } from '../services/aiService';
+import { MonthlyLetterCard } from './insights';
+import type { LetterInputs } from '../domain/monthlyLetter';
+import { AskBar } from './ask/AskBar';
 
 const MarkdownRenderer = lazyWithReload(() => import('react-markdown'));
 
@@ -15,6 +18,8 @@ interface InsightsViewProps {
     categories: Category[];
     baseCurrency: Currency;
     language: 'en' | 'sr';
+    /** Active workspace data for the monthly letter; without it the letter card is hidden. */
+    letterState?: LetterInputs;
 }
 
 const containerVariants: Variants = {
@@ -52,7 +57,8 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
     transactions,
     categories,
     baseCurrency,
-    language
+    language,
+    letterState
 }) => {
     const t = TRANSLATIONS[language];
     const [period, setPeriod] = useState<'weekly' | 'monthly'>('weekly');
@@ -95,110 +101,96 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
 
     const aiAvailable = isAIAvailable();
 
+    const generateButton = (label: string, Icon: typeof Sparkles, disabled: boolean) => (
+        <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={disabled}
+            className="mx-auto flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-[15px] font-semibold text-on-accent transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
+        >
+            <Icon size={18} aria-hidden="true" />
+            {label}
+        </button>
+    );
+
     return (
         <m.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="max-w-3xl mx-auto space-y-6 pb-20"
+            className="mx-auto flex max-w-3xl flex-col gap-3 px-1 pb-20 sm:gap-4"
         >
-            {/* Header */}
-            <m.div variants={itemVariants} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h2 className="text-2xl font-display font-medium text-on-surface flex items-center gap-2">
-                        <Sparkles className="text-primary" size={24} />
-                        {t.aiInsights}
-                    </h2>
-                    <p className="text-sm text-on-surface-variant mt-1">{t.aiDescription}</p>
+            <m.header variants={itemVariants} className="flex flex-wrap items-end justify-between gap-x-3 gap-y-3">
+                <div className="min-w-0">
+                    <h1 className="text-[28px] font-bold leading-tight tracking-[-0.6px]">{t.aiInsights}</h1>
+                    <p className="text-[13px] text-muted">{t.aiDescription}</p>
                 </div>
+                <Segmented<'weekly' | 'monthly'>
+                    size="sm"
+                    ariaLabel={t.timePeriod}
+                    value={period}
+                    onChange={setPeriod}
+                    options={[
+                        { value: 'weekly', label: t.weekly },
+                        { value: 'monthly', label: t.monthly },
+                    ]}
+                />
+            </m.header>
 
-                {/* Period Toggle */}
-                <div className="bg-surface-container rounded-full p-1 flex gap-1">
-                    <button
-                        onClick={() => setPeriod('weekly')}
-                        className={clsx(
-                            "px-4 py-2 rounded-full text-sm font-medium transition-all",
-                            period === 'weekly'
-                                ? "bg-secondary-container text-on-secondary-container shadow-sm"
-                                : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
-                        )}
-                    >
-                        {t.weekly}
-                    </button>
-                    <button
-                        onClick={() => setPeriod('monthly')}
-                        className={clsx(
-                            "px-4 py-2 rounded-full text-sm font-medium transition-all",
-                            period === 'monthly'
-                                ? "bg-secondary-container text-on-secondary-container shadow-sm"
-                                : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
-                        )}
-                    >
-                        {t.monthly}
-                    </button>
-                </div>
-            </m.div>
+            {aiAvailable && (
+                <m.div variants={itemVariants}>
+                    <AskBar language={language} />
+                </m.div>
+            )}
 
-            {/* AI Backend Warning */}
+            {letterState && (
+                <m.div variants={itemVariants}>
+                    <MonthlyLetterCard state={letterState} language={language} />
+                </m.div>
+            )}
+
             {!aiAvailable && (
-                <m.div
-                    variants={itemVariants}
-                    className="bg-error-container/20 border border-error/30 rounded-xl p-4 flex items-start gap-3"
-                >
-                    <AlertCircle className="text-error flex-shrink-0 mt-0.5" size={20} />
-                    <div>
-                        <p className="text-sm text-on-surface font-medium">{t.aiUnavailable}</p>
-                        <p className="text-xs text-on-surface-variant mt-1">
-                            {t.aiConfigureHint}
-                        </p>
+                <m.div variants={itemVariants} className="paper-tile flex items-start gap-3 p-4">
+                    <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[12px] bg-chip text-neg" aria-hidden="true">
+                        <AlertCircle size={18} />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[15px] font-semibold">{t.aiUnavailable}</p>
+                        <p className="mt-0.5 text-[13px] leading-snug text-muted">{t.aiConfigureHint}</p>
                     </div>
                 </m.div>
             )}
 
-            {/* Main Content */}
-            <m.div
-                variants={itemVariants}
-                className="bg-surface-container-low rounded-xl shadow-elevation-1 overflow-hidden"
-            >
-                {!report && !isGenerating && (
-                    <div className="p-8 text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Sparkles className="text-primary" size={32} />
-                        </div>
-                        <h3 className="text-lg font-medium text-on-surface mb-2">{t.readyToAnalyze}</h3>
-                        <p className="text-sm text-on-surface-variant mb-6 max-w-sm mx-auto">
-                            {t.clickToGenerate}
-                        </p>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={!aiAvailable || isGenerating}
-                            className="px-6 py-3 bg-primary text-on-primary rounded-full font-medium transition-all hover:shadow-elevation-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
-                        >
-                            <Sparkles size={18} />
-                            {t.generateReport}
-                        </button>
+            <m.section variants={itemVariants} className="paper-tile overflow-hidden" aria-live="polite">
+                {!report && !isGenerating && !error && (
+                    <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                        <span className="accent-card flex h-14 w-14 items-center justify-center rounded-[20px] text-white" aria-hidden="true">
+                            <Sparkles size={26} />
+                        </span>
+                        <h2 className="text-[19px] font-bold tracking-[-0.3px]">{t.readyToAnalyze}</h2>
+                        <p className="mx-auto max-w-sm text-[14px] leading-snug text-muted">{t.clickToGenerate}</p>
+                        <div className="mt-2">{generateButton(t.generateReport, Sparkles, !aiAvailable || isGenerating)}</div>
                     </div>
                 )}
 
                 {isGenerating && (
-                    <div className="p-8 text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Loader2 className="text-primary animate-spin" size={32} />
-                        </div>
-                        <h3 className="text-lg font-medium text-on-surface mb-2">{t.analyzing}</h3>
-                        <p className="text-sm text-on-surface-variant">{t.analyzingDesc}</p>
+                    <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-accent-soft text-accent" aria-hidden="true">
+                            <Loader2 className="animate-spin" size={26} />
+                        </span>
+                        <h2 className="text-[19px] font-bold tracking-[-0.3px]">{t.analyzing}</h2>
+                        <p className="text-[14px] text-muted">{t.analyzingDesc}</p>
                     </div>
                 )}
 
                 {report && !isGenerating && (
-                    <div className="p-6">
-                        {/* Report Header */}
-                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-outline-variant/20">
-                            <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                                <Calendar size={16} />
+                    <div className="p-4 sm:p-6">
+                        <div className="mb-4 flex items-center justify-between gap-3 border-b border-hair pb-3">
+                            <div className="flex min-w-0 items-center gap-2 text-[13px] text-muted">
+                                <Calendar size={15} aria-hidden="true" className="flex-none" />
                                 {generatedAt && (
-                                    <span>
+                                    <span className="truncate">
                                         {t.generatedOn} {formatDate(generatedAt, {
                                             month: 'short',
                                             day: 'numeric',
@@ -209,26 +201,25 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                                 )}
                             </div>
                             <button
+                                type="button"
                                 onClick={handleGenerate}
                                 disabled={!aiAvailable || isGenerating}
-                                className="px-4 py-2 text-sm text-primary hover:bg-primary-container/30 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50"
+                                className="flex h-9 flex-none items-center gap-1.5 rounded-full bg-chip px-3.5 text-[13px] font-semibold disabled:opacity-45"
                             >
-                                <RefreshCw size={16} />
+                                <RefreshCw size={15} aria-hidden="true" />
                                 {t.regenerate}
                             </button>
                         </div>
 
-                        {/* Markdown Report */}
-                        <div className="prose prose-invert max-w-none
-                            prose-headings:text-on-surface prose-headings:font-display
-                            prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3 prose-h2:flex prose-h2:items-center prose-h2:gap-2
-                            prose-p:text-on-surface-variant prose-p:leading-relaxed
-                            prose-strong:text-on-surface prose-strong:font-semibold
-                            prose-ul:text-on-surface-variant prose-ul:my-2
-                            prose-li:my-1
-                            prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+                        <div className="max-w-none text-[15px] leading-relaxed text-muted
+                            [&_h1]:mb-2 [&_h1]:mt-5 [&_h1]:text-[20px] [&_h1]:font-bold [&_h1]:text-on-surface
+                            [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-[17px] [&_h2]:font-bold [&_h2]:tracking-[-0.3px] [&_h2]:text-on-surface
+                            [&_h3]:mb-1.5 [&_h3]:mt-4 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-on-surface
+                            [&_p]:my-2 [&_strong]:font-semibold [&_strong]:text-on-surface
+                            [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1
+                            [&_a]:text-accent [&_a]:underline-offset-2 hover:[&_a]:underline
                         ">
-                            <Suspense fallback={<div className="text-sm text-on-surface-variant">{t.analyzing}</div>}>
+                            <Suspense fallback={<div className="text-[13px] text-muted">{t.analyzing}</div>}>
                                 <MarkdownRenderer>{report}</MarkdownRenderer>
                             </Suspense>
                         </div>
@@ -236,23 +227,16 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                 )}
 
                 {error && !isGenerating && (
-                    <div className="p-8 text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-error/10 flex items-center justify-center">
-                            <AlertCircle className="text-error" size={32} />
-                        </div>
-                        <h3 className="text-lg font-medium text-on-surface mb-2">{t.analysisFailed}</h3>
-                        <p className="text-sm text-on-surface-variant mb-6">{error}</p>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={!aiAvailable}
-                            className="px-6 py-3 bg-primary text-on-primary rounded-full font-medium transition-all hover:shadow-elevation-2 disabled:opacity-50 flex items-center gap-2 mx-auto"
-                        >
-                            <RefreshCw size={18} />
-                            {t.tryAgain}
-                        </button>
+                    <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-chip text-neg" aria-hidden="true">
+                            <AlertCircle size={26} />
+                        </span>
+                        <h2 className="text-[19px] font-bold tracking-[-0.3px]">{t.analysisFailed}</h2>
+                        <p className="max-w-sm text-[14px] leading-snug text-muted">{error}</p>
+                        <div className="mt-2">{generateButton(t.tryAgain, RefreshCw, !aiAvailable)}</div>
                     </div>
                 )}
-            </m.div>
+            </m.section>
         </m.div>
     );
 };

@@ -6,9 +6,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { MOTION } from '../config';
 import { TRANSLATIONS } from '../constants';
 import { useEscapeKey, useFocusTrap } from '../hooks/useFocusTrap';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { FieldValidation, useFormValidation, validationRules } from '../hooks/useFormValidation';
 import { Account, Category, Event, Person, Transaction } from '../types';
 import { HAPTIC_PATTERNS, vibrate } from '../utils/haptics';
+import { merchantMemoryFor, usualChoice } from '../domain/merchantMemory';
 import { AmountFields } from './transaction-modal/AmountFields';
 import { MoreOptionsFields } from './transaction-modal/MoreOptionsFields';
 import { ReceiptFields } from './transaction-modal/ReceiptFields';
@@ -25,7 +27,11 @@ interface EditTransactionModalProps {
     onSave: (updated: Transaction, targetAccountId?: string) => void;
     onDelete: (id: string) => void;
     t: typeof TRANSLATIONS['en'];
+    /** History for "usual category" suggestions on new entries. */
+    transactions?: Transaction[];
 }
+
+const NO_TRANSACTIONS: Transaction[] = [];
 
 export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     isOpen,
@@ -38,16 +44,19 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     events,
     onSave,
     onDelete,
-    t
+    t,
+    transactions = NO_TRANSACTIONS
 }) => {
     const [edited, setEdited] = useState<Transaction | null>(null);
     const [targetAccountId, setTargetAccountId] = useState('');
     const [showMoreOptions, setShowMoreOptions] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const amountInputRef = useRef<HTMLInputElement>(null);
+    const categoryPickedRef = useRef(false);
     const focusTrapRef = useFocusTrap(isOpen);
 
     useEscapeKey(onClose, isOpen);
+    const { wrapRef, handleProps } = useSheetDrag(onClose);
 
     const validationConfig: FieldValidation = useMemo(() => ({
         amount: [
@@ -84,8 +93,27 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         }
         setTargetAccountId('');
         setShowDeleteConfirm(false);
+        categoryPickedRef.current = false;
         clearErrors();
     }, [transaction, accounts, categories, clearErrors]);
+
+    // New entries: once the note names a shop the user has a clear habit for, preselect that
+    // category, unless they already picked one themselves.
+    const merchantText = edited?.receiptData?.merchant || edited?.note || '';
+    const usual = useMemo(
+        () => (isNewTransaction && merchantText ? usualChoice(merchantMemoryFor(transactions), merchantText) : null),
+        [isNewTransaction, merchantText, transactions]
+    );
+    useEffect(() => {
+        if (!usual || categoryPickedRef.current) return;
+        const category = categories.find(c => c.id === usual.categoryId);
+        if (!category) return;
+        setEdited(current => {
+            if (!current || current.categoryId === category.id || current.categoryId === 'internal-transfer') return current;
+            if (category.type !== current.type) return current;
+            return { ...current, categoryId: category.id, subcategory: '' };
+        });
+    }, [usual, categories]);
 
     useEffect(() => {
         if (!isOpen || !amountInputRef.current) return;
@@ -123,30 +151,33 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-md modal-safe-area"
+            className="paper-scrim modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-transaction-title"
         >
+            <div ref={wrapRef} className="relative flex w-full justify-center" onClick={e => e.stopPropagation()}>
             <m.div
                 ref={focusTrapRef}
                 onClick={e => e.stopPropagation()}
-                initial={MOTION.modal.initial}
-                animate={MOTION.modal.animate}
-                exit={MOTION.modal.exit}
-                transition={MOTION.modal.spring}
-                className="bg-surface-container-high w-full max-w-md rounded-2xl shadow-elevation-5 overflow-hidden flex flex-col max-h-[90vh]"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={MOTION.sheet.exit}
+                transition={MOTION.sheet.spring}
+                className="glass-sheet flex max-h-[90dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-[36px] text-on-surface"
             >
-                <div className="p-5 pb-3 flex justify-between items-center">
+                <div className="shrink-0 touch-none" {...handleProps}>
+                <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
+                <div className="flex items-center justify-between px-5 pb-3 pt-2 md:pt-5">
                     <div className="flex items-center gap-2">
-                        <h3 id="edit-transaction-title" className="text-lg font-display font-medium text-on-surface">
+                        <h3 id="edit-transaction-title" className="text-[22px] font-bold tracking-[-0.4px]">
                             {isNewTransaction ? t.addTransaction : t.editTransaction}
                         </h3>
                         {selectedCategory && (
                             <span className={clsx(
-                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium",
-                                edited.type === 'income' ? "bg-tertiary/15 text-tertiary" : "bg-error/15 text-error"
+                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                edited.type === 'income' ? "bg-pos/15 text-pos" : "bg-chip text-muted"
                             )}>
                                 {edited.type === 'income'
                                     ? <ArrowDownLeft size={10} aria-hidden="true" />
@@ -157,14 +188,16 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant"
+                        type="button"
+                        className="glass flex h-11 w-11 items-center justify-center rounded-full"
                         aria-label={t.close}
                     >
                         <X size={20} aria-hidden="true" />
                     </button>
                 </div>
+                </div>
 
-                <div className="px-5 pb-5 space-y-4 overflow-y-auto custom-scrollbar">
+                <div className="space-y-4 overflow-y-auto px-5 pb-5 custom-scrollbar">
                     <AmountFields
                         edited={edited}
                         setEdited={setEdited}
@@ -176,6 +209,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                         validateOnBlur={validateOnBlur}
                         getFieldState={getFieldState}
                         t={t}
+                        usualHint={usual && usual.categoryId === edited.categoryId ? t.usualCategory.replace('{merchant}', usual.merchant) : null}
+                        onCategoryPicked={() => { categoryPickedRef.current = true; }}
                     />
                     <MoreOptionsFields
                         edited={edited}
@@ -192,7 +227,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                     )}
                 </div>
 
-                <div className="p-5 pt-3 border-t border-outline-variant flex flex-col gap-3">
+                <div className="flex flex-col gap-3 border-t border-hair px-5 pb-5 pt-3">
                     <AnimatePresence>
                         {showDeleteConfirm && (
                             <m.div
@@ -202,18 +237,18 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                                 transition={{ duration: 0.15 }}
                                 className="overflow-hidden"
                             >
-                                <div className="flex items-center justify-between bg-error-container/50 rounded-xl px-4 py-3 mb-1">
-                                    <span className="text-sm text-on-error-container font-medium">{t.deleteConfirm}</span>
+                                <div className="mb-1 flex items-center justify-between rounded-[18px] bg-neg/10 px-4 py-3">
+                                    <span className="text-[14px] font-semibold text-neg">{t.deleteConfirm}</span>
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => setShowDeleteConfirm(false)}
-                                            className="px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors"
+                                            className="h-9 rounded-full px-3.5 text-[13px] font-semibold text-muted hover:bg-chip"
                                         >
                                             {t.no}
                                         </button>
                                         <button
                                             onClick={handleDelete}
-                                            className="px-3 py-1.5 text-xs font-medium bg-error text-on-error rounded-lg hover:bg-error/80 transition-colors"
+                                            className="h-9 rounded-full bg-neg px-3.5 text-[13px] font-semibold text-white"
                                         >
                                             {t.yesDelete}
                                         </button>
@@ -228,10 +263,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                             <button
                                 onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
                                 className={clsx(
-                                    "px-4 py-2.5 text-sm font-medium rounded-xl transition-colors min-h-[44px]",
-                                    showDeleteConfirm
-                                        ? "bg-error/10 text-error"
-                                        : "text-on-surface-variant hover:text-error hover:bg-error-container/30"
+                                    "h-11 rounded-full px-4 text-[15px] font-semibold transition-colors",
+                                    showDeleteConfirm ? "bg-neg/10 text-neg" : "text-neg hover:bg-neg/10"
                                 )}
                             >
                                 {t.delete}
@@ -243,7 +276,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                         <div className="flex gap-2">
                             <button
                                 onClick={onClose}
-                                className="px-5 py-2.5 text-sm text-on-surface-variant font-medium hover:bg-surface-container-highest rounded-xl transition-colors min-h-[44px]"
+                                className="h-11 rounded-full px-5 text-[15px] font-semibold text-muted hover:bg-chip"
                             >
                                 {t.cancel}
                             </button>
@@ -251,10 +284,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                                 disabled={!edited.amount || edited.amount <= 0 || !edited.accountId}
                                 onClick={handleSave}
                                 className={clsx(
-                                    "px-6 py-2.5 text-sm font-medium rounded-xl transition-all min-h-[44px]",
-                                    canSave
-                                        ? "bg-primary text-on-primary shadow-elevation-1 hover:shadow-elevation-2 active:scale-95"
-                                        : "bg-on-surface/12 text-on-surface/38 cursor-not-allowed"
+                                    "h-11 rounded-full px-6 text-[15px] font-semibold transition-colors",
+                                    canSave ? "bg-accent text-on-accent active:scale-95" : "cursor-not-allowed bg-chip text-faint"
                                 )}
                             >
                                 {t.save}
@@ -263,6 +294,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                     </div>
                 </div>
             </m.div>
+            </div>
         </m.div>
     );
 };

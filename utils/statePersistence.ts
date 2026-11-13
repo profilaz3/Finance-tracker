@@ -5,6 +5,9 @@ export interface PersistedStatePreferences {
   theme: AppState['theme'];
   language: AppState['language'];
   isGuest?: boolean;
+  appearance?: AppState['appearance'];
+  homeLayout?: AppState['homeLayout'];
+  budget?: AppState['budget'];
 }
 
 export interface PersistedStateSegments {
@@ -19,6 +22,7 @@ export interface PersistedStateSegments {
   recurringTransactions: AppState['recurringTransactions'];
   events: AppState['events'];
   sharedExpenses: AppState['sharedExpenses'];
+  teams?: AppState['teams'];
 }
 
 export type PersistedStateSegmentName = keyof PersistedStateSegments;
@@ -35,6 +39,7 @@ export const STATE_SEGMENT_NAMES: PersistedStateSegmentName[] = [
   'recurringTransactions',
   'events',
   'sharedExpenses',
+  'teams',
 ];
 
 const stripInlineAvatar = <T extends { avatar?: string }>(profile: T): T => ({
@@ -48,6 +53,9 @@ export const buildStateSegments = (state: AppState): PersistedStateSegments => (
     theme: state.theme,
     language: state.language,
     isGuest: state.isGuest,
+    appearance: state.appearance,
+    homeLayout: state.homeLayout,
+    budget: state.budget,
   },
   transactions: state.transactions,
   categories: state.categories,
@@ -59,6 +67,7 @@ export const buildStateSegments = (state: AppState): PersistedStateSegments => (
   recurringTransactions: state.recurringTransactions,
   events: state.events,
   sharedExpenses: state.sharedExpenses,
+  teams: state.teams,
 });
 
 export const mergeStateSegments = (
@@ -70,6 +79,9 @@ export const mergeStateSegments = (
   theme: segments.preferences?.theme ?? baseState.theme,
   language: segments.preferences?.language ?? baseState.language,
   isGuest: segments.preferences?.isGuest ?? baseState.isGuest,
+  appearance: segments.preferences?.appearance ?? baseState.appearance,
+  homeLayout: segments.preferences?.homeLayout ?? baseState.homeLayout,
+  budget: segments.preferences?.budget !== undefined ? segments.preferences.budget : baseState.budget,
   transactions: segments.transactions ?? baseState.transactions,
   categories: segments.categories ?? baseState.categories,
   accounts: segments.accounts ?? baseState.accounts,
@@ -80,4 +92,5 @@ export const mergeStateSegments = (
   recurringTransactions: segments.recurringTransactions ?? baseState.recurringTransactions,
   events: segments.events ?? baseState.events,
   sharedExpenses: segments.sharedExpenses ?? baseState.sharedExpenses,
+  teams: segments.teams ?? baseState.teams,
 });

@@ -1,0 +1,55 @@
+{
+ "source": "Public sample receipt from github.com/turanjanin/serbian-fiscal-receipts-parser (MIT)",
+ "url": "https://suf.purs.gov.rs/v/?vl=A05DRjY1UlhZTkNGNjVSWFmCUAAAgVAAAKBaMgAAAAAAAAABilcx7KIAAAAjhTToDyIlpfRcGCKbFB4GYM4dXAye5cGXJMhPbsqjCGq7rZCYRxyEO13T5va%2BTtrcOmBKhjJSeny9zk%2B9LQl0otzl6BcvisYdHDlvKehwZdTYZeOeLxCvdeY1nd%2Fxt6qxskz3Ngz2n%2FVdEH2GclA2xjXwsZTsMew2ZbFR2eyW0RwJN%2BKZODBeZZIv4%2FmN3JrSnu2Cb6FDl2%2F3X67vYcKS1BL%2BIPVk3UZKEolStSuL6zMfNA1Y2UN9nsl4whbguUGV%2FLWjWwDUiDkLOnKrQdKw8FC4FNuMHG8Yx3u9Kafuc2ImXuV5gYHM%2Fxd%2BLa5WK2EWf90Fev33pXvBrh3MAXGkXUXqHxqESTcJXaxr9XEfMTnoNDJvPoordMSPVx1fVRDefxYlgg21Z9g9e1F6KhKj%2BhZ1xbHWT%2FYTPfT40Ru4N3a0lUS4tAiuluM3iDAYW5rETa17Zso5JhZspNtyYbmHdsb0Nl3YE9bkgnZXSegRpuwtvEz7KwgTaDHHhCjR%2FDprkaacdvWa8mbHBONGaRyRWY9x4g%2FS8FOYIOZMzkksy0E2r9fJI3a8bHMHxCC3yX%2BHMtVXFwvYxAgZq0jFZpKD20CPedrctLPJt48iSQP8s7JJrqdZa8HVDwJohHL%2FwiEvCSLV2DC%2BP6An89Fyxeo2EoXdbGKkfQxYmb2CGTAsPgUE1lYmcKvzQX5WppSlgVM%3D",
+ "api": {
+  "invoiceRequest": {
+   "posTime": null,
+   "taxId": "100000207",
+   "businessName": "NICEFOODS DOO BEOGRAD",
+   "locationName": "1016383-NICEFOODS DOO BEOGRAD OGRANAK RESTORAN DELTA PLANET NIŠ",
+   "address": "БЛАГОЈА ПАРОВИЋА 1А   ",
+   "city": "НИШ (МЕДИЈАНА)",
+   "administrativeUnit": "Ниш-Медијана",
+   "buyer": null,
+   "buyerCostCenter": null,
+   "cashier": "1",
+   "requestedBy": "NCF65RXY",
+   "referentDocumentNumber": null,
+   "invoiceType": 0,
+   "transactionType": 0,
+   "payments": [
+    {
+     "paymentType": 2,
+     "amount": 330.0
+    }
+   ]
+  },
+  "invoiceResult": {
+   "totalAmount": 330.0,
+   "transactionTypeCounter": 20609,
+   "totalCounter": 20610,
+   "invoiceCounterExtension": "ПП",
+   "invoiceNumber": "NCF65RXY-NCF65RXY-20610",
+   "signedBy": "NCF65RXY",
+   "sdcTime": "2023-09-02T18:40:04.258Z"
+  },
+  "journal": "============ ФИСКАЛНИ РАЧУН ============\r\n               100000207                \r\n         NICEFOODS DOO BEOGRAD          \r\n 1016383-NICEFOODS DOO BEOGRAD OGRANAK  \n       RESTORAN DELTA PLANET NIŠ        \r\n         БЛАГОЈА ПАРОВИЋА 1А            \r\n              Ниш-Медијана              \r\nКасир:                                 1\r\nЕСИР број:                       975/6.1\r\n-------------ПРОМЕТ ПРОДАЈА-------------\r\nАртикли\r\n========================================\r\nНазив   Цена         Кол.         Укупно\r\nIced Coffee vel. (Ђ)                    \r\n       330,00          1          330,00\r\n----------------------------------------\r\nУкупан износ:                     330,00\r\nПлатна картица:                   330,00\r\n========================================\r\nОзнака       Име      Стопа        Порез\r\nЂ           О-ПДВ   20,00%         55,00\r\n----------------------------------------\r\nУкупан износ пореза:               55,00\r\n========================================\r\nПФР време:          02.09.2023. 20:40:04\r\nПФР број рачуна: NCF65RXY-NCF65RXY-20610\r\nБројач рачуна:             20609/20610ПП\r\n========================================\r\n======== КРАЈ ФИСКАЛНОГ РАЧУНА =========",
+  "isValid": true
+ },
+ "specifications": {
+  "success": true,
+  "items": [
+   {
+    "gtin": "00006205",
+    "name": "Iced Coffee vel.",
+    "quantity": 1,
+    "total": 330,
+    "unitPrice": 330,
+    "label": "Ђ",
+    "labelRate": 20,
+    "taxBaseAmount": 275,
+    "vatAmount": 55
+   }
+  ]
+ }
+}

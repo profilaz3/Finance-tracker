@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
+import clsx from 'clsx';
 import {
-    ArrowLeft, Play, CheckCircle2,
-    Trash2, MapPin, Share2, Clock, Camera, MoreVertical, Loader2
+    ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MoreHorizontal, Share2, Trash2,
 } from 'lucide-react';
 import { Event, Person } from '../../types';
-import clsx from 'clsx';
 import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
 import { getTranslations } from '../../utils/i18n';
-import { formatDate as formatLocaleDate } from '../../utils/locale';
+import { eventBannerStyle } from '../../utils/eventVisuals';
+import { useEscapeKey } from '../../hooks/useFocusTrap';
+import { MOTION } from '../../config';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { EventStatusChip, formatEventDates } from '../EventCard';
 
 interface EventHeaderProps {
     event: Event;
@@ -31,27 +33,20 @@ interface EventHeaderProps {
     language?: 'en' | 'sr';
 }
 
-const formatDate = (dateString?: string) => {
-    if (!dateString) return getTranslations().dateTbd;
-    return formatLocaleDate(dateString, {
-        weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-};
+const glassButton = 'flex h-11 w-11 items-center justify-center rounded-full bg-black/25 text-white ring-1 ring-white/20 backdrop-blur-md';
+const menuItem = 'flex h-12 w-full items-center gap-3 rounded-[18px] px-3 text-left text-[15px] font-medium hover:bg-chip disabled:opacity-50';
 
 export const EventHeader: React.FC<EventHeaderProps> = ({
     event,
     eventPeople,
     onBack,
-    onUpdateEvent,
     onDeleteEvent,
-    onShowToast,
+    onUpdateEvent,
     onOpenShareModal,
     isMenuOpen,
     setIsMenuOpen,
     isUploadingPhoto,
-    setIsUploadingPhoto,
     imageVersion,
-    setImageVersion,
     fileInputRef,
     openPicker,
     handleFileChange,
@@ -59,12 +54,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
 }) => {
     const t = getTranslations();
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-    const handleStartEvent = () => {
-        onUpdateEvent(event.id, {
-            startDate: new Date().toISOString(),
-            status: 'active'
-        });
-    };
+    useEscapeKey(() => setIsMenuOpen(false), isMenuOpen);
 
     const handleEndEvent = () => {
         onUpdateEvent(event.id, {
@@ -73,196 +63,132 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
         });
     };
 
-    const handleReopenEvent = () => {
-        onUpdateEvent(event.id, {
-            endDate: undefined,
-            status: 'active'
-        });
+    const runFromMenu = (action: () => void) => () => {
+        setIsMenuOpen(false);
+        action();
     };
 
     return (
-        <div className="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-t from-scrim/80 via-scrim/40 to-transparent z-10" />
-            {event.imageUrl ? (
-                <img
-                    key={`${event.imageUrl}-v${imageVersion}`}
-                    src={`${event.imageUrl}?v=${imageVersion}`}
-                    alt={event.name}
-                    className="w-full h-full object-cover"
-                />
-            ) : (
-                <div className={clsx("w-full h-full flex items-center justify-center", event.color || "bg-primary/20")}>
-                    <MapPin size={64} className="text-on-surface/20" />
-                </div>
-            )}
+        <div className="relative">
+            <div
+                className="relative flex h-[300px] flex-col justify-between overflow-hidden rounded-[30px] p-3 text-white shadow-[0_14px_40px_-18px_rgba(0,0,0,0.55)] md:h-[340px] md:p-4"
+                style={eventBannerStyle(event)}
+            >
+                {event.imageUrl && (
+                    <img
+                        key={`${event.imageUrl}-v${imageVersion}`}
+                        src={`${event.imageUrl}?v=${imageVersion}`}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                    />
+                )}
+                <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/25" aria-hidden="true" />
 
-            {/* Back Button */}
-            <div className="absolute top-4 left-4 z-20">
-                <button
-                    onClick={onBack}
-                    aria-label={t.backToEvents}
-                    title={t.backToEvents}
-                    className="p-2 bg-black/30 backdrop-blur-md rounded-full text-white hover:bg-black/50 transition-colors"
-                >
-                    <ArrowLeft size={24} />
-                </button>
-            </div>
-
-            {/* Menu Button */}
-            <div className={clsx(
-                "absolute top-4 right-4 z-20 transition-opacity duration-200",
-                isMenuOpen ? "opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
-            )}>
-                <div className="relative">
+                <div className="relative flex items-center justify-between">
                     <button
+                        type="button"
+                        onClick={onBack}
+                        aria-label={t.backToEvents}
+                        title={t.backToEvents}
+                        className={glassButton}
+                    >
+                        <ArrowLeft size={22} aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => setIsMenuOpen(!isMenuOpen)}
                         aria-label={t.eventActions}
                         title={t.eventActions}
-                        className="p-2 bg-black/30 backdrop-blur-md rounded-full text-white hover:bg-black/50 transition-colors"
+                        aria-haspopup="menu"
+                        aria-expanded={isMenuOpen}
+                        className={glassButton}
                     >
-                        <MoreVertical size={24} />
+                        {isUploadingPhoto ? <Loader2 size={20} className="animate-spin" aria-hidden="true" /> : <MoreHorizontal size={22} aria-hidden="true" />}
                     </button>
+                </div>
 
-                    {/* Hidden file input for web fallback */}
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                    />
-                    <AnimatePresence>
-                        {isMenuOpen && (
-                            <m.div
-                                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                className="absolute right-0 top-12 w-48 bg-surface rounded-xl shadow-xl border border-outline/10 overflow-hidden z-30"
-                            >
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setIsMenuOpen(false);
-                                        openPicker();
-                                    }}
-                                    disabled={isUploadingPhoto}
-                                    className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2 disabled:opacity-50"
+                <div className="relative flex flex-col gap-2 px-1 pb-1">
+                    <span><EventStatusChip status={event.status} t={t} /></span>
+                    <h1 className="text-[32px] font-bold leading-[1.1] tracking-[-0.8px] md:text-[40px]">{event.name}</h1>
+                    {event.description && <p className="line-clamp-2 max-w-xl text-[14px] text-white/80">{event.description}</p>}
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium text-white/85">
+                            <CalendarDays size={14} aria-hidden="true" className="shrink-0" />
+                            {formatEventDates(event, t, language)}
+                        </span>
+                        <span className="flex -space-x-2">
+                            {eventPeople.slice(0, 5).map(person => (
+                                <span
+                                    key={person.id}
+                                    title={getParticipantTooltipLabel(person)}
+                                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white ring-2 ring-black/30"
+                                    style={{ background: person.color }}
                                 >
-                                    {isUploadingPhoto ? (
-                                        <Loader2 size={16} className="animate-spin" />
-                                    ) : (
-                                        <Camera size={16} />
-                                    )}
-                                    {isUploadingPhoto ? t.uploading : t.changePhoto}
-                                </button>
-
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setIsMenuOpen(false);
-                                        onOpenShareModal();
-                                    }}
-                                    className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
-                                >
-                                    <Share2 size={16} /> {t.shareEvent}
-                                </button>
-
-                                {event.status === 'active' && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setIsMenuOpen(false);
-                                            handleEndEvent();
-                                        }}
-                                        className="w-full px-4 py-3 text-left text-sm font-medium text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2"
-                                    >
-                                        <CheckCircle2 size={16} /> {t.endEvent}
-                                    </button>
-                                )}
-
-                                {event.status === 'completed' && (
-                                    <button
-                                        onClick={() => {
-                                            setIsMenuOpen(false);
-                                            setIsConfirmingDelete(true);
-                                        }}
-                                        className="w-full px-4 py-3 text-left text-sm font-medium text-error hover:bg-error/10 transition-colors flex items-center gap-2"
-                                    >
-                                        <Trash2 size={16} /> {t.deleteEvent}
-                                    </button>
-                                )}
-
-
-                            </m.div>
-                        )}
-                    </AnimatePresence>
+                                    {person.avatar
+                                        ? <img src={person.avatar} alt={person.name} className="h-full w-full object-cover" />
+                                        : getParticipantInitials(person.name)}
+                                </span>
+                            ))}
+                            {eventPeople.length > 5 && (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 text-[11px] font-bold ring-2 ring-black/30 backdrop-blur-md">
+                                    +{eventPeople.length - 5}
+                                </span>
+                            )}
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-6 z-20 text-white">
-                <div className="flex items-end justify-between gap-4">
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className={clsx(
-                                "px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md border border-on-surface/20 flex items-center gap-1.5",
-                                event.status === 'active' ? "bg-tertiary/30 text-white" :
-                                    event.status === 'completed' ? "bg-primary/30 text-white" : "bg-on-surface/20 text-white/80"
-                            )}>
-                                {event.status === 'active' && <Play size={12} fill="currentColor" />}
-                                {event.status === 'completed' && <CheckCircle2 size={12} />}
-                                <span className="capitalize">{event.status === 'active' ? t.eventStatusActive : event.status === 'completed' ? t.eventStatusCompleted : t.eventStatusArchived}</span>
-                            </span>
+            {/* Hidden file input for the web photo fallback */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+            />
 
-                            {/* Show dates */}
-                            {event.startDate && (
-                                <span className="text-sm font-medium opacity-90 flex items-center gap-1">
-                                    <Clock size={14} />
-                                    {formatDate(event.startDate)}
-                                    {event.endDate ? ` - ${formatDate(event.endDate)}` : ''}
-                                </span>
-                            )}
-                        </div>
-                        <h1 className="text-3xl md:text-4xl font-bold font-display">{event.name}</h1>
-                        {event.description && <p className="mt-1 opacity-80 max-w-xl">{event.description}</p>}
-                    </div>
-
-                    <div className="flex flex-col items-end gap-3">
-                        <div className="flex -space-x-2">
-                            {eventPeople.map(person => (
-                                <div key={person.id} className="w-8 h-8 rounded-full border-2 border-black/50 overflow-hidden" title={getParticipantTooltipLabel(person)}>
-                                    {person.avatar ? (
-                                        <img src={person.avatar} alt={person.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-[10px] font-bold bg-white text-black">
-                                            {getParticipantInitials(person.name)}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Controls - Only Start and Reopen now */}
-                        <div className="flex gap-2">
-                            {event.status !== 'active' && event.status !== 'completed' && (
-                                <button
-                                    onClick={handleStartEvent}
-                                    className="px-4 py-2 bg-tertiary hover:bg-tertiary/90 text-on-tertiary rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-tertiary/20"
-                                >
-                                    <Play size={16} fill="currentColor" /> {t.startEvent}
+            <AnimatePresence>
+                {isMenuOpen && (
+                    <>
+                        <div className="fixed inset-0 z-30" onClick={() => setIsMenuOpen(false)} aria-hidden="true" />
+                        <m.div
+                            key="event-menu"
+                            initial={{ opacity: 0, scale: 0.92, y: -6 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: -6 }}
+                            transition={MOTION.modal.spring}
+                            style={{ transformOrigin: 'top right' }}
+                            className="glass-sheet absolute right-3 top-[60px] z-40 w-[232px] rounded-[26px] p-1.5 text-on-surface"
+                        >
+                            <button type="button" onClick={runFromMenu(openPicker)} disabled={isUploadingPhoto} className={menuItem}>
+                                {isUploadingPhoto ? <Loader2 size={19} className="animate-spin text-muted" aria-hidden="true" /> : <Camera size={19} className="text-muted" aria-hidden="true" />}
+                                {isUploadingPhoto ? t.uploading : t.changePhoto}
+                            </button>
+                            <button type="button" onClick={runFromMenu(onOpenShareModal)} className={menuItem}>
+                                <Share2 size={19} className="text-muted" aria-hidden="true" />
+                                {t.shareEvent}
+                            </button>
+                            {event.status === 'active' && (
+                                <button type="button" onClick={runFromMenu(handleEndEvent)} className={menuItem}>
+                                    <CheckCircle2 size={19} className="text-muted" aria-hidden="true" />
+                                    {t.endEvent}
                                 </button>
                             )}
                             {event.status === 'completed' && (
                                 <button
-                                    onClick={handleReopenEvent}
-                                    className="px-4 py-2 bg-on-surface/20 backdrop-blur-md hover:bg-on-surface/30 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+                                    type="button"
+                                    onClick={runFromMenu(() => setIsConfirmingDelete(true))}
+                                    className={clsx(menuItem, 'mt-1 border-t border-hair text-neg')}
                                 >
-                                    <Play size={16} /> {t.reopenEvent}
+                                    <Trash2 size={19} aria-hidden="true" />
+                                    {t.deleteEvent}
                                 </button>
                             )}
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        </m.div>
+                    </>
+                )}
+            </AnimatePresence>
 
             <ConfirmDialog
                 isOpen={isConfirmingDelete}
@@ -278,6 +204,6 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                     onBack();
                 }}
             />
-        </div >
+        </div>
     );
 };

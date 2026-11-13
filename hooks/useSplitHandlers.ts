@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { withAccountTeam } from '../domain/teams';
 import type { Dispatch, SetStateAction } from 'react';
 import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
@@ -152,7 +153,8 @@ export function useSplitHandlers({
   }, [addToast, closeSplitModal, createId, selectedTransaction, setSelectedTransaction, setState, state.categories, state.rates]);
 
   const handleUnifiedSplit = useCallback(async (result: UnifiedSplitResult) => {
-    for (const transaction of result.transactions) {
+    for (const splitTransaction of result.transactions) {
+      const transaction = withAccountTeam(splitTransaction, state.accounts);
       setState(prev => {
         const existingIndex = prev.transactions.findIndex(entry => entry.id === transaction.id);
         if (existingIndex !== -1) {
@@ -188,7 +190,7 @@ export function useSplitHandlers({
     addToast(wasEditing ? getTranslations().splitExpenseUpdated : getTranslations().splitExpenseAdded, 'success');
     closeSplitExpenseModal();
     setSplitTransactionContext(undefined);
-  }, [addToast, closeSplitExpenseModal, setSplitTransactionContext, setState, state.people, state.transactions, syncPersonBalanceUpdates]);
+  }, [addToast, closeSplitExpenseModal, setSplitTransactionContext, setState, state.accounts, state.people, state.transactions, syncPersonBalanceUpdates]);
 
   return {
     handleSplitTransaction,

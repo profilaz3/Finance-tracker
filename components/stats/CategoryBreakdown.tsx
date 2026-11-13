@@ -8,7 +8,10 @@ import { getExpensePrincipal, isCountedExpense } from '../../domain/money';
 import {
   CategoryTimeFrame,
   ChartColors,
-  ToggleButton,
+  CHART_CARD,
+  ChartEmpty,
+  ChartHead,
+  ChartToggle,
   VolatilityDataItem,
   getCutoffDate,
   getMonthKey,
@@ -16,6 +19,8 @@ import {
 } from './types';
 import { DonutChart, HorizontalBarChart } from './lightCharts';
 import { formatPercent } from '../../utils/locale';
+import { CategoryGlyph } from '../ui/CategoryGlyph';
+import { money } from '../home/parts';
 
 interface CategoryBreakdownProps {
   transactions: Transaction[];
@@ -45,6 +50,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
   onCategoryTimeFrameChange,
 }) => {
   const t = TRANSLATIONS[language];
+  const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
 
   const categoryData = useMemo(() => {
     const cutoff = getCutoffDate(categoryTimeFrame, now);
@@ -129,62 +135,57 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
+        className={CHART_CARD}
       >
-        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-          <h3 className="text-lg font-medium text-on-surface">{t.categoryBreakdown}</h3>
-          <div className="bg-surface-container rounded-full p-1 flex gap-1">
-            {(['weekly', 'monthly', 'yearly'] as const).map((timeFrame) => (
-              <ToggleButton
-                key={timeFrame}
-                active={categoryTimeFrame === timeFrame}
-                onClick={() => onCategoryTimeFrameChange(timeFrame)}
-                label={t[timeFrame]}
-              />
-            ))}
-          </div>
-        </div>
+        <ChartHead title={t.categoryBreakdown}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={categoryTimeFrame}
+            onChange={onCategoryTimeFrameChange}
+            options={(['weekly', 'monthly', 'yearly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
           <DonutChart
             rows={categoryData.map((item) => ({ label: item.name, value: item.value, color: item.color }))}
             centerLabel={
               categoryData.length > 0 ? (
                 <div className="text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">{t.total}</p>
-                  <p className="text-lg sm:text-xl font-display font-semibold text-on-surface">
-                    {formatCurrency(categoryTotal, baseCurrency)}
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t.total}</p>
+                  <p className="text-[18px] font-bold tabular-nums tracking-[-0.3px] sm:text-xl">
+                    {money(categoryTotal, baseCurrency, language)}
                   </p>
                 </div>
               ) : null
             }
           />
           <div className="w-full md:pl-4">
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {categoryData.map((item) => {
                 const percent = categoryTotal > 0 ? (item.value / categoryTotal) * 100 : 0;
                 return (
-                  <div key={item.id} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-on-surface truncate max-w-[160px]">{item.name}</span>
+                  <div key={item.id} className="flex items-center gap-3">
+                    <CategoryGlyph category={categoryById.get(item.id) ?? { name: item.name, color: item.color }} size={36} />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate text-[15px] font-semibold">{item.name}</span>
+                        <span className="flex-none text-[14px] font-semibold tabular-nums">{money(item.value, baseCurrency, language)}</span>
                       </div>
-                      <span className="font-mono text-xs text-on-surface-variant">{formatCurrency(item.value, baseCurrency)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 flex-1 rounded-full bg-surface-container-high">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${percent}%`, minWidth: percent > 0 ? '6px' : '0px', backgroundColor: item.color }}
-                        />
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-chip">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${percent}%`, minWidth: percent > 0 ? '6px' : '0px', backgroundColor: item.color }}
+                          />
+                        </div>
+                        <span className="w-11 text-right text-[12px] tabular-nums text-faint">{formatPercent(percent)}</span>
                       </div>
-                      <span className="text-[11px] text-on-surface-variant w-10 text-right">{formatPercent(percent)}</span>
                     </div>
                   </div>
                 );
               })}
               {categoryData.length === 0 ? (
-                <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
+                <ChartEmpty>{t.noData}</ChartEmpty>
               ) : null}
             </div>
           </div>
@@ -195,11 +196,9 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1"
+        className={CHART_CARD}
       >
-        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-          <h3 className="text-lg font-medium text-on-surface">{t.categoryVolatility}</h3>
-        </div>
+        <ChartHead title={t.categoryVolatility} />
         {volatilityData.length > 0 ? (
           <HorizontalBarChart
             rows={volatilityData.map((item) => ({
@@ -208,10 +207,10 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
               value: item.value,
               color: item.color,
             }))}
-            valueFormatter={(value) => formatCurrency(value, baseCurrency)}
+            valueFormatter={(value) => money(value, baseCurrency, language)}
           />
         ) : (
-          <p className="text-on-surface-variant text-center italic mt-10">{t.noData}</p>
+          <ChartEmpty>{t.noData}</ChartEmpty>
         )}
       </m.div>
     </>
@@ -284,41 +283,28 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4 }}
-      className="bg-surface-container-low p-6 rounded-xl shadow-elevation-1 lg:col-span-2"
+      className={`${CHART_CARD} lg:col-span-2`}
     >
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <div>
-          <h3 className="text-lg font-medium text-on-surface">
-            {t.paidForOthers}
-          </h3>
-          <p className="text-sm text-on-surface-variant mt-1">
-            {t.totalLabel} {formatCurrency(paidForOthersData.total, baseCurrency)}
-          </p>
-        </div>
-        <div className="bg-surface-container rounded-full p-1 flex gap-1">
-          {(['weekly', 'monthly', 'yearly'] as const).map((timeFrame) => (
-            <ToggleButton
-              key={timeFrame}
-              active={categoryTimeFrame === timeFrame}
-              onClick={() => onCategoryTimeFrameChange(timeFrame)}
-              label={t[timeFrame]}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="space-y-3">
+      <ChartHead title={t.paidForOthers} subtitle={`${t.totalLabel} ${formatCurrency(paidForOthersData.total, baseCurrency)}`}>
+          <ChartToggle
+            ariaLabel={t.timePeriod}
+            value={categoryTimeFrame}
+            onChange={onCategoryTimeFrameChange}
+            options={(['weekly', 'monthly', 'yearly'] as const).map(timeFrame => ({ value: timeFrame, label: t[timeFrame] }))}
+          />
+        </ChartHead>
+      <div className="space-y-3.5">
         {paidForOthersData.data.map((item, index) => {
           const percentage = paidForOthersData.total > 0 ? (item.value / paidForOthersData.total) * 100 : 0;
           return (
-            <div key={item.id} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-on-surface">{item.name}</span>
-                </div>
-                <span className="font-mono font-medium text-on-surface-variant">{formatCurrency(item.value, baseCurrency)}</span>
+            <div key={item.id} className="flex items-center gap-3">
+              <CategoryGlyph category={categories.find(category => category.id === item.id) ?? { name: item.name, color: item.color }} size={36} />
+              <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="min-w-0 truncate text-[15px] font-semibold">{item.name}</span>
+                <span className="flex-none text-[14px] font-semibold tabular-nums">{money(item.value, baseCurrency, language)}</span>
               </div>
-              <div className="h-2 bg-surface-container rounded-full overflow-hidden">
+              <div className="h-1.5 overflow-hidden rounded-full bg-chip">
                 <m.div
                   initial={{ width: 0 }}
                   animate={{ width: `${percentage}%` }}
@@ -326,6 +312,7 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
                   className="h-full rounded-full"
                   style={{ backgroundColor: item.color }}
                 />
+              </div>
               </div>
             </div>
           );
