@@ -216,7 +216,6 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                 return (
                                     <m.div
                                         key={recurring.id}
-                                        layout
                                         className={clsx(
                                             "bg-surface-container-low p-4 rounded-xl flex items-center gap-4",
                                             !recurring.isActive && "opacity-50"

@@ -185,7 +185,6 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         return (
                             <m.div
                                 key={person.id}
-                                layout
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 whileHover={{ scale: 1.02 }}
