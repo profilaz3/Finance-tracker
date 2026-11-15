@@ -1,7 +1,7 @@
 import React from 'react';
 import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction, Event } from '../../types';
 import { isTransferTransaction } from '../../domain/money';
-import { formatDate } from '../../utils/locale';
+import { formatDate, getAppLanguage, getIntlLocale, type AppLanguage } from '../../utils/locale';
 import { Segmented } from '../ui/Segmented';
 
 // ─── Public Props (same API as original Stats component) ────────────────────
@@ -138,11 +138,22 @@ export const buildAxisProps = (chartColors: ChartColors) => ({
 
 export const isTransfer = (tx: Transaction) => isTransferTransaction(tx);
 
-export const formatCompactNumber = (value: number) => {
+/** Axis ticks: "266.8K" in English, "266,8 hilj." in Serbian (Intl compact, app language). */
+export const formatCompactNumber = (value: number, language: AppLanguage = getAppLanguage()) => {
   const abs = Math.abs(value);
-  if (abs >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return value.toFixed(0);
+  try {
+    return new Intl.NumberFormat(getIntlLocale(language), {
+      notation: abs >= 1000 ? 'compact' : 'standard',
+      maximumFractionDigits: abs >= 1000 ? 1 : 0,
+    }).format(value);
+  } catch {
+    return abs >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0);
+  }
 };
+
+/** "Q4 '26" in English, "4. kv. '26" in Serbian. */
+export const formatQuarterShort = (year: number | string, quarter: number | string, language: AppLanguage = getAppLanguage()) =>
+  language === 'sr' ? `${quarter}. kv. '${String(year).slice(2)}` : `Q${quarter} '${String(year).slice(2)}`;
 
 // Buckets follow the user's local calendar (a purchase at 00:30 on the 1st
 // belongs to the new month even if it is still the previous month in UTC).
@@ -207,9 +218,20 @@ const parseLocalKey = (dateKey: string) => {
 
 export const formatLabel = (dateKey: string, tf: string, language: 'en' | 'sr') => {
   if (tf === 'daily') return formatDate(parseLocalKey(dateKey), { month: 'short', day: 'numeric' }, language);
-  if (tf === 'weekly') return dateKey; // Keep Wxx format or improve
+  if (tf === 'weekly') {
+    // "2026-W32" reads as the Monday that starts the ISO week ("Aug 3").
+    const match = /^(\d{4})-W(\d{1,2})$/.exec(dateKey);
+    if (!match) return dateKey;
+    const jan4 = new Date(Date.UTC(Number(match[1]), 0, 4));
+    const monday = new Date(jan4);
+    monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() || 7) - 1) + (Number(match[2]) - 1) * 7);
+    return formatDate(new Date(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate()), { month: 'short', day: 'numeric' }, language);
+  }
   if (tf === 'monthly') return formatDate(parseLocalKey(dateKey), { month: 'short', year: '2-digit' }, language);
-  if (tf === 'quarterly') return dateKey;
+  if (tf === 'quarterly') {
+    const match = /^(\d{4})-Q([1-4])$/.exec(dateKey);
+    return match ? formatQuarterShort(match[1], match[2], language) : dateKey;
+  }
   if (tf === 'yearly') return dateKey;
   return dateKey;
 };

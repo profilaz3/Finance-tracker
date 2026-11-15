@@ -5,6 +5,7 @@ import type { Currency, Person } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { formatMoney } from '../../utils/locale';
 import { Avatar } from '../home/parts';
+import { stableColor } from '../../utils/stableColor';
 import { isVoiceRecordingSupported, useVoiceRecorder, type VoiceRecording } from '../../hooks/useVoiceRecorder';
 import { isAIAvailable } from '../../services/aiService';
 import { assignReceiptSplit, transcribeInstruction, type SplitAiFailure } from '../../services/splitAssignService';
@@ -124,7 +125,7 @@ export const SplitAssign: React.FC<SplitAssignProps> = ({
     if (id === SELF_ID) return { name: t.me, color: selfProfile?.color || 'rgb(var(--accent-rgb))', image: selfProfile?.avatar };
     if (id.startsWith(NEW_PERSON_PREFIX)) return { name: id.slice(NEW_PERSON_PREFIX.length), color: 'var(--paper-muted)', pending: true };
     const person = personById.get(id);
-    return { name: person?.name ?? '?', color: person?.color ?? '#888', image: person?.avatar };
+    return { name: person?.name ?? '?', color: person?.color || stableColor(person?.name ?? '?'), image: person?.avatar };
   };
 
   const notOnSplit = people.filter(person => !roster.includes(person.id));

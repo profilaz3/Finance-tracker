@@ -97,32 +97,6 @@ export interface SupabaseTeamRow {
 
 const VALID_CURRENCIES: Currency[] = ['EUR', 'USD', 'RSD'];
 const VALID_LANGUAGES: AppState['language'][] = ['en', 'sr'];
-const VALID_THEMES: AppState['theme'][] = [
-    'neon',
-    'racing-orange',
-    'graphite',
-    'coffee',
-    'gilded',
-    'crimson-red',
-    'lime-dark',
-    'sterling',
-    'canyon',
-    'cyberpunk-pink',
-    'harbor',
-    'galaxy',
-    'evergreen',
-    'linen',
-    'mist',
-    'light'
-];
-
-const LEGACY_THEME_MAP: Record<string, AppState['theme']> = {
-    'oled': 'graphite',
-    'royal-purple': 'galaxy',
-    'emerald-light': 'evergreen',
-    'monochrome-light': 'mist'
-};
-
 const VALID_TEAM_ROLES: TeamRole[] = ['owner', 'admin', 'member'];
 
 /** Spread into a mapped entity: adds `teamId` only for team rows, so personal rows keep their shape. */
@@ -140,12 +114,6 @@ const normalizeCurrency = (currency?: string, fallback: Currency = 'RSD'): Curre
 
 const normalizeLanguage = (language?: string): AppState['language'] =>
     VALID_LANGUAGES.includes(language as AppState['language']) ? (language as AppState['language']) : 'en';
-
-const normalizeTheme = (theme?: string, fallback: AppState['theme'] = 'lime-dark'): AppState['theme'] => {
-    if (!theme) return fallback;
-    const mappedTheme = LEGACY_THEME_MAP[theme] ?? theme;
-    return VALID_THEMES.includes(mappedTheme as AppState['theme']) ? (mappedTheme as AppState['theme']) : 'neon';
-};
 
 export function mapTransactionRow(row: SupabaseTransactionRow): Transaction {
     return {
@@ -255,7 +223,7 @@ export function mapTeamRow(row: SupabaseTeamRow): Team {
 export function mapSettingsRow(
     row: SupabaseSettingsRow | null | undefined,
     userId: string
-): Pick<AppState, 'baseCurrency' | 'theme' | 'language' | 'userProfile' | 'appearance' | 'homeLayout' | 'budget' | 'paymentDetails'> {
+): Pick<AppState, 'baseCurrency' | 'language' | 'userProfile' | 'appearance' | 'homeLayout' | 'homeHeader' | 'budget' | 'teamBudgets' | 'paymentDetails'> {
     const rawUserProfile = row?.user_profile;
     const userProfile: Person | undefined = rawUserProfile ? {
         id: normalizeUserProfileId(rawUserProfile.id, userId) ?? userId,
@@ -268,7 +236,6 @@ export function mapSettingsRow(
 
     return {
         baseCurrency: normalizeCurrency(row?.base_currency),
-        theme: normalizeTheme(row?.theme),
         language: normalizeLanguage(row?.language),
         userProfile,
         ...parseSettingsPrefs(row?.prefs)

@@ -185,25 +185,46 @@ describe('build contracts', () => {
   it('checks in a browser regression for transaction create, edit, and delete flow', () => {
     const packageJson = readFileSync('package.json', 'utf8');
     const script = readFileSync('scripts/transaction-crud-regression.mjs', 'utf8');
-    const fab = readFileSync('components/transactions/TransactionsFab.tsx', 'utf8');
+    const app = readFileSync('App.tsx', 'utf8');
+    const navigation = readFileSync('components/app/AppNavigation.tsx', 'utf8');
+    const addSheet = readFileSync('components/app/AddMenu.tsx', 'utf8');
+    const transactionItem = readFileSync('components/TransactionItem.tsx', 'utf8');
 
     expect(packageJson).toContain('"test:transaction-crud-regression": "node scripts/transaction-crud-regression.mjs"');
     expect(script).toContain("import { chromium } from 'playwright'");
     expect(script).toContain('TRANSACTION_REGRESSION_EMAIL');
     expect(script).toContain('TRANSACTION_REGRESSION_PASSWORD');
     expect(script).toContain('transaction-crud-regression-success.png');
-    expect(script).toContain("getByRole('button', { name: /open transaction actions|otvori akcije transakcija/i })");
-    expect(script).toContain('button[aria-label="Add a transaction"], button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]');
-    expect(script).toContain("getByRole('heading', { name: /new transaction|add transaction|add a transaction|nova transakcija|dodaj transakciju/i })");
+    // Create: "Add entry" -> New entry sheet -> Expense tile -> transaction form (no delete action).
+    expect(script).toContain("getByRole('button', { name: /^add entry$|^dodaj unos$/i })");
+    expect(script).toContain("getByRole('dialog', { name: /^new entry$|^novi unos$/i })");
+    expect(script).toContain("getByRole('button', { name: /^expense\\b|^trošak\\b/i })");
+    // The form's title names the kind it adds.
+    expect(script).toContain("getByRole('heading', { name: /^new expense$|^novi trošak$/i })");
+    expect(TRANSLATIONS.en.newExpense).toBe('New expense');
+    expect(TRANSLATIONS.sr.newExpense).toBe('Novi trošak');
     expect(script).toContain('New transaction modal exposed delete action.');
-    expect(script).toContain("getByRole('menuitem', { name: /^edit$|^izmeni$/i })");
-    expect(script).toContain("getByRole('menuitem', { name: /^delete$|^obrisi$|^obriši$/i })");
-    expect(fab).toContain('aria-label={TRANSLATIONS[language].openTransactionActions}');
-    expect(fab).toContain('aria-label={TRANSLATIONS[language].addTransaction}');
-    expect(TRANSLATIONS.en.openTransactionActions).toBe('Open transaction actions');
-    expect(TRANSLATIONS.sr.openTransactionActions).toBe('Otvori akcije transakcija');
-    expect(TRANSLATIONS.en.addTransaction).toBe('Add a transaction');
-    expect(TRANSLATIONS.sr.addTransaction).toBe('Dodaj transakciju');
+    // Edit: tapping the row opens the edit modal. Delete: the row's "More actions" menu.
+    expect(script).toContain("getByRole('heading', { name: /^edit expense$|^izmeni trošak$/i })");
+    expect(TRANSLATIONS.en.editExpense).toBe('Edit expense');
+    expect(TRANSLATIONS.sr.editExpense).toBe('Izmeni trošak');
+    expect(script).toContain("getByRole('button', { name: /^more actions$|^više opcija$/i })");
+    expect(script).toContain('const deleteLabel = /^delete$|^obrisi$|^obriši$/i;');
+    expect(script).toContain("getByRole('menuitem', { name: deleteLabel })");
+    expect(app).toContain('add: t.addEntry');
+    expect(navigation).toContain('aria-label={labels.add}');
+    expect(addSheet).toContain('<h2 id={titleId} className="sr-only">{t.newEntry}</h2>');
+    expect(addSheet).toContain('label: t.expenseType');
+    expect(transactionItem).toContain('data-transaction-row');
+    expect(transactionItem).toContain('aria-label={t.moreActions}');
+    expect(TRANSLATIONS.en.addEntry).toBe('Add entry');
+    expect(TRANSLATIONS.sr.addEntry).toBe('Dodaj unos');
+    expect(TRANSLATIONS.en.newEntry).toBe('New entry');
+    expect(TRANSLATIONS.sr.newEntry).toBe('Novi unos');
+    expect(TRANSLATIONS.en.expenseType).toBe('Expense');
+    expect(TRANSLATIONS.sr.expenseType).toBe('Trošak');
+    expect(TRANSLATIONS.en.moreActions).toBe('More actions');
+    expect(TRANSLATIONS.sr.moreActions).toBe('Više opcija');
   });
 
   it('checks in a browser regression for account edit flow in wallet settings', () => {
@@ -214,9 +235,23 @@ describe('build contracts', () => {
     expect(script).toContain("import { chromium } from 'playwright'");
     expect(script).toContain('ACCOUNT_EDIT_REGRESSION_EMAIL');
     expect(script).toContain('ACCOUNT_EDIT_REGRESSION_PASSWORD');
+    const accountItem = readFileSync('components/AccountItem.tsx', 'utf8');
+    const balanceInput = readFileSync('components/BalanceInput.tsx', 'utf8');
+
     expect(script).toContain('account-edit-regression-success.png');
-    expect(script).toContain("/settings|podešavanja|podesavanja/i");
-    expect(script).toContain("/wallets|nov/i");
+    expect(script).toContain("/^settings$|^podešavanja$/i");
+    expect(script).toContain("/^wallets\\b|^novčanici\\b/i");
+    // The balance is a labelled button that opens a decimal text editor ("1.500,50" or "1500.50").
+    expect(script).toContain("/^edit balance:|^izmeni stanje:/i");
+    expect(script).toContain("/^current balance$|^trenutno stanje$/i");
+    expect(script).toContain('formatWithDecimalComma');
+    expect(accountItem).toContain('aria-label={`${t.editBalance}: ${account.name}, ');
+    expect(accountItem).toContain('label={t.currentBalance}');
+    expect(balanceInput).toContain('inputMode="decimal"');
+    expect(TRANSLATIONS.en.editBalance).toBe('Edit balance');
+    expect(TRANSLATIONS.sr.editBalance).toBe('Izmeni stanje');
+    expect(TRANSLATIONS.en.currentBalance).toBe('Current balance');
+    expect(TRANSLATIONS.sr.currentBalance).toBe('Trenutno stanje');
   });
 
   it('checks in a bundle snapshot script so chunk sizes are easy to inspect without opening the visualizer blob', () => {
@@ -239,8 +274,8 @@ describe('build contracts', () => {
     expect(packageJson).toContain('"bundle:budget": "node scripts/bundle-budget.mjs"');
     expect(script).toContain("console.error('Bundle budget failed')");
     expect(script).toContain("console.log('Bundle budget passed')");
-    expect(script).toContain("{ label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false }");
-    expect(script).toContain("{ label: 'startup-js', prefix: null, maxBytes: 520 * 1024, aggregate: false }");
+    expect(script).toContain("{ label: 'entry-chunk', prefix: 'index-', maxBytes: 202 * 1024, aggregate: false }");
+    expect(script).toContain("{ label: 'startup-js', prefix: null, maxBytes: 522 * 1024, aggregate: false }");
     expect(script).toContain("{ label: 'react', prefix: 'react-', maxBytes: 224 * 1024, aggregate: false }");
     expect(script).toContain("const startupAssetNames = [");
     expect(script).toContain("indexHtml.matchAll(/<script[^>]+type=\"module\"");
@@ -333,7 +368,7 @@ describe('build contracts', () => {
   it('checks in a browser regression for dashboard wallet and debt summary rendering', () => {
     const packageJson = readFileSync('package.json', 'utf8');
     const script = readFileSync('scripts/dashboard-summary-regression.mjs', 'utf8');
-    const dashboardView = readFileSync('components/DashboardView.tsx', 'utf8');
+    const homeBlocks = readFileSync('components/home/blocks.tsx', 'utf8');
     const peopleView = readFileSync('components/PeopleView.tsx', 'utf8');
 
     expect(packageJson).toContain('"test:dashboard-summary-regression": "node scripts/dashboard-summary-regression.mjs"');
@@ -341,12 +376,21 @@ describe('build contracts', () => {
     expect(script).toContain('DASHBOARD_SUMMARY_REGRESSION_EMAIL');
     expect(script).toContain('DASHBOARD_SUMMARY_REGRESSION_PASSWORD');
     expect(script).toContain('dashboard-summary-regression-success.png');
-    expect(script).toContain('Total Net Worth');
-    expect(script).toContain('Owes You');
-    expect(script).toContain('You Owe');
-    expect(dashboardView).toContain('getDashboardWalletSummaries');
-    expect(dashboardView).toContain('getActiveDashboardPeople');
-    expect(peopleView).toContain('calculateDashboardDebtSummary');
+    // Home (the old Dashboard): Net worth tile, Wallets tile in two or more currencies,
+    // People tile net balance, then each person's open balance in People.
+    expect(script).toContain('const netWorthLabel = /^net worth|^neto vrednost/i;');
+    expect(script).toContain("getByRole('heading', { name: /^wallets$|^novčanici$/i, level: 3 })");
+    expect(script).toContain('const debtLabel = /owes you|you owe|duguje ti|duguješ/i;');
+    expect(script).toContain('Expected people debt cards to show open balances');
+    expect(homeBlocks).toContain('<BlockHead title={t.block_wallets} right={money(total, currency, language)}');
+    expect(homeBlocks).toContain('{net >= 0 ? t.owesYou : t.youOwe}');
+    // People cards say who owes whom next to each amount; the totals use the same sums as Home.
+    expect(peopleView).toContain('const status = !first ? t.settled : owesYou ? t.owesYou : s.youOweThem;');
+    expect(peopleView).toContain('debtTotals(lines, baseCurrency, rates)');
+    expect(TRANSLATIONS.en.block_networth).toBe('Net worth');
+    expect(TRANSLATIONS.en.block_wallets).toBe('Wallets');
+    expect(TRANSLATIONS.en.owesYou).toBe('Owes you');
+    expect(TRANSLATIONS.en.youOwe).toBe('You owe');
   });
 
   it('checks in a GitHub Actions workflow that runs verify always and browser regressions against a local Supabase', () => {

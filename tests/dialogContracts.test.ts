@@ -9,7 +9,7 @@ const DIALOG_COMPONENTS = [
   'components/ExportModal.tsx',
   'components/ImagePickerSheet.tsx',
   'components/PersonDetail.tsx',
-  'components/ReceiptModal.tsx',
+  'components/transaction-details/TransactionDetailsSheet.tsx',
   'components/ReceiptScanModal.tsx',
   'components/ShareEventModal.tsx',
   'components/SharedExpenseModal.tsx',

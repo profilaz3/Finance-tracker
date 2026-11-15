@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import type { AppState } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { CleanupSheet } from './CleanupSheet';
+import { IconTile } from '../ui/IconTile';
 
 type ToastFn = (message: string, type: 'success' | 'error' | 'info' | 'warning', action?: { label: string; onClick: () => void }) => void;
 
@@ -20,13 +21,7 @@ export const CleanupCard: React.FC<CleanupCardProps> = ({ state, setState, onToa
     <>
       <section className="paper-tile flex flex-col gap-3 p-4">
         <div className="flex items-start gap-3">
-          <span
-            aria-hidden="true"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px]"
-            style={{ background: 'color-mix(in oklab, #7C3AED 16%, var(--paper-tile))', color: 'color-mix(in oklab, #7C3AED 72%, var(--paper-text))' }}
-          >
-            <Sparkles size={20} />
-          </span>
+          <IconTile icon={Sparkles} color="#7C3AED" size={40} />
           <div className="min-w-0 flex-1">
             <h3 className="text-[16px] font-bold">{t.cleanupTitle}</h3>
             <p className="text-[13px] leading-snug text-muted">{t.cleanupIntro}</p>

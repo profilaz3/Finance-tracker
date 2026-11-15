@@ -5,11 +5,12 @@ import type { AppState, PaymentDetails } from '../../types';
 import { formatAccountNumber } from '../../utils/ipsQr';
 import { PaymentDetailsForm } from '../payments/PaymentDetailsForm';
 import { openPaymentRequest } from '../payments/paymentBus';
+import { IconTile } from '../ui/IconTile';
 
 interface PaymentSettingsProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
-  onToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info', action?: { label: string; onClick: () => void }) => void;
 }
 
 /** Settings > Payment details: the account friends pay back to through an IPS QR code. */
@@ -25,12 +26,25 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ state, setStat
     onToast?.(next ? t.paySaved : t.payRemoved, 'success');
   };
 
+  // Removing is one tap, so it can be undone from the toast (settings sync picks up the restore).
+  const remove = () => {
+    const previous = details;
+    if (!previous) return;
+    setState(prev => ({ ...prev, paymentDetails: null }));
+    setFormKey(key => key + 1);
+    onToast?.(t.payRemoved, 'info', {
+      label: t.undo,
+      onClick: () => {
+        setState(prev => (prev.paymentDetails ? prev : { ...prev, paymentDetails: previous }));
+        setFormKey(key => key + 1);
+      },
+    });
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="paper-tile flex items-start gap-3 p-4">
-        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-accent-soft text-accent">
-          <QrCode size={20} />
-        </span>
+        <IconTile icon={QrCode} size={40} color="#16A34A" />
         <p className="min-w-0 flex-1 text-[14px] leading-snug text-muted">{t.payIntro}</p>
       </div>
 
@@ -41,7 +55,7 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ state, setStat
           defaultName={state.userProfile?.name}
           language={state.language}
           onSave={save}
-          onRemove={details ? () => save(null) : undefined}
+          onRemove={details ? remove : undefined}
         />
       </div>
 

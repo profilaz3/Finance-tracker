@@ -1,7 +1,10 @@
 import React from 'react';
-import { AlertCircle, X } from 'lucide-react';
+import { Copy, X } from 'lucide-react';
 import type { DuplicateTransactionGroup } from '../../utils/qolSuggestions';
 import { TRANSLATIONS } from '../../constants';
+import { pluralForm } from '../../utils/plural';
+import { fill } from '../home/parts';
+import { ACTIVITY_STRINGS } from './activityStrings';
 
 interface DuplicateHintBannerProps {
   language: 'en' | 'sr';
@@ -10,6 +13,7 @@ interface DuplicateHintBannerProps {
   onDismissGroup: (groupId: string) => void;
 }
 
+/** One quiet line: how many sets of entries look alike, Review selects the first set, X hides it. */
 export const DuplicateHintBanner: React.FC<DuplicateHintBannerProps> = ({
   language,
   groups,
@@ -21,37 +25,31 @@ export const DuplicateHintBanner: React.FC<DuplicateHintBannerProps> = ({
     return null;
   }
 
-  const extraCount = groups.length - 1;
   const t = TRANSLATIONS[language];
-  const labels = {
-    title: t.possibleDuplicates,
-    description: `${t.similarTransactionsFound.replace('{count}', String(group.transactions.length))}${extraCount > 0 ? (extraCount === 1 ? t.plusMoreGroup : t.plusMoreGroups).replace('{count}', String(extraCount)) : ''}.`,
-    review: t.review,
-    dismiss: t.dismiss,
-  };
+  const s = ACTIVITY_STRINGS[language];
+  const form = pluralForm(groups.length, language);
+  const title = fill(form === 'one' ? s.dupOne : form === 'few' ? s.dupFew : s.dupMany, { count: groups.length });
+  const detail = t.similarTransactionsFound.replace('{count}', String(group.transactions.length));
 
   return (
-    <div className="mb-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 flex items-center gap-3">
-      <AlertCircle size={18} className="text-warning shrink-0" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-on-surface">{labels.title}</p>
-        <p className="text-xs text-on-surface-variant">{labels.description}</p>
-      </div>
+    <div className="mt-3 flex min-h-12 items-center gap-2 rounded-[18px] bg-chip pl-3.5 pr-1">
+      <Copy size={18} className="shrink-0 text-muted" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold" title={detail}>{title}</span>
       <button
         type="button"
         onClick={() => onReviewGroup(group)}
-        className="px-3 py-1.5 rounded-lg bg-warning text-on-warning text-xs font-medium"
+        className="h-10 shrink-0 rounded-full px-3 text-[15px] font-semibold text-accent"
       >
-        {labels.review}
+        {t.review}
       </button>
       <button
         type="button"
         onClick={() => onDismissGroup(group.id)}
-        className="p-2 rounded-lg hover:bg-warning/15 text-on-surface-variant"
-        aria-label={labels.dismiss}
-        title={labels.dismiss}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted"
+        aria-label={`${s.hide}: ${detail}`}
+        title={s.hide}
       >
-        <X size={14} aria-hidden="true" />
+        <X size={16} aria-hidden="true" />
       </button>
     </div>
   );

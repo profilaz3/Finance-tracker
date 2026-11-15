@@ -20,31 +20,29 @@ describe('transaction modal contracts', () => {
     expect(editTransactionModal).toContain('isNewTransaction?: boolean;');
     expect(editTransactionModal).toContain('isNewTransaction = false,');
     expect(editTransactionModal).not.toContain('const isNewTransaction = !transaction;');
-    expect(editTransactionModal).toContain('{isNewTransaction ? t.addTransaction : t.editTransaction}');
+    expect(editTransactionModal).toContain('const title = isNewTransaction');
     expect(editTransactionModal).toContain('{!isNewTransaction ? (');
   });
 
-  it('uses shared number input parsers for transaction amount and optional numeric fields', () => {
+  it('reads every money field with the shared AmountInput (comma decimals), never type="number"', () => {
     const editTransactionModal = readFileSync('components/EditTransactionModal.tsx', 'utf8');
     const amountFields = readFileSync('components/transaction-modal/AmountFields.tsx', 'utf8');
     const moreOptionsFields = readFileSync('components/transaction-modal/MoreOptionsFields.tsx', 'utf8');
     const receiptFields = readFileSync('components/transaction-modal/ReceiptFields.tsx', 'utf8');
-    const modalSources = [editTransactionModal, amountFields, moreOptionsFields, receiptFields].join('\n');
+    const receiptScan = readFileSync('components/ReceiptScanModal.tsx', 'utf8');
+    const splitModal = readFileSync('components/SplitModal.tsx', 'utf8');
+    const moneySources = [editTransactionModal, amountFields, moreOptionsFields, receiptFields, receiptScan, splitModal];
 
-    expect(amountFields).toMatch(
-      /import \{[^}]*parseRequiredNumberInput[^}]*\} from ['"]\.\.\/\.\.\/utils\/numberInput['"];/
-    );
-    expect(moreOptionsFields).toMatch(
-      /import \{[^}]*parseOptionalNumberInput[^}]*\} from ['"]\.\.\/\.\.\/utils\/numberInput['"];/
-    );
-    expect(receiptFields).toMatch(
-      /import \{[^}]*parseRequiredNumberInput[^}]*\} from ['"]\.\.\/\.\.\/utils\/numberInput['"];/
-    );
-    expect(amountFields).toContain('amount: parseRequiredNumberInput(val)');
-    expect(moreOptionsFields).toContain('fees: parseOptionalNumberInput(e.target.value)');
-    expect(receiptFields).toContain('quantity: parseRequiredNumberInput(e.target.value)');
-    expect(receiptFields).toContain('price: parseRequiredNumberInput(e.target.value)');
-    expect(modalSources).not.toMatch(/\bparseFloat\s*\(/);
+    for (const source of [amountFields, moreOptionsFields, receiptFields, receiptScan, splitModal]) {
+      expect(source).toMatch(/import \{ AmountInput \} from ['"][./]+ui\/AmountInput['"];/);
+      expect(source).toContain('<AmountInput');
+    }
+    expect(amountFields).toContain('onValueChange={form.setAmount}');
+    expect(moreOptionsFields).toContain('onValueChange={form.setFees}');
+    for (const source of moneySources) {
+      expect(source).not.toContain('type="number"');
+      expect(source).not.toMatch(/\bparseFloat\s*\(/);
+    }
   });
 
   it('delegates field rendering to focused transaction-modal components', () => {

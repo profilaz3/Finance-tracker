@@ -4,11 +4,20 @@ import { Plus } from 'lucide-react';
 import type { HomeBlock, HomeBlockType } from '../../types';
 import { topCategories, parseLocalDate } from '../../domain/home';
 import { readableTextOn, squarify } from '../../domain/treemap';
-import { formatNumber, formatShortDate, formatMonthYear, getIntlLocale } from '../../utils/locale';
+import { formatNumber, formatPercent, formatShortDate, formatMediumDate, formatMonthYear, getIntlLocale } from '../../utils/locale';
+import { localizeTransactionNote } from '../../utils/systemText';
+import { iconForCategory } from '../../utils/categoryIcons';
 import type { HomeActions, HomeData } from './useHomeData';
+import { HEADER_STRINGS } from './headerStrings';
 import { openRates } from '../rates/ratesBus';
 import { RatesTrend } from '../rates/RatesTrend';
-import { Avatar, Big, BlockHead, DateChip, Empty, Label, ListRow, Ring, compactMoney, fill, fitFont, money, signedMoney } from './parts';
+import { CategoryGlyph } from '../ui/CategoryGlyph';
+import { AccountGlyph } from '../ui/AccountGlyph';
+import { CurrencyFlag, CurrencyPair } from '../ui/CurrencyFlag';
+import { Illustration, type IllustrationName } from '../ui/Illustration';
+import { Sparkline } from '../ui/Sparkline';
+import { DeltaPill, deltaTone } from '../ui/primitives';
+import { Avatar, Big, BlockHead, DateChip, Label, ListRow, Ring, compactMoney, fill, fitFont, money, rowMoney, signedMoney } from './parts';
 
 export interface BlockProps {
   block: HomeBlock;
@@ -46,6 +55,26 @@ const Tile: React.FC<{ children: React.ReactNode; className?: string; style?: Re
 
 const monthLabel = (data: HomeData) =>
   data.isCurrentMonth ? data.t.thisMonth : formatMonthYear(new Date(data.month.year, data.month.month, 1), data.language);
+
+/** "No spending this month", or "No spending in October 2025" for a past month. */
+const noSpendingLabel = (data: HomeData) =>
+  data.isCurrentMonth ? data.t.noSpendingYet : fill(data.t.noSpendingIn, { month: monthLabel(data) });
+
+/** Past months show the net worth they ended at: say so ("As of 31 Oct 2025"). */
+const netWorthAsOf = (data: HomeData): string | null =>
+  data.isCurrentMonth ? null : fill(data.t.netWorthAsOf, { date: formatMediumDate(new Date(data.month.year, data.month.month + 1, 0), data.language) });
+
+/** Empty block body: a small spot illustration beside (or above, when `stacked`) the message. */
+const EmptyArt: React.FC<{ name: IllustrationName; children: React.ReactNode; stacked?: boolean }> = ({ name, children, stacked }) => (
+  <span className={clsx('flex flex-1 items-center text-[13px] text-muted', stacked ? 'flex-col justify-center gap-1 text-center' : 'gap-3 py-1')}>
+    <Illustration name={name} className={clsx('shrink-0', stacked ? '!h-[60px] !w-[76px]' : '!h-[58px] !w-[72px]')} />
+    <span className="min-w-0">{children}</span>
+  </span>
+);
+
+/** Budget share that deserves a heads-up before it runs over. */
+const BUDGET_WARN = 0.8;
+const WARN_COLOR = '#E39B17';
 
 // ---------------------------------------------------------------- Budget
 
@@ -109,7 +138,16 @@ const BudgetBlock: React.FC<BlockProps> = ({ block, data }) => {
       <Tile>
         <div className="flex items-start justify-between">
           <Label>{t.block_budget}</Label>
-          <Ring ratio={progress.spentRatio} radius={20} stroke={7} color={over ? 'var(--paper-neg)' : undefined} />
+          <Ring
+            ratio={progress.spentRatio}
+            radius={25}
+            stroke={7}
+            color={over ? 'var(--paper-neg)' : progress.spentRatio >= BUDGET_WARN ? WARN_COLOR : undefined}
+          >
+            <span className={clsx('text-[12px] font-bold tabular-nums tracking-[-0.3px]', over && 'text-neg')}>
+              {formatPercent(Math.round(progress.spentRatio * 100), 0, language)}
+            </span>
+          </Ring>
         </div>
         <Big className={clsx('mt-auto', over && 'text-neg')}>{money(Math.abs(progress.left), currency, language)}</Big>
         <span className="text-[13px] text-muted">
@@ -148,13 +186,12 @@ const BudgetBlock: React.FC<BlockProps> = ({ block, data }) => {
         <div className="mt-2.5 flex flex-col gap-3">
           {rows.map(row => {
             const over = row.over > 0;
+            const share = row.limit > 0 ? row.spent / row.limit : 0;
             return (
-              <div key={row.categoryId} className="flex flex-col gap-[5px]">
+              <div key={row.categoryId} className="grid grid-cols-[28px_1fr] items-center gap-x-2.5 gap-y-[5px]">
+                <CategoryGlyph category={data.category(row.categoryId) ?? { name: row.name, color: row.color }} size={28} className="row-span-2" />
                 <span className="flex justify-between gap-2 text-sm">
-                  <span className="flex min-w-0 items-center gap-1.5 font-semibold">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
-                    <span className="truncate">{row.name}</span>
-                  </span>
+                  <span className="min-w-0 truncate font-semibold">{row.name}</span>
                   <span className={clsx('shrink-0', over ? 'font-bold text-neg' : 'font-medium text-muted')}>
                     {over
                       ? fill(t.amountOver, { amount: money(row.over, currency, language) })
@@ -164,7 +201,7 @@ const BudgetBlock: React.FC<BlockProps> = ({ block, data }) => {
                 <span className="block h-1.5 rounded-full bg-chip">
                   <span
                     className="block h-1.5 rounded-full"
-                    style={{ width: `${Math.min(100, (row.spent / row.limit) * 100).toFixed(0)}%`, background: over ? 'var(--paper-neg)' : row.color }}
+                    style={{ width: `${Math.min(100, share * 100).toFixed(0)}%`, background: over ? 'var(--paper-neg)' : share >= BUDGET_WARN ? WARN_COLOR : row.color }}
                   />
                 </span>
               </div>
@@ -183,6 +220,19 @@ const splitCents = (value: string): [string, string] => {
   return match ? [match[1], match[2] + match[3]] : [value, ''];
 };
 
+/** Net worth at the end of each elapsed day of the month, ending at today's (or the month-end) total. */
+export const netWorthTrend = (data: HomeData): number[] => {
+  const { summary } = data;
+  if (summary.todayIndex < 3) return [];
+  let value = data.netWorth - summary.netChange;
+  const points = [value];
+  for (let i = 0; i < summary.todayIndex; i += 1) {
+    value += summary.netByDay[i] ?? 0;
+    points.push(value);
+  }
+  return points;
+};
+
 const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
   const { t, currency, language, summary } = data;
   const change = signedMoney(summary.netChange, currency, language);
@@ -193,6 +243,7 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
       <Tile>
         <Label>{t.block_networth}</Label>
         <Big className="mt-auto" size={26}>{money(data.netWorth, currency, language)}</Big>
+        {netWorthAsOf(data) && <span className="text-[12px] text-muted">{netWorthAsOf(data)}</span>}
         <span className={clsx('text-[13px] font-semibold', summary.netChange >= 0 ? 'text-pos' : 'text-neg')}>{change}</span>
         <span className="text-[12px] text-muted">{monthLabel(data)}</span>
       </Tile>
@@ -201,11 +252,11 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
 
   const [whole, cents] = splitCents(money(data.netWorth, currency, language, true));
   const accent = block.style === 'card';
-  const stats = [
-    [t.inShort, summary.income],
-    [t.spent, summary.spent],
-    [t.leftShort, summary.left],
-  ] as const;
+  const trend = netWorthTrend(data);
+  const statValues = [summary.income, summary.spent, summary.left];
+  const statTexts = rowMoney(statValues, currency, language);
+  const stats = [t.inShort, t.spent, t.leftShort].map((label, i) => [label, statTexts[i]] as const);
+  const asOf = netWorthAsOf(data);
 
   return (
     <div
@@ -220,7 +271,10 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
           <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[30px] shadow-[inset_1px_1px_0_rgba(255,255,255,0.28),inset_0_0_0_0.5px_rgba(255,255,255,0.12)]" />
         </>
       )}
-      <span className={clsx('relative text-sm font-medium', accent ? 'opacity-80' : 'text-muted')}>{t.block_networth}</span>
+      <span className={clsx('relative text-sm font-medium', accent ? 'opacity-80' : 'text-muted')}>
+        {t.block_networth}
+        {asOf && <span className="font-normal"> · {asOf}</span>}
+      </span>
       <span className="relative mt-0.5 block min-w-0" style={{ containerType: 'inline-size' }}>
         <span className="block truncate font-bold leading-[50px] tracking-[-0.04em]" style={{ fontSize: fitFont(46, `${whole}${cents}`, 0.62) }}>
           {whole}
@@ -231,11 +285,20 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
         {change}{' '}
         <span className={clsx('font-medium', accent ? 'opacity-75' : 'text-muted')}>{monthLabel(data)}</span>
       </span>
-      <div className="relative mt-[18px] grid grid-cols-3 gap-2">
-        {stats.map(([label, value]) => (
-          <span key={label} className="flex min-w-0 flex-col gap-px">
-            <span className={clsx('text-[12px]', accent ? 'opacity-75' : 'text-muted')}>{label}</span>
-            <span className="truncate text-[17px] font-bold">{compactMoney(value, currency, language)}</span>
+      {trend.length > 0 && (
+        <Sparkline
+          values={trend}
+          height={34}
+          color={accent ? 'rgba(255,255,255,0.92)' : undefined}
+          className="relative mt-2.5"
+        />
+      )}
+      <div className={clsx('relative grid grid-cols-3 gap-2', trend.length > 0 ? 'mt-3' : 'mt-[18px]')}>
+        {stats.map(([label, text]) => (
+          <span key={label} className="flex min-w-0 flex-col gap-px" style={{ containerType: 'inline-size' }}>
+            <span className={clsx('truncate text-[12px]', accent ? 'opacity-75' : 'text-muted')}>{label}</span>
+            {/* Shrinks to fit instead of cutting the figure off. */}
+            <span className="whitespace-nowrap font-bold leading-[22px]" style={{ fontSize: fitFont(17, text, 0.62) }}>{text}</span>
           </span>
         ))}
       </div>
@@ -275,6 +338,8 @@ const Treemap: React.FC<{ data: HomeData; height: number; max: number }> = ({ da
         const color = readableTextOn(entry.color);
         const showLabel = rect.w > 52 && rect.h > 34;
         const showAmount = rect.w > 52 && rect.h > 52;
+        const showIcon = rect.w > 64 && rect.h > 74;
+        const Icon = showIcon ? iconForCategory(data.category(entry.categoryId) ?? entry) : null;
         return (
           <div
             key={entry.categoryId}
@@ -289,7 +354,12 @@ const Treemap: React.FC<{ data: HomeData; height: number; max: number }> = ({ da
             }}
           >
             <div className="flex h-full w-full flex-col justify-between overflow-hidden rounded-[10px] p-2" style={{ background: entry.color, color }}>
-              {showLabel && <span className="truncate text-[13px] font-semibold leading-4">{entry.name}</span>}
+              {showLabel && (
+                <span className="flex min-w-0 flex-col gap-1">
+                  {Icon && <Icon size={16} strokeWidth={2.2} aria-hidden="true" className="shrink-0 opacity-90" />}
+                  <span className="truncate text-[13px] font-semibold leading-4">{entry.name}</span>
+                </span>
+              )}
               {showAmount && (
                 <span className="truncate text-[12px] font-medium leading-4 opacity-85">
                   {money(entry.amount, data.currency, data.language)} · {formatNumber(Math.round((entry.amount / total) * 100))}%
@@ -356,7 +426,7 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
             </span>
           </>
         ) : (
-          <span className="mt-auto text-[13px] text-muted">{t.noSpendingYet}</span>
+          <span className="mt-auto text-[13px] text-muted">{noSpendingLabel(data)}</span>
         )}
       </Tile>
     );
@@ -367,7 +437,38 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
     return (
       <Tile>
         <BlockHead title={t.block_categories} />
-        <Empty>{t.noSpendingYet}</Empty>
+        <EmptyArt name="chart">{noSpendingLabel(data)}</EmptyArt>
+      </Tile>
+    );
+  }
+
+  // A treemap or bar chart of one or two categories says little: list them with their share instead.
+  if (summary.byCategory.length < 3) {
+    return (
+      <Tile>
+        <BlockHead title={t.block_categories} right={right} className="mb-1" />
+        <div className="flex flex-col">
+          {summary.byCategory.map((entry, i) => {
+            const share = summary.spent > 0 ? entry.amount / summary.spent : 0;
+            return (
+              <span key={entry.categoryId} className={clsx('flex items-center gap-3 py-2.5', i > 0 && 'border-t border-hair')}>
+                <CategoryGlyph category={data.category(entry.categoryId) ?? entry} size={38} />
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[15px] font-semibold">{entry.name}</span>
+                    <span className="shrink-0 text-[15px] font-semibold">{money(entry.amount, currency, language)}</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="h-1.5 flex-1 rounded-full bg-chip">
+                      <span className="block h-1.5 rounded-full" style={{ width: `${(share * 100).toFixed(1)}%`, background: entry.color }} />
+                    </span>
+                    <span className="w-9 shrink-0 text-right text-[12px] font-medium tabular-nums text-muted">{formatPercent(Math.round(share * 100), 0, language)}</span>
+                  </span>
+                </span>
+              </span>
+            );
+          })}
+        </div>
       </Tile>
     );
   }
@@ -380,7 +481,8 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
         <BlockHead title={t.block_categories} right={right} />
         <div className="flex flex-col gap-[9px]">
           {list.map(entry => (
-            <div key={entry.categoryId} className="grid grid-cols-[84px_1fr_auto] items-center gap-2.5 text-[13px]">
+            <div key={entry.categoryId} className="grid grid-cols-[22px_76px_1fr_auto] items-center gap-2 text-[13px]">
+              <CategoryGlyph category={data.category(entry.categoryId) ?? entry} size={22} className="!rounded-[7px]" />
               <span className="truncate font-medium text-muted">{entry.name}</span>
               <span className="h-3.5 rounded-full bg-chip">
                 <span className="block h-3.5 rounded-full" style={{ width: `${((entry.amount / max) * 100).toFixed(1)}%`, background: entry.color }} />
@@ -409,11 +511,24 @@ const weekdayInitials = (language: HomeData['language']): string[] => {
   return Array.from({ length: 7 }, (_, i) => formatter.format(new Date(2026, 10, 2 + i)));
 };
 
+/**
+ * Scale top for the day bars: one big purchase (rent, a laptop) should not flatten every other day.
+ * Above ~2x the 90th percentile of spending days the scale caps and the spike is marked instead.
+ */
+const dailyScale = (values: number[]): { top: number; capped: boolean } => {
+  const max = Math.max(1, ...values);
+  const spending = values.filter(value => value > 0).sort((a, b) => a - b);
+  if (spending.length < 5) return { top: max, capped: false };
+  const p90 = spending[Math.floor(0.9 * (spending.length - 1))];
+  return max > p90 * 2.2 ? { top: p90 * 1.35, capped: true } : { top: max, capped: false };
+};
+
 const DailyBlock: React.FC<BlockProps> = ({ block, data }) => {
   const { t, summary, currency, language, month } = data;
   const days = summary.byDay;
   const elapsed = summary.todayIndex;
-  const max = Math.max(1, ...days);
+  const { top: max, capped } = dailyScale(days.slice(0, Math.max(elapsed, 0)));
+  const average = elapsed > 0 ? summary.spent / elapsed : 0;
 
   if (block.style === 'week') {
     const end = Math.max(elapsed, 1);
@@ -421,16 +536,35 @@ const DailyBlock: React.FC<BlockProps> = ({ block, data }) => {
     const week = days.slice(start, end);
     const weekMax = Math.max(1, ...week);
     const last = days[end - 1] ?? 0;
+    const perDay = fill(t.perDay, { amount: money(average, currency, language) });
+    const change = average > 0 ? (last - average) / average : 0;
+    const scaleTop = Math.max(weekMax, average);
     return (
       <Tile>
         <Label>{data.isCurrentMonth ? t.today : formatShortDate(new Date(month.year, month.month, end), language)}</Label>
         <Big className="mt-1" size={26}>{money(last, currency, language)}</Big>
-        <div className="mt-auto flex h-14 items-end gap-1" aria-hidden="true">
+        {average > 0 && (
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-muted">
+            {last > 0 && (
+              <DeltaPill direction={change > 0.005 ? 'up' : change < -0.005 ? 'down' : 'flat'} tone={deltaTone(change, 'down', 0.005)}>
+                {formatPercent(Math.min(999, Math.round(Math.abs(change) * 100)), 0, language)}
+              </DeltaPill>
+            )}
+            <span className="truncate">{perDay}</span>
+          </span>
+        )}
+        <div className="relative mt-auto flex h-14 items-end gap-1" aria-hidden="true">
+          {average > 0 && (
+            <span
+              className="pointer-events-none absolute inset-x-0 border-t border-dashed border-[var(--paper-faint)]"
+              style={{ bottom: `${((average / scaleTop) * 100).toFixed(1)}%` }}
+            />
+          )}
           {week.map((value, i) => (
             <span
               key={i}
               className={clsx('flex-1 rounded-[5px]', i === week.length - 1 ? 'bg-accent' : 'bg-accent/35')}
-              style={{ height: `${Math.max(6, (value / weekMax) * 100)}%` }}
+              style={{ height: `${Math.max(6, (value / scaleTop) * 100)}%` }}
             />
           ))}
         </div>
@@ -438,7 +572,6 @@ const DailyBlock: React.FC<BlockProps> = ({ block, data }) => {
     );
   }
 
-  const average = elapsed > 0 ? summary.spent / elapsed : 0;
   const right = elapsed > 0 ? fill(t.perDay, { amount: money(average, currency, language) }) : undefined;
 
   if (block.style === 'calendar') {
@@ -485,20 +618,49 @@ const DailyBlock: React.FC<BlockProps> = ({ block, data }) => {
 
   const height = block.size === 'l' ? 260 : 120;
   const todayPosition = elapsed > 0 ? ((elapsed - 0.5) / days.length) * 100 : -1;
+  // Tallest capped day gets its real amount printed above the bar.
+  const spikeIndex = capped ? days.slice(0, elapsed).reduce((best, value, i, list) => (value > list[best] ? i : best), 0) : -1;
+  const spikeLeft = spikeIndex >= 0 ? Math.min(88, Math.max(12, ((spikeIndex + 0.5) / days.length) * 100)) : 0;
   return (
     <Tile>
       <BlockHead title={t.block_daily} right={right} />
-      <div role="img" aria-label={t.block_daily} className="flex items-end gap-[2px]" style={{ height }}>
-        {days.map((value, i) => {
-          const past = i < elapsed;
-          return (
+      <div role="img" aria-label={right ? `${t.block_daily}, ${right}` : t.block_daily} className={clsx('relative flex items-end gap-[2px]', capped && 'pt-4')} style={{ height }}>
+        {capped && (
+          <span
+            aria-hidden="true"
+            className="absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-full bg-chip px-1.5 text-[10px] font-semibold leading-[14px] text-muted"
+            style={{ left: `${spikeLeft}%` }}
+          >
+            {compactMoney(days[spikeIndex], currency, language)}
+          </span>
+        )}
+        <span className="relative flex h-full flex-1 items-end gap-[2px]">
+          {average > 0 && average < max && (
             <span
-              key={i}
-              className={clsx('min-w-0 flex-1 rounded-t-[3px] rounded-b-[1px]', past ? (i === elapsed - 1 && data.isCurrentMonth ? 'bg-on-surface' : 'bg-accent') : 'bg-chip')}
-              style={{ height: past ? `${Math.max(2, (value / max) * 100)}%` : '4%' }}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 z-[1] border-t border-dashed border-[var(--paper-faint)]"
+              style={{ bottom: `${((average / max) * 100).toFixed(1)}%` }}
             />
-          );
-        })}
+          )}
+          {days.map((value, i) => {
+            const past = i < elapsed;
+            const clipped = past && value > max;
+            return (
+              <span
+                key={i}
+                className={clsx(
+                  'relative min-w-0 flex-1 rounded-t-[3px] rounded-b-[1px]',
+                  past ? (i === elapsed - 1 && data.isCurrentMonth ? 'bg-on-surface' : 'bg-accent') : 'bg-chip',
+                )}
+                style={{ height: past ? `${Math.max(2, Math.min(1, value / max) * 100)}%` : '4%' }}
+              >
+                {clipped && (
+                  <span aria-hidden="true" className="absolute inset-x-0 top-[5px] h-[3px] -skew-y-[24deg] bg-[var(--paper-tile)]" />
+                )}
+              </span>
+            );
+          })}
+        </span>
       </div>
       <div className="relative mt-1.5 h-4 text-[11px] text-faint">
         <span className="absolute left-0">{formatShortDate(new Date(month.year, month.month, 1), language)}</span>
@@ -520,25 +682,49 @@ const WalletsBlock: React.FC<BlockProps> = ({ block, data }) => {
     return (
       <Tile>
         <BlockHead title={t.block_wallets} />
-        <Empty>{t.noWalletsYet}</Empty>
+        <EmptyArt name="wallet">{t.noWalletsYet}</EmptyArt>
       </Tile>
     );
   }
 
   if (block.style === 'cards') {
+    // Up to three share one row, four make a 2x2; more show the three biggest (in your order) and "+N more".
+    const shown = wallets.length > 4
+      ? (() => {
+        const biggest = new Set([...wallets].sort((a, b) => Math.abs(b.baseBalance) - Math.abs(a.baseBalance)).slice(0, 3));
+        return wallets.filter(wallet => biggest.has(wallet));
+      })()
+      : wallets;
+    const more = wallets.length - shown.length;
+    const tiles = shown.length + (more > 0 ? 1 : 0);
     return (
       <Tile>
         <BlockHead title={t.block_wallets} right={money(total, currency, language)} />
-        <div className="grid grid-cols-2 gap-2">
-          {wallets.slice(0, 4).map(wallet => (
-            <span key={wallet.account.id} className="flex min-w-0 flex-col gap-1 rounded-[18px] bg-chip p-3">
-              <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-muted">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: wallet.account.color }} aria-hidden="true" />
-                <span className="truncate">{wallet.account.name}</span>
+        <div className={clsx('grid gap-2', tiles === 1 ? 'grid-cols-1' : tiles === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
+          {shown.map(wallet => {
+            const own = wallet.account.currency;
+            const digits = Math.abs(wallet.balance) < 100 && own !== 'RSD' ? 2 : 0;
+            const text = `${wallet.balance < 0 ? '−' : ''}${formatNumber(Math.abs(wallet.balance), { minimumFractionDigits: digits, maximumFractionDigits: digits }, language)}`;
+            return (
+              <span key={wallet.account.id} className="flex min-w-0 flex-col rounded-[18px] bg-chip p-3" style={{ containerType: 'inline-size' }}>
+                <AccountGlyph account={wallet.account} size={28} showCurrency={false} />
+                <span className="mt-2.5 truncate text-[13px] font-medium text-muted">{wallet.account.name}</span>
+                {/* Shrinks to fit instead of cutting the figure off. */}
+                <span
+                  className={clsx('whitespace-nowrap font-bold leading-[22px] tabular-nums tracking-[-0.02em]', wallet.balance < 0 && 'text-neg')}
+                  style={{ fontSize: fitFont(17, text, 0.6) }}
+                >
+                  {text}
+                </span>
+                <span className="text-[12px] font-medium text-muted">{own}</span>
               </span>
-              <span className="truncate text-[17px] font-bold">{money(wallet.balance, wallet.account.currency, language)}</span>
+            );
+          })}
+          {more > 0 && (
+            <span className="flex min-h-[112px] items-center justify-center rounded-[18px] bg-chip p-3 text-[15px] font-semibold text-muted">
+              {fill(HEADER_STRINGS[language].walletsMore, { count: more })}
             </span>
-          ))}
+          )}
         </div>
       </Tile>
     );
@@ -552,7 +738,7 @@ const WalletsBlock: React.FC<BlockProps> = ({ block, data }) => {
         {rows.map((wallet, i) => (
           <ListRow
             key={wallet.account.id}
-            left={<Avatar name={wallet.account.name} color={wallet.account.color} size={36} />}
+            left={<AccountGlyph account={wallet.account} size={38} />}
             title={wallet.account.name}
             sub={wallet.account.currency}
             amount={money(wallet.balance, wallet.account.currency, language)}
@@ -604,7 +790,7 @@ const PeopleBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
     <Tile>
       <BlockHead title={t.block_people} className="mb-1" />
       {rows.length === 0 ? (
-        <Empty>{t.allSettled}</Empty>
+        <EmptyArt name="settled">{t.allSettled}</EmptyArt>
       ) : (
         <div>
           {rows.map((entry, i) => (
@@ -627,12 +813,26 @@ const PeopleBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
 
 // ---------------------------------------------------------------- Event
 
+/** "3–7 Nov" / "3–7. nov": a locale-formatted range instead of joining two dates with "to". */
+const eventDates = (start: string | undefined, end: string | undefined, language: HomeData['language']): string => {
+  const from = start ? parseLocalDate(start) : null;
+  const to = end ? parseLocalDate(end) : null;
+  if (!from || Number.isNaN(from.getTime())) return to && !Number.isNaN(to.getTime()) ? formatShortDate(to, language) : '';
+  if (!to || Number.isNaN(to.getTime())) return formatShortDate(from, language);
+  try {
+    return new Intl.DateTimeFormat(getIntlLocale(language), { day: 'numeric', month: 'short' }).formatRange(from, to);
+  } catch {
+    return `${formatShortDate(from, language)} – ${formatShortDate(to, language)}`;
+  }
+};
+
 const EventBlock: React.FC<BlockProps> = ({ block, data }) => {
   const { t, currency, language } = data;
   if (!data.event) {
     return (
       <Tile>
         <Label>{t.block_event}</Label>
+        <Illustration name="events" className={clsx('mx-auto shrink-0', block.size === 's' ? '!h-[60px] !w-[76px]' : '!h-[72px] !w-[90px]')} />
         <span className="mt-auto text-[15px] font-semibold">{t.noActiveEvent}</span>
         <span className="mt-0.5 flex items-center gap-1 text-[13px] font-semibold text-accent">
           <Plus size={15} aria-hidden="true" />
@@ -642,7 +842,7 @@ const EventBlock: React.FC<BlockProps> = ({ block, data }) => {
     );
   }
   const { event, total, expenseCount } = data.event;
-  const dates = [event.startDate, event.endDate].filter(Boolean).map(value => formatShortDate(parseLocalDate(value!), language));
+  const dates = eventDates(event.startDate, event.endDate, language);
   return (
     <div
       className={clsx('relative flex h-full w-full flex-col overflow-hidden text-left text-white', block.size === 's' ? 'rounded-[26px] p-4' : 'min-h-[150px] rounded-[26px] p-5')}
@@ -655,7 +855,7 @@ const EventBlock: React.FC<BlockProps> = ({ block, data }) => {
       <span className="relative truncate text-[13px] font-medium opacity-85">
         {block.size === 's'
           ? money(total, currency, language)
-          : [money(total, currency, language), `${expenseCount}×`, dates.join(' to ')].filter(Boolean).join(' · ')}
+          : [money(total, currency, language), `${expenseCount}×`, dates].filter(Boolean).join(' · ')}
       </span>
     </div>
   );
@@ -699,7 +899,7 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
             </span>
           </>
         ) : (
-          <span className="mt-auto text-[13px] text-muted">{t.nothingUpcoming}</span>
+          <EmptyArt name="calendar" stacked>{t.nothingUpcoming}</EmptyArt>
         )}
       </Tile>
     );
@@ -710,7 +910,7 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
     <Tile>
       <BlockHead title={t.block_upcoming} className="mb-1" />
       {rows.length === 0 ? (
-        <Empty>{t.nothingUpcoming}</Empty>
+        <EmptyArt name="calendar">{t.nothingUpcoming}</EmptyArt>
       ) : (
         <div>
           {rows.map((item, i) => (
@@ -739,22 +939,27 @@ const RecentBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
     <Tile>
       <div className="mb-1 flex items-baseline justify-between gap-3">
         <h3 className="text-[17px] font-bold tracking-[-0.3px]">{t.block_recent}</h3>
-        <button type="button" onClick={actions.openActivity} className="text-sm font-semibold text-accent">
+        <button type="button" onClick={actions.openActivity} className="-my-2.5 -mr-2 flex min-h-10 items-center px-2 text-sm font-semibold text-accent">
           {t.navActivity}
         </button>
       </div>
       {rows.length === 0 ? (
-        <Empty>{t.noTransactions}</Empty>
+        <EmptyArt name="transactions">{t.noTransactions}</EmptyArt>
       ) : (
         <div>
           {rows.map((transaction, i) => {
             const category = data.categoryName(transaction.categoryId);
-            const title = transaction.note?.trim() || category || t.other;
+            const title = localizeTransactionNote(transaction.note?.trim(), language) || category || t.other;
             const income = transaction.type === 'income';
             return (
               <ListRow
                 key={transaction.id}
-                left={<Avatar name={title} color={data.categoryColor(transaction.categoryId)} />}
+                left={
+                  <CategoryGlyph
+                    category={data.category(transaction.categoryId)}
+                    badge={transaction.currency !== data.currency ? <CurrencyFlag currency={transaction.currency} size={15} /> : undefined}
+                  />
+                }
                 title={title}
                 sub={[category !== title ? category : null, data.accountName(transaction.accountId)].filter(Boolean).join(' · ') || formatShortDate(parseLocalDate(transaction.date), language)}
                 amount={`${income ? '+' : '−'}${money(transaction.amount, transaction.currency, language, true)}`}
@@ -791,8 +996,11 @@ const RatesBlock: React.FC<BlockProps> = ({ block, data, preview }) => {
         <div className="mt-auto flex flex-col gap-1.5">
           {rates.map(pair => (
             <span key={`${pair.from}-${pair.to}`} className="flex items-baseline justify-between gap-2 text-[13px]">
-              <span className="font-medium text-muted">{pair.from}/{pair.to}</span>
-              <span className="text-[15px] font-semibold">{format(pair.value)}</span>
+              <span className="flex items-center gap-1.5 font-medium text-muted">
+                <CurrencyPair base={pair.from} quote={pair.to} size={16} />
+                {pair.from}/{pair.to}
+              </span>
+              <span className="text-[15px] font-semibold tabular-nums">{format(pair.value)}</span>
             </span>
           ))}
         </div>
@@ -805,9 +1013,14 @@ const RatesBlock: React.FC<BlockProps> = ({ block, data, preview }) => {
       <div className="grid grid-cols-3 gap-2">
         {rates.map(pair => (
           <span key={`${pair.from}-${pair.to}`} className="flex min-w-0 flex-col rounded-2xl bg-chip px-3 py-2.5">
-            <span className="text-[12px] font-medium text-muted">1 {pair.from}</span>
-            <span className="truncate text-[17px] font-bold">{format(pair.value)}</span>
-            <span className="text-[12px] text-muted">{pair.to}</span>
+            <span className="flex items-center gap-1.5 text-[12px] font-medium text-muted">
+              <CurrencyFlag currency={pair.from} size={16} />1 {pair.from}
+            </span>
+            <span className="mt-1 truncate text-[17px] font-bold tabular-nums">{format(pair.value)}</span>
+            <span className="flex items-center gap-1.5 text-[12px] text-muted">
+              <CurrencyFlag currency={pair.to} size={12} />
+              {pair.to}
+            </span>
           </span>
         ))}
       </div>
@@ -828,9 +1041,9 @@ const QuickAddBlock: React.FC<BlockProps> = ({ data, actions }) => {
             key={template.id}
             type="button"
             onClick={() => actions.useTemplate(template.id)}
-            className="flex h-10 max-w-full items-center gap-2 rounded-full bg-chip pl-3 pr-3.5 text-sm font-semibold"
+            className="flex h-10 max-w-full items-center gap-2 rounded-full bg-chip pl-[7px] pr-3.5 text-sm font-semibold"
           >
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: data.categoryColor(template.categoryId) }} aria-hidden="true" />
+            <CategoryGlyph category={data.category(template.categoryId)} size={26} className="!rounded-full" />
             <span className="truncate">{template.name}</span>
             {template.amount != null && <span className="shrink-0 font-medium text-muted">{money(template.amount, template.currency, language, true)}</span>}
           </button>

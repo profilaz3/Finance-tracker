@@ -1,40 +1,10 @@
 import React from 'react';
-import {
-    Banknote, CreditCard, Wallet, PiggyBank, Landmark, Bitcoin,
-    DollarSign, Euro, PoundSterling, Briefcase, Gem,
-    Coins, Building, Vault, Coffee, Car, Home, Gamepad2,
-    Activity, TrendingUp, RefreshCw, ArrowRightLeft,
-    ArrowUpRight, ArrowDownLeft, Tag, type LucideIcon
-} from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
+import { ACCOUNT_ICONS } from '../utils/accountIcons';
 
-export const ICONS = {
-    'banknote': Banknote,
-    'credit-card': CreditCard,
-    'wallet': Wallet,
-    'piggy-bank': PiggyBank,
-    'landmark': Landmark,
-    'bitcoin': Bitcoin,
-    'dollar-sign': DollarSign,
-    'euro': Euro,
-    'pound-sterling': PoundSterling,
-    'briefcase': Briefcase,
-    'gem': Gem,
-    'coins': Coins,
-    'building': Building,
-    'vault': Vault,
-    'coffee': Coffee,
-    'car': Car,
-    'home': Home,
-    'gamepad': Gamepad2,
-    'activity': Activity,
-    'trending-up': TrendingUp,
-    'refresh-cw': RefreshCw,
-    'arrow-right-left': ArrowRightLeft,
-    'arrow-up-right': ArrowUpRight,
-    'arrow-down-left': ArrowDownLeft,
-    'tag': Tag
-};
+/** Wallet icon set (also the default picker set). */
+export const ICONS = ACCOUNT_ICONS;
 
 export type IconName = keyof typeof ICONS;
 

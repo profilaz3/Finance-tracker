@@ -5,18 +5,24 @@ const distAssetsDir = path.resolve('dist', 'assets');
 const distIndexHtml = path.resolve('dist', 'index.html');
 
 const budgets = [
-  { label: 'entry-chunk', prefix: 'index-', maxBytes: 200 * 1024, aggregate: false },
+  // Raised from 200 KB: theme and accent validation plus the first-paint theme apply (about 2 KB,
+  // eager so a saved theme never flashes). Palettes stay in CSS and the custom accent maths is lazy.
+  { label: 'entry-chunk', prefix: 'index-', maxBytes: 202 * 1024, aggregate: false },
   // Raised from 360 KB: the complete EN+SR translation table (~50 KB raw, ~122 KB gzip startup total) is eager by design.
   // Raised from 400 KB for the redesign: EN+SR strings for the new screens (+34 KB, eager by design)
   // and the new app shell (add sheet, home, notifications, swipe pager). AI features stay lazy.
-  { label: 'startup-js', prefix: null, maxBytes: 520 * 1024, aggregate: false },
+  // Raised from 520 KB for the themes (EN+SR strings and the eager theme code above, about 3.5 KB).
+  // Reminders, alerts and the monthly letter load after first paint (components/app/BackgroundJobs),
+  // which took about 16 KB out of startup; keep that headroom for strings rather than raising this.
+  { label: 'startup-js', prefix: null, maxBytes: 522 * 1024, aggregate: false },
   { label: 'transactions-route', prefix: 'TransactionsView-', maxBytes: 80 * 1024, aggregate: false },
   { label: 'stats-shell', prefix: 'Stats-', maxBytes: 12 * 1024, aggregate: false },
   { label: 'export-modal', prefix: 'ExportModal-', maxBytes: 8 * 1024, aggregate: false },
   { label: 'pdf-export', prefix: 'pdfExport-', maxBytes: 8 * 1024, aggregate: false },
   // Raised from 16 KB: teams and avatar storage calls.
   { label: 'supabase-service', prefix: 'supabaseService-', maxBytes: 18 * 1024, aggregate: false },
-  { label: 'icons', prefix: 'icons-', maxBytes: 48 * 1024, aggregate: false },
+  // Raised from 48 KB for the screen headers redesign (filters, calendar and menu icons).
+  { label: 'icons', prefix: 'icons-', maxBytes: 49 * 1024, aggregate: false },
   { label: 'motion', prefix: 'motion-', maxBytes: 128 * 1024, aggregate: false },
   { label: 'motion-max-features', prefix: 'motionMaxFeatures-', maxBytes: 56 * 1024, aggregate: false },
   { label: 'virtuoso', prefix: 'virtuoso-', maxBytes: 64 * 1024, aggregate: false },

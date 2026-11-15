@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ChevronRight, Library, Mail, PenLine } from 'lucide-react';
+import { ChevronRight, Library, PenLine } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
 import { CONFIG } from '../../config';
 import {
@@ -18,6 +18,7 @@ import {
   subscribeLetters,
 } from '../../services/letterService';
 import type { AppLanguage } from '../../utils/locale';
+import { useBackLayer } from '../../hooks/useBackLayer';
 import { ShimmerLine } from './Shimmer';
 import { LetterSheet } from './LetterSheet';
 import { fillTemplate, LETTER_PAPER, LETTER_SERIF, letterMonthLabel, letterMonthName } from './letterFormat';
@@ -27,6 +28,23 @@ interface MonthlyLetterCardProps {
   state: LetterInputs;
   language: AppLanguage;
 }
+
+/** A small paper envelope with a stamp that carries the month number. */
+const Envelope: React.FC<{ month: number | null }> = ({ month }) => (
+  <svg width="60" height="50" viewBox="0 0 60 50" aria-hidden="true" className="flex-none">
+    <rect x="2" y="11" width="50" height="35" rx="6" fill="var(--paper-tile)" stroke="var(--paper-line)" strokeWidth="1.5" />
+    <path d="M4 44 21 29M50 44 33 29" fill="none" stroke="var(--paper-line)" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M4 13.5 27 31l23-17.5" fill="none" stroke="rgb(var(--accent-rgb))" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+    <circle cx="35" cy="16" r="7" fill="none" stroke="var(--paper-muted)" strokeWidth="1" strokeDasharray="2 2" opacity="0.55" />
+    <g transform="rotate(7 48 13)">
+      <rect x="38.5" y="2" width="19" height="22" rx="2.5" fill="rgb(var(--accent-rgb))" stroke="var(--paper-tile)" strokeWidth="2.2" strokeDasharray="2.6 1.6" />
+      <rect x="41.5" y="5" width="13" height="16" rx="1.5" fill="none" stroke="var(--paper-on-accent)" strokeWidth="0.8" opacity="0.55" />
+      {month !== null && (
+        <text x="48" y="16.6" textAnchor="middle" fontSize="9.5" fontWeight="700" fill="var(--paper-on-accent)">{month}</text>
+      )}
+    </g>
+  </svg>
+);
 
 const aiConfigured = () => Boolean(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
 
@@ -63,13 +81,17 @@ export const MonthlyLetterCard: React.FC<MonthlyLetterCardProps> = ({ state, lan
     if (!snapshot.archive[requested] && !snapshot.writing.includes(requested) && aiConfigured()) void write(requested);
   }, [snapshot.openRequest, snapshot.userId, snapshot.archive, snapshot.writing, open, write]);
 
-  if (!snapshot.userId) return null;
-
   const latest = snapshot.archive[latestMonth] ?? null;
   const writingLatest = snapshot.writing.includes(latestMonth);
   const shown = latest ?? (writingLatest || enough ? null : letters[0] ?? null);
   const cardMonth = shown?.month ?? latestMonth;
-  if (!shown && !writingLatest && !(enough && aiConfigured())) return null;
+  const visible = Boolean(snapshot.userId) && Boolean(shown || writingLatest || (enough && aiConfigured()));
+
+  // Back (browser or Android) closes the reading sheet instead of leaving Insights. A card that
+  // is not rendered has no sheet on screen, so it holds no history entry either.
+  useBackLayer('letter-sheet', isOpen && visible, () => setIsOpen(false));
+
+  if (!visible) return null;
 
   const monthName = letterMonthName(cardMonth, language);
   // The whole card opens a written letter; otherwise only its button acts.
@@ -88,9 +110,7 @@ export const MonthlyLetterCard: React.FC<MonthlyLetterCardProps> = ({ state, lan
           className="flex w-full items-center gap-3.5 p-4 text-left"
           {...(shown ? { type: 'button' as const, onClick: () => open(shown.month), 'aria-label': `${t.letterRead}: ${fillTemplate(t.letterCardTitle, { month: monthName })}` } : {})}
         >
-          <span className="accent-card relative flex h-12 w-12 flex-none items-center justify-center rounded-[16px] text-white" aria-hidden="true">
-            <Mail size={22} strokeWidth={2.1} />
-          </span>
+          <Envelope month={parseMonthId(cardMonth) ? parseMonthId(cardMonth)!.month + 1 : null} />
           <span className="min-w-0 flex-1">
             <span className="block text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">{letterMonthLabel(cardMonth, language)}</span>
             <span className="block text-[17px] font-bold leading-snug tracking-[-0.2px]">{fillTemplate(t.letterCardTitle, { month: monthName })}</span>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { m } from 'motion/react';
-import { X, Split, ChevronDown } from 'lucide-react';
+import { X, Split, ChevronDown, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { Account, Person, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -10,6 +10,7 @@ import { useSheetDrag } from '../hooks/useSheetDrag';
 import { MOTION } from '../config';
 import { Segmented } from './ui/Segmented';
 import { excludeOwnProfile } from '../domain/people';
+import { AmountInput } from './ui/AmountInput';
 
 const label = 'mb-1.5 block px-1 text-[13px] font-semibold text-muted';
 
@@ -34,8 +35,12 @@ export const SplitModal: React.FC<SplitModalProps> = ({
     t
 }) => {
     const people = useMemo(() => excludeOwnProfile(allPeople, userProfile), [allPeople, userProfile]);
-    const [amount, setAmount] = useState('');
+    const language = t === TRANSLATIONS.sr ? 'sr' : 'en';
+    const [amount, setAmount] = useState<number | undefined>(undefined);
+    const [amountUnreadable, setAmountUnreadable] = useState(false);
     const [currency, setCurrency] = useState<Currency>('RSD');
+    // The currency follows the chosen wallet or person until it is picked by hand.
+    const [currencyPicked, setCurrencyPicked] = useState(false);
     const [targetType, setTargetType] = useState<'account' | 'person'>('account');
     const [selectedTarget, setSelectedTarget] = useState('');
 
@@ -46,7 +51,15 @@ export const SplitModal: React.FC<SplitModalProps> = ({
 
     if (!isOpen) return null;
 
-    const canConfirm = !!amount && !!selectedTarget;
+    const canConfirm = amount !== undefined && amount > 0 && !amountUnreadable && !!selectedTarget;
+    const pickTarget = (id: string) => {
+        setSelectedTarget(id);
+        if (currencyPicked) return;
+        const targetCurrency = targetType === 'account'
+            ? accounts.find(a => a.id === id)?.currency
+            : people.find(p => p.id === id)?.defaultCurrency;
+        if (targetCurrency) setCurrency(targetCurrency);
+    };
 
     return (
         <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
@@ -81,9 +94,11 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                             type="button"
                             onClick={onClose}
                             aria-label={t.close}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                            className="-m-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted"
                         >
-                            <X size={18} aria-hidden="true" />
+                            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-chip">
+                                <X size={18} aria-hidden="true" />
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -93,21 +108,28 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                     <div>
                         <label htmlFor={amountId} className={label}>{t.amount}</label>
                         <div className="flex gap-2">
-                            <input
+                            <AmountInput
                                 id={amountId}
-                                type="number"
-                                inputMode="decimal"
+                                language={language}
                                 value={amount}
-                                onChange={e => setAmount(e.target.value)}
-                                placeholder="0.00"
-                                className="h-14 min-w-0 flex-1 rounded-[16px] border-none bg-chip px-4 text-[24px] font-semibold tabular-nums text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
+                                onValueChange={(value, text) => {
+                                    setAmount(value);
+                                    setAmountUnreadable(value === undefined && text.trim() !== '');
+                                }}
+                                placeholder="0"
+                                aria-invalid={amountUnreadable || undefined}
+                                aria-describedby={amountUnreadable ? `${amountId}-error` : undefined}
+                                className={clsx(
+                                    'h-14 min-w-0 flex-1 rounded-[16px] border-none bg-chip px-4 text-[24px] font-semibold tabular-nums text-on-surface outline-none placeholder:text-faint',
+                                    amountUnreadable ? 'ring-2 ring-neg' : 'focus:ring-2 focus:ring-accent'
+                                )}
                                 autoFocus
                             />
                             <div className="relative w-[104px] shrink-0">
                                 <select
                                     value={currency}
                                     aria-label={t.currency}
-                                    onChange={e => setCurrency(e.target.value as Currency)}
+                                    onChange={e => { setCurrency(e.target.value as Currency); setCurrencyPicked(true); }}
                                     className="h-14 w-full appearance-none rounded-[16px] border-none bg-chip pl-4 pr-9 text-[16px] font-semibold text-on-surface outline-none focus:ring-2 focus:ring-accent"
                                 >
                                     <option value="RSD">RSD</option>
@@ -117,6 +139,12 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                                 <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
                             </div>
                         </div>
+                        {amountUnreadable && (
+                            <div id={`${amountId}-error`} role="alert" className="mt-1 flex items-center gap-1 px-1 text-[12px] text-neg">
+                                <AlertCircle size={12} aria-hidden="true" />
+                                <span>{t.amountUnreadable}</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Target Type Toggle */}
@@ -125,7 +153,7 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                         value={targetType}
                         onChange={(value) => { setTargetType(value); setSelectedTarget(''); }}
                         options={[
-                            { value: 'account', label: t.account },
+                            { value: 'account', label: t.wallet },
                             { value: 'person', label: t.person },
                         ]}
                     />
@@ -133,16 +161,16 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                     {/* Target Selection */}
                     <div>
                         <label htmlFor={targetId} className={label}>
-                            {targetType === 'account' ? t.account : t.person}
+                            {targetType === 'account' ? t.wallet : t.person}
                         </label>
                         <div className="relative">
                             <select
                                 id={targetId}
                                 value={selectedTarget}
-                                onChange={e => setSelectedTarget(e.target.value)}
+                                onChange={e => pickTarget(e.target.value)}
                                 className="h-12 w-full appearance-none rounded-[14px] border-none bg-chip pl-4 pr-10 text-[16px] text-on-surface outline-none focus:ring-2 focus:ring-accent"
                             >
-                                <option value="">{targetType === 'account' ? t.selectAccount : t.selectPerson}</option>
+                                <option value="">{targetType === 'account' ? t.chooseWallet : t.selectPerson}</option>
                                 {targetType === 'person' && people.map(p => (
                                     <option key={p.id} value={p.id}>{p.name} ({p.defaultCurrency})</option>
                                 ))}
@@ -164,7 +192,11 @@ export const SplitModal: React.FC<SplitModalProps> = ({
                         </button>
                         <button
                             type="button"
-                            onClick={() => { vibrate(HAPTIC_PATTERNS.success); onSplit(parseFloat(amount), currency, selectedTarget, targetType); }}
+                            onClick={() => {
+                                if (!canConfirm || amount === undefined) return;
+                                vibrate(HAPTIC_PATTERNS.success);
+                                onSplit(amount, currency, selectedTarget, targetType);
+                            }}
                             disabled={!canConfirm}
                             className={clsx(
                                 'h-11 rounded-full px-6 text-[15px] font-semibold transition-colors',

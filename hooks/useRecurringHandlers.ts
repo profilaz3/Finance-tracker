@@ -23,6 +23,11 @@ export function useRecurringHandlers({
   addToast,
 }: UseRecurringHandlersOptions) {
   const handleAddRecurring = useCallback(async (recurring: RecurringTransaction) => {
+    // The database rejects negative amounts (recurring_amount_check); never report those as added.
+    if (!Number.isFinite(recurring.amount) || recurring.amount <= 0) {
+      addToast(TRANSLATIONS[state.language].amountAboveZero, 'error');
+      return;
+    }
     setState(prev => ({
       ...prev,
       recurringTransactions: [...prev.recurringTransactions, recurring],
@@ -57,12 +62,30 @@ export function useRecurringHandlers({
     }
   }, [setState, state.recurringTransactions]);
 
+  // Single-item delete: no confirm, an Undo toast puts the rule back where it was.
   const handleDeleteRecurring = useCallback(async (id: string) => {
+    const index = state.recurringTransactions.findIndex(r => r.id === id);
+    const deleted = index === -1 ? undefined : state.recurringTransactions[index];
+    const t = TRANSLATIONS[state.language];
+
     setState(prev => ({
       ...prev,
       recurringTransactions: prev.recurringTransactions.filter(r => r.id !== id),
     }));
-    addToast(TRANSLATIONS[state.language].recurringDeleted, 'success');
+    addToast(t.recurringDeleted, 'info', deleted ? {
+      label: t.undo,
+      onClick: () => {
+        setState(prev => {
+          if (prev.recurringTransactions.some(r => r.id === deleted.id)) return prev;
+          const recurringTransactions = [...prev.recurringTransactions];
+          recurringTransactions.splice(Math.min(index, recurringTransactions.length), 0, deleted);
+          return { ...prev, recurringTransactions };
+        });
+        void getSyncManager()
+          .then(syncManager => syncManager.syncRecurring(deleted))
+          .catch(error => console.error('Failed to sync restored recurring transaction:', error));
+      },
+    } : undefined);
 
     try {
       const syncManager = await getSyncManager();
@@ -70,7 +93,7 @@ export function useRecurringHandlers({
     } catch (error) {
       console.error('Failed to delete recurring transaction:', error);
     }
-  }, [addToast, setState, state.language]);
+  }, [addToast, setState, state.language, state.recurringTransactions]);
 
   const handleToggleRecurring = useCallback(async (id: string) => {
     const recurring = state.recurringTransactions.find(r => r.id === id);

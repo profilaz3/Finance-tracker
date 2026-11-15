@@ -1,9 +1,12 @@
 import React, { useId } from 'react';
-import { ChevronDown } from 'lucide-react';
+import clsx from 'clsx';
+import { AlertCircle, ChevronDown } from 'lucide-react';
 import { CURRENCIES } from '../../constants';
 import { Currency } from '../../types';
 import { CommonFieldsProps } from './types';
 import { CategoryGlyph } from '../ui/CategoryGlyph';
+import { AmountInput } from '../ui/AmountInput';
+import { formatMoney } from '../../utils/locale';
 
 const label = 'mb-1.5 block px-1 text-[13px] font-semibold text-muted';
 const field = 'h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent';
@@ -13,19 +16,27 @@ const SelectChevron = () => (
     <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted" />
 );
 
-const stripLeadingZeros = (val: string) =>
-    val.length > 1 && val.startsWith('0') && !val.includes('.') ? val.replace(/^0+/, '') : val;
+export const FieldError: React.FC<{ id: string; message: string | null }> = ({ id, message }) =>
+    message ? (
+        <p id={id} role="alert" className="mt-1 flex items-center gap-1 px-1 text-[12px] font-medium text-neg">
+            <AlertCircle size={12} aria-hidden="true" className="shrink-0" />
+            <span>{message}</span>
+        </p>
+    ) : null;
 
 export const CommonFields: React.FC<CommonFieldsProps> = ({
     mode,
     amount,
-    setAmount,
+    onAmountChange,
+    amountInvalid,
     currency,
     setCurrency,
     transactionDate,
     setTransactionDate,
     fees,
-    setFees,
+    onFeesChange,
+    feesInvalid,
+    feesInSplitCurrency,
     note,
     setNote,
     categoryId,
@@ -50,18 +61,22 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
                         <label htmlFor={`${id}-amount`} className={label}>
                             {t.total}
                         </label>
-                        <input
+                        <AmountInput
                             id={`${id}-amount`}
-                            type="number"
-                            inputMode="decimal"
+                            language={language}
                             value={amount}
-                            onChange={(e) => setAmount(stripLeadingZeros(e.target.value))}
-                            placeholder="0.00"
-                            className="h-14 w-full rounded-[16px] border-none bg-chip px-4 text-[24px] font-semibold tabular-nums tracking-tight text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
+                            emptyWhenZero
+                            onValueChange={onAmountChange}
+                            placeholder="0"
+                            aria-invalid={amountInvalid}
+                            aria-describedby={amountInvalid ? `${id}-amount-error` : undefined}
+                            className={clsx(
+                                'h-14 w-full rounded-[16px] border-none bg-chip px-4 text-[24px] font-semibold tabular-nums tracking-tight text-on-surface outline-none placeholder:text-faint focus:ring-2',
+                                amountInvalid ? 'ring-2 ring-neg focus:ring-neg' : 'focus:ring-accent'
+                            )}
                             autoFocus
-                            step="0.01"
-                            onFocus={(e) => e.target.select()}
                         />
+                        <FieldError id={`${id}-amount-error`} message={amountInvalid ? t.splitErrorInvalidAmount : null} />
                     </div>
                 )}
 
@@ -136,17 +151,28 @@ export const CommonFields: React.FC<CommonFieldsProps> = ({
             {/* Fees - Only for I Paid mode */}
             {mode === 'i_paid' && (
                 <div>
-                    <label htmlFor={`${id}-fees`} className={label}>{t.feesUsd}</label>
-                    <input
-                        id={`${id}-fees`}
-                        type="number"
-                        inputMode="decimal"
-                        value={fees}
-                        onChange={(e) => setFees(stripLeadingZeros(e.target.value))}
-                        onFocus={(e) => e.target.select()}
-                        placeholder="0.00"
-                        className={`${field} tabular-nums`}
-                    />
+                    {/* Fees are entered and stored in USD (domain/money.ts); show what they add in the split currency. */}
+                    <label htmlFor={`${id}-fees`} className={label}>{t.splitFeesLabel}</label>
+                    <div className="relative">
+                        <AmountInput
+                            id={`${id}-fees`}
+                            language={language}
+                            value={fees}
+                            emptyWhenZero
+                            onValueChange={onFeesChange}
+                            placeholder="0"
+                            aria-invalid={feesInvalid}
+                            aria-describedby={feesInvalid ? `${id}-fees-error` : feesInSplitCurrency > 0 && currency !== 'USD' ? `${id}-fees-converted` : undefined}
+                            className={clsx(field.replace('focus:ring-accent', feesInvalid ? 'ring-2 ring-neg focus:ring-neg' : 'focus:ring-accent'), 'pr-14 tabular-nums')}
+                        />
+                        <span aria-hidden="true" className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-muted">USD</span>
+                    </div>
+                    <FieldError id={`${id}-fees-error`} message={feesInvalid ? t.splitErrorInvalidAmount : null} />
+                    {!feesInvalid && feesInSplitCurrency > 0 && currency !== 'USD' && (
+                        <p id={`${id}-fees-converted`} className="mt-1 px-1 text-[12px] text-muted">
+                            {t.splitFeesAdded.replace('{amount}', formatMoney(feesInSplitCurrency, currency, language))}
+                        </p>
+                    )}
                 </div>
             )}
 

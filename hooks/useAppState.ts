@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { applyAppearanceToRoot, resolveAppearance } from '../utils/appearance';
 import { AppState, Category } from '../types';
 import { applyExternalSegmentChange, flushSaveState, loadState, saveState } from '../services/storageService';
@@ -61,23 +61,24 @@ export function useAppState(isAuthenticated: boolean | null = null) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Ensure Internal Transfer category exists (migration)
+  // Transfers between wallets are booked on the Internal Transfer category, so it must exist:
+  // after load and again whenever a sync replaced the categories with a list that lacks it.
+  const hasInternalTransfer = state.categories.some(c => c.id === 'internal-transfer');
   useEffect(() => {
-    const hasInternalTransfer = state.categories.some(c => c.id === 'internal-transfer');
-    if (!hasInternalTransfer) {
-      const internalTransferCat: Category = {
-        id: 'internal-transfer',
-        name: 'Internal Transfer',
-        type: 'income' as const,
-        subcategories: ['Between Accounts'],
-        color: '#9E9E9E'
-      };
-      setState(prev => ({
-        ...prev,
-        categories: [...prev.categories, internalTransferCat]
-      }));
-    }
-  }, []);
+    if (hasInternalTransfer) return;
+    const internalTransferCat: Category = INITIAL_CATEGORIES.find(c => c.id === 'internal-transfer') ?? {
+      id: 'internal-transfer',
+      name: 'Internal Transfer',
+      type: 'income' as const,
+      subcategories: ['Between Accounts'],
+      color: '#808080',
+    };
+    setState(prev => (
+      prev.categories.some(c => c.id === 'internal-transfer')
+        ? prev
+        : { ...prev, categories: [...prev.categories, { ...internalTransferCat }] }
+    ));
+  }, [hasInternalTransfer]);
 
   // Migrate old category names and types
   useEffect(() => {
@@ -103,8 +104,8 @@ export function useAppState(isAuthenticated: boolean | null = null) {
     }
   }, [state.categories]);
 
-  // Apply the paper appearance (mode, accent, glass) to <html>; follow the OS in "system" mode.
-  useEffect(() => {
+  // Apply the paper appearance (mode, theme, accent, glass) to <html> before paint; follow the OS in "system" mode.
+  useLayoutEffect(() => {
     const root = document.documentElement;
     const appearance = resolveAppearance(state.appearance);
     const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;

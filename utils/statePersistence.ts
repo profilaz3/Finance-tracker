@@ -2,12 +2,13 @@ import { AppState } from '../types';
 
 export interface PersistedStatePreferences {
   baseCurrency: AppState['baseCurrency'];
-  theme: AppState['theme'];
   language: AppState['language'];
   isGuest?: boolean;
   appearance?: AppState['appearance'];
   homeLayout?: AppState['homeLayout'];
+  homeHeader?: AppState['homeHeader'];
   budget?: AppState['budget'];
+  teamBudgets?: AppState['teamBudgets'];
   paymentDetails?: AppState['paymentDetails'];
 }
 
@@ -51,12 +52,13 @@ const stripInlineAvatar = <T extends { avatar?: string }>(profile: T): T => ({
 export const buildStateSegments = (state: AppState): PersistedStateSegments => ({
   preferences: {
     baseCurrency: state.baseCurrency,
-    theme: state.theme,
     language: state.language,
     isGuest: state.isGuest,
     appearance: state.appearance,
     homeLayout: state.homeLayout,
+    homeHeader: state.homeHeader,
     budget: state.budget,
+    teamBudgets: state.teamBudgets,
     paymentDetails: state.paymentDetails,
   },
   transactions: state.transactions,
@@ -78,12 +80,13 @@ export const mergeStateSegments = (
 ): AppState => ({
   ...baseState,
   baseCurrency: segments.preferences?.baseCurrency ?? baseState.baseCurrency,
-  theme: segments.preferences?.theme ?? baseState.theme,
   language: segments.preferences?.language ?? baseState.language,
   isGuest: segments.preferences?.isGuest ?? baseState.isGuest,
   appearance: segments.preferences?.appearance ?? baseState.appearance,
   homeLayout: segments.preferences?.homeLayout ?? baseState.homeLayout,
+  homeHeader: segments.preferences?.homeHeader ?? baseState.homeHeader,
   budget: segments.preferences?.budget !== undefined ? segments.preferences.budget : baseState.budget,
+  teamBudgets: segments.preferences?.teamBudgets ?? baseState.teamBudgets,
   paymentDetails: segments.preferences?.paymentDetails !== undefined ? segments.preferences.paymentDetails : baseState.paymentDetails,
   transactions: segments.transactions ?? baseState.transactions,
   categories: segments.categories ?? baseState.categories,

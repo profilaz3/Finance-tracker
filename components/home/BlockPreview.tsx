@@ -7,7 +7,7 @@ import type { HomeActions, HomeData } from './useHomeData';
 /** Width a block is laid out at before scaling: one or two phone columns. */
 export const previewWidth = (block: HomeBlock): number => (block.size === 's' ? 170 : 348);
 
-const NOOP_ACTIONS: HomeActions = {
+export const NOOP_ACTIONS: HomeActions = {
   openBudgets: () => {},
   openActivity: () => {},
   openInsights: () => {},

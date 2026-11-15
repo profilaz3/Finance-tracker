@@ -7,9 +7,11 @@ import { Transaction, Category, Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { formatDate } from '../utils/locale';
 import { generateInsights, isAIAvailable } from '../services/aiService';
+import { subscribeAiErrors, type AiErrorKind } from '../services/aiErrors';
 import { MonthlyLetterCard } from './insights';
 import type { LetterInputs } from '../domain/monthlyLetter';
 import { AskBar } from './ask/AskBar';
+import { Illustration } from './ui/Illustration';
 
 const MarkdownRenderer = lazyWithReload(() => import('react-markdown'));
 
@@ -64,17 +66,28 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
     const [period, setPeriod] = useState<'weekly' | 'monthly'>('weekly');
     const [report, setReport] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    // Why the last report failed; the message is worded from it at render time.
+    const [error, setError] = useState<AiErrorKind | 'not-configured' | null>(null);
     const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
     const handleGenerate = async () => {
         if (!isAIAvailable()) {
-            setError(t.aiUnavailable);
+            setError('not-configured');
             return;
         }
 
         setIsGenerating(true);
         setError(null);
+
+        // The AI call resolves to null on failure; the error bus says why.
+        let reason: AiErrorKind | null = null;
+        const unsubscribe = subscribeAiErrors(info => {
+            if (info.fn === 'generate-insights') reason = info.kind;
+        });
+        const failed = () => {
+            const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+            setError(offline ? 'network' : reason ?? 'unknown');
+        };
 
         try {
             const result = await generateInsights(
@@ -89,15 +102,27 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                 setReport(result);
                 setGeneratedAt(new Date());
             } else {
-                setError(t.analysisFailed);
+                failed();
             }
         } catch (err) {
             console.error('Insights generation failed:', err);
-            setError(t.analysisFailed);
+            failed();
         } finally {
+            unsubscribe();
             setIsGenerating(false);
         }
     };
+
+    const isOffline = error === 'network' && typeof navigator !== 'undefined' && navigator.onLine === false;
+    const errorMessage = error === 'not-configured'
+        ? t.aiConfigureHint
+        : error === 'quota'
+            ? t.aiDailyLimitReached
+            : error === 'unavailable'
+                ? t.aiServiceUnavailable
+                : error === 'network'
+                    ? (isOffline ? t.insightsFailedOffline : t.insightsFailedNetwork)
+                    : t.insightsFailedGeneric;
 
     const aiAvailable = isAIAvailable();
 
@@ -165,8 +190,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
             <m.section variants={itemVariants} className="paper-tile overflow-hidden" aria-live="polite">
                 {!report && !isGenerating && !error && (
                     <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-                        <span className="accent-card flex h-14 w-14 items-center justify-center rounded-[20px] text-white" aria-hidden="true">
-                            <Sparkles size={26} />
+                        <span className="relative h-[104px] w-[132px]" aria-hidden="true">
+                            <Illustration name="chart" />
+                            <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-accent text-on-accent shadow-[0_0_0_4px_var(--paper-tile)]">
+                                <Sparkles size={17} />
+                            </span>
                         </span>
                         <h2 className="text-[19px] font-bold tracking-[-0.3px]">{t.readyToAnalyze}</h2>
                         <p className="mx-auto max-w-sm text-[14px] leading-snug text-muted">{t.clickToGenerate}</p>
@@ -227,13 +255,20 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                 )}
 
                 {error && !isGenerating && (
-                    <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-                        <span className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-chip text-neg" aria-hidden="true">
-                            <AlertCircle size={26} />
-                        </span>
+                    <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                        {isOffline ? (
+                            <span className="relative h-[88px] w-[112px]" aria-hidden="true">
+                                <Illustration name="offline" />
+                            </span>
+                        ) : (
+                            <span className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-chip text-neg" aria-hidden="true">
+                                <AlertCircle size={26} />
+                            </span>
+                        )}
                         <h2 className="text-[19px] font-bold tracking-[-0.3px]">{t.analysisFailed}</h2>
-                        <p className="max-w-sm text-[14px] leading-snug text-muted">{error}</p>
-                        <div className="mt-2">{generateButton(t.tryAgain, RefreshCw, !aiAvailable)}</div>
+                        <p className="max-w-sm text-[14px] leading-snug text-muted">{errorMessage}</p>
+                        {/* A spent daily limit will not reset by trying again now. */}
+                        {error !== 'quota' && <div className="mt-2">{generateButton(t.tryAgain, RefreshCw, !aiAvailable)}</div>}
                     </div>
                 )}
             </m.section>

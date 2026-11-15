@@ -58,14 +58,21 @@ export interface ModeToggleProps {
 
 export interface CommonFieldsProps {
     mode: SplitMode;
-    amount: string;
-    setAmount: (val: string) => void;
+    amount: number | undefined;
+    /** Parsed amount (undefined while empty or unreadable) and the raw text. */
+    onAmountChange: (amount: number | undefined, text: string) => void;
+    /** Text is present but cannot be read as an amount. */
+    amountInvalid: boolean;
     currency: Currency;
     setCurrency: (val: Currency) => void;
     transactionDate: string;
     setTransactionDate: (val: string) => void;
-    fees: string;
-    setFees: (val: string) => void;
+    /** Fees in USD (always stored in USD). */
+    fees: number | undefined;
+    onFeesChange: (amount: number | undefined, text: string) => void;
+    feesInvalid: boolean;
+    /** The fees converted into the split currency, added to the total. */
+    feesInSplitCurrency: number;
     note: string;
     setNote: (val: string) => void;
     categoryId: string;
@@ -82,16 +89,17 @@ export interface IPaidSectionProps {
     splitMethod: SplitMethod;
     setSplitMethod: (method: SplitMethod) => void;
     shares: SplitShare[];
-    setShares: React.Dispatch<React.SetStateAction<SplitShare[]>>;
-    amount: string;
-    fees: string;
+    /** Total to split, fees included. */
+    totalToSplit: number;
     currency: Currency;
     people: Person[];
     language: 'en' | 'sr';
     t: Record<string, string>;
     togglePersonIncluded: (personId: string) => void;
-    updateShareAmount: (personId: string, value: string) => void;
-    updateSharePercentage: (personId: string, value: string) => void;
+    updateShareAmount: (personId: string, amount: number | undefined, text: string) => void;
+    updateSharePercentage: (personId: string, percentage: number | undefined, text: string) => void;
+    /** Share fields whose text cannot be read (keyed by person id). */
+    invalidShares: Record<string, boolean>;
     remainingAmount: number;
     remainingPercentage: number;
     includedCount: number;
@@ -106,7 +114,9 @@ export interface TheyPaidSectionProps {
     includedRecipients: Recipient[];
     recipientTotal: number;
     toggleRecipient: (personId: string) => void;
-    updateRecipientAmount: (personId: string, value: string) => void;
+    updateRecipientAmount: (personId: string, amount: number | undefined, text: string) => void;
+    /** Amount fields whose text cannot be read (keyed by person id). */
+    invalidRecipients: Record<string, boolean>;
     currency: Currency;
     language: 'en' | 'sr';
     getPerson: (id: string) => Person | undefined;

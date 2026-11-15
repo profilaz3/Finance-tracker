@@ -21,11 +21,11 @@ export const ANALYTICS_STUDIO_LABELS = {
   },
   sr: {
     improved: 'Bolje',
-    worsened: 'Losije',
-    periodSpend: 'Potrosnja u periodu',
+    worsened: 'Lošije',
+    periodSpend: 'Potrošnja u periodu',
     previousPeriod: 'Prethodni period',
     anomalyTitles: {
-      'category-spike': 'Skok potrosnje u kategoriji',
+      'category-spike': 'Skok potrošnje u kategoriji',
       'large-transaction': 'Velika transakcija',
       'high-fees': 'Visoke naknade',
     },
@@ -33,10 +33,10 @@ export const ANALYTICS_STUDIO_LABELS = {
       `${categoryName || 'Ova kategorija'} je ${amount} iznad prethodnog perioda${percentage ? ` (${percentage})` : ''}.`
     ),
     largeTransactionDetail: (categoryName: string | null, amount: string, percentage: string | null) => (
-      `${categoryName || 'Jedan trosak'} cini ${amount}${percentage ? `, ${percentage} trenutnih troskova` : ''}.`
+      `${categoryName || 'Jedan trošak'} čini ${amount}${percentage ? `, ${percentage} trenutnih troškova` : ''}.`
     ),
     highFeesDetail: (amount: string, percentage: string | null) => (
-      `Naknade su ${amount}${percentage ? `, ${percentage} trenutnih troskova` : ''}.`
+      `Naknade su ${amount}${percentage ? `, ${percentage} trenutnih troškova` : ''}.`
     ),
   },
 } as const;

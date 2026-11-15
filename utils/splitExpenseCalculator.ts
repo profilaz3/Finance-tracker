@@ -7,8 +7,32 @@ import {
   TransactionSplitShare,
 } from '../types';
 import { convertAmount } from '../services/currencyService';
+import { parseAmountInput } from './numberInput';
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
+
+/** An amount as a number, or as text the person typed (read in the app language). */
+export type AmountLike = number | string | undefined | null;
+
+/**
+ * Numbers pass through; text is read with `parseAmountInput` in the app language, so
+ * "45,50" is 45.5 and, in Serbian, "2.000" is two thousand. Empty or unreadable text is 0.
+ */
+export const readAmount = (value: AmountLike, language?: 'en' | 'sr'): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (!value) return 0;
+  return parseAmountInput(value, language) ?? 0;
+};
+
+/**
+ * One person's share of `total` for a percentage, in whole cents rounded down, so the shares
+ * of people who add up to at most 100% never exceed the total. The payer ("me") gets the rest,
+ * which also absorbs the leftover cents.
+ */
+export const percentShareAmount = (total: number, percentage: number): number => {
+  if (!(percentage > 0) || !(total > 0)) return 0;
+  return Math.floor((Math.round(total * 100) * percentage) / 100 + 1e-6) / 100;
+};
 
 /**
  * Splits `total` into `count` parts in integer cents so the parts always sum
@@ -23,14 +47,26 @@ export const splitEvenlyInCents = (total: number, count: number): number[] => {
   return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
 };
 
-export const calculateTotalSplitAmount = (
-  amount: string,
-  fees: string,
+/** Fees are always entered and stored in USD (see FEE_CURRENCY in domain/money.ts). */
+export const convertFeesToSplitCurrency = (
+  fees: AmountLike,
   currency: Currency,
-  rates: ExchangeRates
+  rates: ExchangeRates,
+  language?: 'en' | 'sr'
 ): number => {
-  const baseAmount = parseFloat(amount) || 0;
-  const feeAmountUSD = parseFloat(fees) || 0;
+  const feeAmountUSD = readAmount(fees, language);
+  return feeAmountUSD > 0 ? round2(convertAmount(feeAmountUSD, 'USD', currency, rates)) : 0;
+};
+
+export const calculateTotalSplitAmount = (
+  amount: AmountLike,
+  fees: AmountLike,
+  currency: Currency,
+  rates: ExchangeRates,
+  language?: 'en' | 'sr'
+): number => {
+  const baseAmount = readAmount(amount, language);
+  const feeAmountUSD = readAmount(fees, language);
   const feeAmountInTransactionCurrency = feeAmountUSD > 0
     ? convertAmount(feeAmountUSD, 'USD', currency, rates)
     : 0;
@@ -64,69 +100,55 @@ export const recalculateSplitShares = (
   if (splitMethod === 'percentage') {
     return shares.map(share => ({
       ...share,
-      amount: share.isIncluded ? round2((totalToSplit * (share.percentage || 0)) / 100) : 0,
+      amount: share.isIncluded ? percentShareAmount(totalToSplit, share.percentage || 0) : 0,
     }));
   }
 
   return shares;
 };
 
+/**
+ * Switching to percentages with nothing entered yet starts everyone, me included, on an even
+ * share (e.g. 33.33% each for two people and me) instead of 0% for the others.
+ */
+export const seedEvenPercentages = (shares: SplitShare[], totalToSplit: number): SplitShare[] => {
+  const included = shares.filter(share => share.isIncluded);
+  if (included.length === 0 || included.some(share => (share.percentage || 0) > 0)) return shares;
+  const percentage = round2(100 / (included.length + 1));
+  return shares.map(share => share.isIncluded
+    ? { ...share, percentage, amount: percentShareAmount(totalToSplit, percentage) }
+    : share);
+};
+
+/**
+ * Sets one person's percentage. The payer ("me") is part of the 100%: whatever the others do
+ * not take is my share, so nothing is auto-filled into another person.
+ */
 export const updatePercentageShare = (
   shares: SplitShare[],
   personId: string,
-  value: string,
-  totalToSplit: number
+  value: AmountLike,
+  totalToSplit: number,
+  language?: 'en' | 'sr'
 ): SplitShare[] => {
-  const newPercentage = parseFloat(value) || 0;
-
-  const updatedShares = shares.map(share =>
+  const newPercentage = round2(Math.max(0, readAmount(value, language)));
+  return shares.map(share =>
     share.personId === personId
-      ? {
-          ...share,
-          percentage: round2(newPercentage),
-          amount: round2((totalToSplit * newPercentage) / 100),
-        }
+      ? { ...share, percentage: newPercentage, amount: percentShareAmount(totalToSplit, newPercentage) }
       : share
   );
-
-  const assignedPercentage = updatedShares.reduce(
-    (sum, share) => sum + (share.personId === personId ? newPercentage : (share.percentage || 0)),
-    0
-  );
-  const emptyShares = updatedShares.filter(
-    share =>
-      share.isIncluded &&
-      share.personId !== personId &&
-      (share.percentage === 0 || share.percentage === undefined)
-  );
-
-  if (emptyShares.length === 1) {
-    const remaining = 100 - assignedPercentage;
-    if (remaining >= 0) {
-      return updatedShares.map(share =>
-        share.personId === emptyShares[0].personId
-          ? {
-              ...share,
-              percentage: round2(remaining),
-              amount: round2((totalToSplit * remaining) / 100),
-            }
-          : share
-      );
-    }
-  }
-
-  return updatedShares;
 };
 
 export const calculateRemainingAmount = (shares: SplitShare[], totalToSplit: number): number =>
   round2(totalToSplit - shares.filter(share => share.isIncluded).reduce((sum, share) => sum + share.amount, 0));
 
+/** My own percentage: what the others leave of 100%. Negative when they take more than 100%. */
 export const calculateRemainingPercentage = (shares: SplitShare[]): number =>
   round2(100 - shares.filter(share => share.isIncluded).reduce((sum, share) => sum + (share.percentage || 0), 0));
 
 interface CalculateIPaidSplitSubmissionArgs {
-  amount: string;
-  fees: string;
+  amount: AmountLike;
+  fees: AmountLike;
   currency: Currency;
   categoryId: string;
   accountId: string;
@@ -181,9 +203,10 @@ export const toggleDebtRecipient = (
 export const updateDebtRecipientAmount = (
   recipients: DebtRecipient[],
   personId: string,
-  value: string
+  value: AmountLike,
+  language?: 'en' | 'sr'
 ): DebtRecipient[] => {
-  const amount = round2(parseFloat(value) || 0);
+  const amount = round2(Math.max(0, readAmount(value, language)));
   return recipients.map(recipient =>
     recipient.personId === personId
       ? { ...recipient, amount }
@@ -229,21 +252,20 @@ const buildCalculatedShares = (
     };
   }
 
-  const othersTotalCents = includedShares.reduce((sum, share) => sum + Math.round(share.amount * 100), 0);
+  // Percentages are worked out from the final total (fees included); I keep what is left.
+  const others = includedShares.map(share => ({
+    personId: share.personId,
+    amount: splitMethod === 'percentage' ? percentShareAmount(totalAmount, share.percentage || 0) : round2(share.amount),
+    percentage: round2(share.percentage || 0),
+  }));
+  const othersTotalCents = others.reduce((sum, share) => sum + Math.round(share.amount * 100), 0);
   const myPortion = (Math.round(totalAmount * 100) - othersTotalCents) / 100;
 
   if (myPortion < 0) {
     return null;
   }
 
-  return {
-    myPortion,
-    shares: includedShares.map(share => ({
-      personId: share.personId,
-      amount: round2(share.amount),
-      percentage: round2(share.percentage || 0),
-    })),
-  };
+  return { myPortion, shares: others };
 };
 
 /**
@@ -289,13 +311,14 @@ export const calculateIPaidSplitSubmission = ({
   transactionId,
   transaction,
   eventId,
+  language,
 }: CalculateIPaidSplitSubmissionArgs): SplitSubmissionResult => {
   const includedShares = shares.filter(share => share.isIncluded);
   if (includedShares.length === 0) {
     return { balanceUpdates: [], error: 'no-participants' };
   }
 
-  const totalAmount = calculateTotalSplitAmount(amount, fees, currency, rates);
+  const totalAmount = calculateTotalSplitAmount(amount, fees, currency, rates, language);
   if (totalAmount <= 0) {
     return { balanceUpdates: [], error: 'invalid-amount' };
   }
@@ -316,8 +339,8 @@ export const calculateIPaidSplitSubmission = ({
     transaction: {
       id: transaction?.id || transactionId || '',
       date: transactionDate,
-      amount: parseFloat(amount) || 0,
-      fees: parseFloat(fees) || undefined,
+      amount: readAmount(amount, language),
+      fees: readAmount(fees, language) || undefined,
       currency,
       categoryId,
       accountId,

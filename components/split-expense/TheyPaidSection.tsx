@@ -4,7 +4,9 @@ import clsx from 'clsx';
 import { TheyPaidSectionProps } from './types';
 import { TRANSLATIONS } from '../../constants';
 import { Avatar } from '../home/parts';
-import { formatDecimal } from '../../utils/locale';
+import { formatMoney } from '../../utils/locale';
+import { AmountInput } from '../ui/AmountInput';
+import { FieldError } from './CommonFields';
 
 const label = 'mb-1.5 block px-1 text-[13px] font-semibold text-muted';
 const chip = 'flex h-10 items-center gap-2 rounded-full pl-1 pr-3.5 text-[14px] font-semibold transition-colors';
@@ -18,6 +20,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
     recipientTotal,
     toggleRecipient,
     updateRecipientAmount,
+    invalidRecipients,
     currency,
     language,
     getPerson
@@ -107,24 +110,34 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
                     </p>
                     <div className="paper-tile px-3">
                         <div className="divide-y divide-hair">
-                            {includedRecipients.map(recipient => (
-                                <div key={recipient.personId} className="flex items-center gap-2.5 py-2.5">
-                                    {recipientAvatar(recipient.personId, recipient.name, 32)}
-                                    <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{recipient.name}</span>
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        aria-label={recipient.name}
-                                        value={recipient.amount || ''}
-                                        onChange={(e) => updateRecipientAmount(recipient.personId, e.target.value)}
-                                        placeholder="0"
-                                        className="h-10 w-[104px] shrink-0 rounded-[12px] border-none bg-chip px-3 text-right text-[15px] font-semibold tabular-nums text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
-                                        step="0.01"
-                                        onFocus={(e) => e.target.select()}
-                                    />
-                                    <span className="w-9 shrink-0 text-[13px] font-semibold text-muted">{currency}</span>
-                                </div>
-                            ))}
+                            {includedRecipients.map(recipient => {
+                                const invalid = !!invalidRecipients[recipient.personId];
+                                const errorId = `split-recipient-${recipient.personId}-error`;
+                                return (
+                                    <div key={recipient.personId} className="py-2.5">
+                                        <div className="flex items-center gap-2.5">
+                                            {recipientAvatar(recipient.personId, recipient.name, 32)}
+                                            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{recipient.name}</span>
+                                            <AmountInput
+                                                language={language}
+                                                aria-label={`${recipient.name} ${currency}`}
+                                                value={recipient.amount}
+                                                emptyWhenZero
+                                                onValueChange={(value, text) => updateRecipientAmount(recipient.personId, value, text)}
+                                                placeholder="0"
+                                                aria-invalid={invalid}
+                                                aria-describedby={invalid ? errorId : undefined}
+                                                className={clsx(
+                                                    'h-10 w-[104px] shrink-0 rounded-[12px] border-none bg-chip px-3 text-right text-[15px] font-semibold tabular-nums text-on-surface outline-none placeholder:text-faint focus:ring-2',
+                                                    invalid ? 'ring-2 ring-neg focus:ring-neg' : 'focus:ring-accent'
+                                                )}
+                                            />
+                                            <span className="w-9 shrink-0 text-[13px] font-semibold text-muted">{currency}</span>
+                                        </div>
+                                        <FieldError id={errorId} message={invalid ? t.splitErrorInvalidAmount : null} />
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         {/* Total */}
@@ -133,7 +146,7 @@ export const TheyPaidSection: React.FC<TheyPaidSectionProps> = ({
                                 {t.totalPaidBy.replace('{name}', getPerson(payerId)?.name ?? '')}
                             </span>
                             <span className="text-[16px] font-bold tabular-nums">
-                                {formatDecimal(recipientTotal)} {currency}
+                                {formatMoney(recipientTotal, currency, language)}
                             </span>
                         </div>
                     </div>

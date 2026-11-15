@@ -1,6 +1,9 @@
 import React, { useMemo, useRef } from 'react';
 import { m } from 'motion/react';
-import { Edit, Handshake, MoreHorizontal, Plus, Receipt, Trash2 } from 'lucide-react';
+import { Edit, Handshake, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { Illustration } from '../ui/Illustration';
+import { IconTile } from '../ui/IconTile';
+import { stableColor } from '../../utils/stableColor';
 import { AppState, SharedExpense, Transaction, Person, Currency } from '../../types';
 import { convertCurrency } from '../../utils/currencyUtils';
 import { UnifiedExpense } from './types';
@@ -11,6 +14,9 @@ import { getIntlLocale } from '../../utils/locale';
 import { CategoryGlyph } from '../ui/CategoryGlyph';
 import { money } from '../home/parts';
 import { isSettlementExpense } from '../../domain/settle';
+import { localizeCategoryName, localizeTransactionNote } from '../../utils/systemText';
+import { participantName, type EventViewer } from '../../domain/eventViewer';
+import { openTransactionDetails } from '../transaction-details/detailsBus';
 
 interface ExpensesListProps {
     unifiedExpenses: UnifiedExpense[];
@@ -25,6 +31,8 @@ interface ExpensesListProps {
     onOpenSharedModal: () => void;
     /** Currency for the per-day totals. */
     currency?: Currency;
+    /** Who is looking (domain/eventViewer): which ids read as "You" and which are the organizer. */
+    viewer: Pick<EventViewer, 'selfIds' | 'ownerIds' | 'ownerName'>;
 }
 
 const LONG_PRESS_MS = 500;
@@ -43,12 +51,14 @@ interface RowProps {
     setOpenMenuId: (id: string | null) => void;
     /** Without it (settlement rows) a tap opens the actions menu instead. */
     onEdit?: () => void;
+    /** What a tap does when it is not editing (an entry opens its details). */
+    onOpen?: () => void;
     onDelete: () => void;
     t: (typeof TRANSLATIONS)['en'];
 }
 
-/** One expense row: tap to edit, long-press or the ... button for actions. */
-const ExpenseRow: React.FC<RowProps> = ({ id, left, title, sub, amount, amountClassName, last, menuOpen, setOpenMenuId, onEdit, onDelete, t }) => {
+/** One expense row: tap to open (or edit), long-press or the ... button for actions. */
+const ExpenseRow: React.FC<RowProps> = ({ id, left, title, sub, amount, amountClassName, last, menuOpen, setOpenMenuId, onEdit, onOpen, onDelete, t }) => {
     const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const longPressed = useRef(false);
 
@@ -70,7 +80,8 @@ const ExpenseRow: React.FC<RowProps> = ({ id, left, title, sub, amount, amountCl
                     type="button"
                     onClick={() => {
                         if (longPressed.current) return;
-                        if (onEdit) onEdit();
+                        if (onOpen) onOpen();
+                        else if (onEdit) onEdit();
                         else setOpenMenuId(menuOpen ? null : id);
                     }}
                     onMouseDown={handlePressStart}
@@ -99,7 +110,7 @@ const ExpenseRow: React.FC<RowProps> = ({ id, left, title, sub, amount, amountCl
                     aria-expanded={menuOpen}
                     title={t.moreActions}
                     onClick={() => setOpenMenuId(menuOpen ? null : id)}
-                    className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-opacity hover:bg-chip opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                    className="-mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-opacity hover:bg-chip opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 sm:group-focus-within:opacity-100 sm:focus-visible:opacity-100"
                 >
                     <MoreHorizontal size={18} aria-hidden="true" />
                 </button>
@@ -162,6 +173,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     onDeleteSharedExpense,
     onOpenSharedModal,
     currency = state.baseCurrency,
+    viewer,
 }) => {
     const t = TRANSLATIONS[state.language];
     const locale = getIntlLocale(state.language);
@@ -203,9 +215,9 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 
     if (unifiedExpenses.length === 0) {
         return (
-            <section className="paper-tile flex flex-col items-center gap-3 px-6 py-10 text-center">
-                <span className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-accent-soft text-accent" aria-hidden="true">
-                    <Receipt size={26} />
+            <section className="paper-tile flex flex-col items-center gap-3 px-6 pb-10 pt-6 text-center">
+                <span className="h-28 w-36" aria-hidden="true">
+                    <Illustration name="receipt" />
                 </span>
                 <h3 className="text-[17px] font-bold">{t.noExpensesYet}</h3>
                 <p className="max-w-[280px] text-[14px] text-muted">{t.noEventExpensesDesc}</p>
@@ -237,19 +249,21 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                 const category = state.categories.find(c => c.id === tx.categoryId);
                                 const account = state.accounts.find(a => a.id === tx.accountId);
                                 const isExpense = tx.type === 'expense';
+                                const categoryName = category ? localizeCategoryName(category, state.language) : undefined;
                                 return (
                                     <ExpenseRow
                                         key={tx.id}
                                         id={tx.id}
                                         left={<CategoryGlyph category={category} />}
-                                        title={tx.note || category?.name || t.expense}
-                                        sub={[category?.name, account?.name].filter(Boolean).join(' · ')}
+                                        title={localizeTransactionNote(tx.note, state.language) || categoryName || t.expense}
+                                        sub={[categoryName, account?.name].filter(Boolean).join(' · ')}
                                         amount={money(tx.amount, tx.currency, state.language, true)}
                                         amountClassName={isExpense ? undefined : 'text-pos'}
                                         last={last}
                                         menuOpen={openMenuId === tx.id}
                                         setOpenMenuId={setOpenMenuId}
                                         onEdit={() => onEditTransaction(tx)}
+                                        onOpen={() => openTransactionDetails(tx.id)}
                                         onDelete={() => onDeleteTransaction?.(tx.id)}
                                         t={t}
                                     />
@@ -260,20 +274,18 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                             const payer =
                                 eventPeople.find(p => p.id === expense.paidBy) ??
                                 state.people.find(p => p.id === expense.paidBy);
-                            const findPerson = (id: string) =>
-                                eventPeople.find(p => p.id === id) ?? state.people.find(p => p.id === id);
+                            const isSelf = (id: string) => viewer.selfIds.has(id);
+                            // Event participants first: there a guest sees the organizer under their name.
+                            const nameOf = (id: string, unknown = t.unknown) =>
+                                participantName(id, viewer, [...eventPeople, ...state.people], { you: t.you, organizer: t.organizer, unknown });
                             if (isSettlementExpense(expense)) {
-                                const isSelf = (id: string) => id === 'self' || id === state.userProfile?.id;
-                                const nameOf = (id: string) => (isSelf(id) ? t.you : findPerson(id)?.name ?? t.unknown);
                                 const receiver = expense.sharedWith[0] ?? '';
                                 return (
                                     <ExpenseRow
                                         key={expense.id}
                                         id={expense.id}
                                         left={(
-                                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
-                                                <Handshake size={19} />
-                                            </span>
+                                            <IconTile icon={Handshake} size={40} shape="circle" color="var(--paper-pos)" />
                                         )}
                                         title={t.settlement}
                                         sub={`${nameOf(expense.paidBy)} → ${nameOf(receiver)}`}
@@ -295,7 +307,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                         <span
                                             title={payer ? getParticipantTooltipLabel(payer) : t.unknownPayer}
                                             className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white"
-                                            style={{ background: payer?.color || '#8A8984' }}
+                                            style={{ background: payer ? payer.color || stableColor(payer.name) : '#8A8984' }}
                                         >
                                             {payer?.avatar
                                                 ? <img src={payer.avatar} alt={payer.name} className="h-full w-full object-cover" />
@@ -303,7 +315,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                                         </span>
                                     )}
                                     title={expense.name}
-                                    sub={`${t.paidByName.replace('{name}', payer?.name ?? t.unknownPayer)} · ${formatPeopleCount(expense.sharedWith.length)}`}
+                                    sub={`${isSelf(expense.paidBy) ? t.youPaid : t.paidByName.replace('{name}', payer?.name ?? nameOf(expense.paidBy, t.unknownPayer))} · ${formatPeopleCount(expense.sharedWith.length)}`}
                                     amount={money(expense.amount, expense.currency, state.language, true)}
                                     last={last}
                                     menuOpen={openMenuId === expense.id}

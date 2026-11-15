@@ -53,7 +53,6 @@ const baseState: AppState = {
   rates: { base: 'EUR', date: '2026-04-06', rates: { EUR: 1, USD: 2, RSD: 120 } },
   templates: [],
   recurringTransactions: [],
-  theme: 'graphite',
   language: 'en',
   events: [event],
   sharedExpenses: [

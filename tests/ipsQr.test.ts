@@ -35,6 +35,10 @@ describe('account numbers', () => {
     expect(parseAccountNumber('160-1234567-29')).toEqual({ ok: true, digits: DUMMY });
     expect(parseAccountNumber(' 160 0000001234567 29 ')).toEqual({ ok: true, digits: DUMMY });
     expect(parseAccountNumber(DUMMY)).toEqual({ ok: true, digits: DUMMY });
+    // Pasted with typographic dashes or non-breaking spaces.
+    expect(parseAccountNumber('160\u20130000001234567\u201429')).toEqual({ ok: true, digits: DUMMY });
+    expect(parseAccountNumber('160\u20111234567\u221229')).toEqual({ ok: true, digits: DUMMY });
+    expect(parseAccountNumber('160\u00a00000001234567\u202f29')).toEqual({ ok: true, digits: DUMMY });
     // NBS examples: 840-955845-10 and 165-55-74 are zero padded in the middle.
     expect(parseAccountNumber('840-955845-10')).toEqual({ ok: true, digits: '840000000095584510' });
   });

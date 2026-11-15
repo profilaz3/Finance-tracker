@@ -44,3 +44,6 @@ tmp-preview.*
 
 # Android release signing (points at ~/Android/keystores; never commit)
 android/keystore.properties
+
+# Cloudflare wrangler local state
+.wrangler

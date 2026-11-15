@@ -127,6 +127,7 @@ export const IncomeChart: React.FC<IncomeChartProps> = ({
       <div className="h-[260px] w-full sm:h-[320px]">
         {netWorthData.length > 0 ? (
           <StackedAreaLineChart
+            ariaLabel={t.totalNetWorth}
             rows={netWorthData}
             labelKey="label"
             areaKeys={[

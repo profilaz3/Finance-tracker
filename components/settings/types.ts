@@ -13,6 +13,8 @@ export interface SettingsViewProps {
 
     getAccountBalance: (account: Account) => number;
     onLogout?: () => void;
+    /** Signs out of every device (ends all sessions of the user). */
+    onLogoutEverywhere?: () => void;
     onDeleteAccount?: () => void;
     onAddCategory: (category: Category) => void;
     onUpdateCategory: (category: Category) => void;

@@ -1,7 +1,7 @@
-import { AppearanceSchema, BudgetSchema, HomeLayoutSchema, PaymentDetailsSchema } from '../schemas';
+import { AppearanceSchema, BudgetSchema, HomeHeaderSchema, HomeLayoutSchema, PaymentDetailsSchema, TeamBudgetsSchema } from '../schemas';
 import type { AppState } from '../types';
 
-type PrefsSlice = Pick<AppState, 'appearance' | 'homeLayout' | 'budget' | 'paymentDetails'>;
+type PrefsSlice = Pick<AppState, 'appearance' | 'homeLayout' | 'homeHeader' | 'budget' | 'teamBudgets' | 'paymentDetails'>;
 
 /**
  * Read `settings.prefs` from the server. Each part is validated on its own so a
@@ -19,11 +19,22 @@ export function parseSettingsPrefs(raw: unknown): Partial<PrefsSlice> {
   const layout = HomeLayoutSchema.safeParse(prefs.homeLayout);
   if (layout.success) result.homeLayout = layout.data;
 
+  const header = HomeHeaderSchema.safeParse(prefs.homeHeader);
+  if (header.success) result.homeHeader = header.data;
+
   if (prefs.budget === null) {
     result.budget = null;
   } else {
     const budget = BudgetSchema.safeParse(prefs.budget);
     if (budget.success) result.budget = budget.data;
+  }
+
+  // Team workspace budgets: a malformed map keeps the local copy; null means none.
+  if (prefs.teamBudgets === null) {
+    result.teamBudgets = {};
+  } else if (prefs.teamBudgets !== undefined) {
+    const teamBudgets = TeamBudgetsSchema.safeParse(prefs.teamBudgets);
+    if (teamBudgets.success) result.teamBudgets = teamBudgets.data;
   }
 
   // Payment details: `payment: null` clears them, a malformed value keeps the local copy.

@@ -1,5 +1,6 @@
-import { Account, Category, Currency, Person, Transaction } from '../types';
+import { Account, Category, Currency, ExchangeRates, Person, Transaction } from '../types';
 import { resolveRepaymentCategory } from './money';
+import { convertAmount } from '../services/currencyService';
 
 interface BuildPersonInput {
   createId: () => string;
@@ -97,6 +98,46 @@ export const addAccountToCollection = (accounts: Account[], account: Account): A
 
 export const removeAccountFromCollection = (accounts: Account[], id: string): Account[] =>
   accounts.filter(account => account.id !== id);
+
+/**
+ * Wallet a settlement with a person is recorded in: the first wallet in the settled currency, so
+ * paying back dinars lands in a dinar wallet without a conversion; otherwise the first wallet.
+ */
+export const pickSettlementAccountId = (
+  accounts: Pick<Account, 'id' | 'currency'>[],
+  currency: Currency,
+): string | undefined => accounts.find(account => account.currency === currency)?.id ?? accounts[0]?.id;
+
+const OPEN_BALANCE_EPSILON = 0.005;
+const BALANCE_CURRENCIES: Currency[] = ['EUR', 'USD', 'RSD'];
+
+/**
+ * Open balances with a person split by direction of money: `owedToMe` (they pay me back,
+ * positive balances) and `iOwe` (I pay them back, negative balances), each as [currency, amount]
+ * with the amount as a positive number. A settle button only clears one direction.
+ */
+export const splitOpenBalances = (
+  balances: Partial<Record<Currency, number>>,
+): { owedToMe: [Currency, number][]; iOwe: [Currency, number][] } => {
+  const owedToMe: [Currency, number][] = [];
+  const iOwe: [Currency, number][] = [];
+  BALANCE_CURRENCIES.forEach(currency => {
+    const amount = balances[currency] || 0;
+    if (amount >= OPEN_BALANCE_EPSILON) owedToMe.push([currency, roundAmount(amount)]);
+    else if (amount <= -OPEN_BALANCE_EPSILON) iOwe.push([currency, roundAmount(-amount)]);
+  });
+  return { owedToMe, iOwe };
+};
+
+/** A person's balances netted into one currency at `rates` (positive: they owe me). */
+export const netPersonBalance = (
+  balances: Partial<Record<Currency, number>>,
+  currency: Currency,
+  rates: ExchangeRates,
+): number => (Object.entries(balances) as [Currency, number][]).reduce(
+  (sum, [entryCurrency, amount]) => sum + (amount ? convertAmount(amount, entryCurrency, currency, rates) : 0),
+  0,
+);
 
 export const buildSettlementDraft = ({
   createId,

@@ -1,16 +1,17 @@
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { lazyWithReload } from '../../utils/lazyWithReload';
 import { AppState, Currency, Event, Person, Transaction } from '../../types';
 import { CHART_COLORS, TRANSLATIONS } from '../../constants';
 import type { SplitPrefill } from '../split-expense/types';
 import { useAskRequests } from '../ask/askBus';
+import { duplicateTransactionDraft } from '../../domain/transactions';
 import type { PaymentDetails } from '../../types';
 
 const AddPersonModal = lazyWithReload(() => import('../AddPersonModal').then(m => ({ default: m.AddPersonModal })));
 const PersonDetail = lazyWithReload(() => import('../PersonDetail').then(m => ({ default: m.PersonDetail })));
 const EditTransactionModal = lazyWithReload(() => import('../EditTransactionModal').then(m => ({ default: m.EditTransactionModal })));
-const ReceiptModal = lazyWithReload(() => import('../ReceiptModal').then(m => ({ default: m.ReceiptModal })));
+const TransactionDetailsSheet = lazyWithReload(() => import('../transaction-details/TransactionDetailsSheet'));
 const SplitModal = lazyWithReload(() => import('../SplitModal').then(m => ({ default: m.SplitModal })));
 const EventCreationModal = lazyWithReload(() => import('../EventCreationModal').then(m => ({ default: m.EventCreationModal })));
 const ReceiptScanModal = lazyWithReload(() => import('../ReceiptScanModal').then(m => ({ default: m.ReceiptScanModal })));
@@ -24,8 +25,9 @@ interface AppModalsState {
   setIsEditModalOpen: (isOpen: boolean) => void;
   isSplitModalOpen: boolean;
   setIsSplitModalOpen: (isOpen: boolean) => void;
-  isReceiptModalOpen: boolean;
-  setIsReceiptModalOpen: (isOpen: boolean) => void;
+  detailsId: string | null;
+  detailsOrigin: Element | null;
+  closeDetails: () => void;
   isAddPersonModalOpen: boolean;
   setIsAddPersonModalOpen: (isOpen: boolean) => void;
   isEventCreationModalOpen: boolean;
@@ -52,15 +54,18 @@ interface AppModalsProps {
   setSelectedPerson: (person: Person | null) => void;
   setPersonToEdit: (person: Person | null) => void;
   setSplitTransactionContext: (transaction: Transaction | undefined) => void;
+  setSelectedTransaction: (transaction: Transaction | null) => void;
+  onSaveAsTemplate: (transaction: Transaction) => void;
+  createId: () => string;
   handleSplitTransaction: (amount: number, currency: Currency, targetId: string, targetType: 'account' | 'person') => Promise<void>;
   deletePerson: (id: string) => Promise<void>;
-  handleSettleUp: (personId: string, currency: AppState['baseCurrency'], amount?: number) => void;
+  handleSettleUp: (personId: string, currency: AppState['baseCurrency'], amount?: number, accountId?: string) => void;
   handleUpdatePersonBalance: (personId: string, currency: Currency, newBalance: number) => Promise<void>;
   addPerson: (name: string, defaultCurrency: Currency, color: string, avatar?: string) => Promise<void>;
   updatePerson: (id: string, updates: Partial<Person>) => Promise<void>;
   createUserProfile: (name: string, defaultCurrency: Currency, color: string, avatar?: string) => Promise<void>;
   updateUserProfile: (id: string, updates: Partial<Person>) => Promise<void>;
-  updateTransaction: (updatedTransaction: Transaction) => Promise<void>;
+  updateTransaction: (updatedTransaction: Transaction, targetAccountId?: string, options?: { silent?: boolean }) => Promise<void>;
   deleteTransaction: (id: string) => void;
   handleCreateEvent: (event: Event) => Promise<void>;
   addTransaction: (transaction: Transaction) => Promise<void>;
@@ -68,7 +73,11 @@ interface AppModalsProps {
     transactions: Transaction[];
     balanceUpdates: { personId: string; currency: Currency; delta: number }[];
   }) => Promise<void>;
-  addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  addToast: (
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info',
+    action?: { label: string; onClick: () => void },
+  ) => void;
   t: typeof TRANSLATIONS.en;
   /** A receipt image shared into the app; opens the receipt scanner preloaded. */
   sharedReceiptImage?: string | null;
@@ -92,6 +101,9 @@ export const AppModals: React.FC<AppModalsProps> = ({
   setSelectedPerson,
   setPersonToEdit,
   setSplitTransactionContext,
+  setSelectedTransaction,
+  onSaveAsTemplate,
+  createId,
   handleSplitTransaction,
   deletePerson,
   handleSettleUp,
@@ -120,10 +132,54 @@ export const AppModals: React.FC<AppModalsProps> = ({
     modals.setIsAskOpen(true);
   });
 
+  // The details sheet shows the live entry, so edits made from it appear in it; a deleted entry closes it.
+  const detailsTransaction = modals.detailsId ? state.transactions.find(transaction => transaction.id === modals.detailsId) : undefined;
+  const { detailsId, closeDetails } = modals;
+  useEffect(() => {
+    if (detailsId && !detailsTransaction) closeDetails();
+  }, [detailsId, detailsTransaction, closeDetails]);
+
+  const editTransaction = (transaction: Transaction) => {
+    if (transaction.splitDetails) {
+      setSplitTransactionContext(transaction);
+      modals.setIsSplitExpenseModalOpen(true);
+      return;
+    }
+    setSelectedTransaction(transaction);
+    modals.setIsEditModalOpen(true);
+  };
+
   return (
     <Suspense fallback={null}>
       {/* Modals stay mounted while their exit animation plays. */}
       <AnimatePresence>
+      {/* First, so the forms opened from it (same layer, later in the page) sit on top of it. */}
+      {detailsTransaction && (
+        <TransactionDetailsSheet
+          key="transaction-details"
+          transaction={detailsTransaction}
+          origin={modals.detailsOrigin}
+          state={state}
+          onClose={closeDetails}
+          onEdit={editTransaction}
+          onSplit={transaction => {
+            setSelectedTransaction(transaction);
+            modals.setIsSplitModalOpen(true);
+          }}
+          onDuplicate={transaction => {
+            setSelectedTransaction(duplicateTransactionDraft(transaction, { createId }));
+            modals.setIsEditModalOpen(true);
+          }}
+          onSaveAsTemplate={onSaveAsTemplate}
+          onDelete={transaction => {
+            closeDetails();
+            deleteTransaction(transaction.id);
+          }}
+          onSettle={handleSettleUp}
+          onUpdate={transaction => void updateTransaction(transaction, undefined, { silent: true })}
+          onToast={addToast}
+        />
+      )}
       {modals.isSplitModalOpen && (
         <SplitModal
           key="split"
@@ -153,6 +209,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
           }}
           onSettleUp={handleSettleUp}
           onUpdateBalance={handleUpdatePersonBalance}
+          accounts={state.accounts}
           language={state.language}
         />
       )}
@@ -181,17 +238,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
           onUpdate={updateUserProfile}
           initialData={state.userProfile || null}
           language={state.language}
-        />
-      )}
-
-      {modals.isReceiptModalOpen && (
-        <ReceiptModal
-          key="receipt"
-          isOpen={modals.isReceiptModalOpen}
-          onClose={() => modals.setIsReceiptModalOpen(false)}
-          transaction={selectedTransaction}
-          onSave={updateTransaction}
-          t={t}
+          isOwnProfile
         />
       )}
 
@@ -210,6 +257,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
           onDelete={deleteTransaction}
           t={t}
           transactions={state.transactions}
+          rates={state.rates}
         />
       )}
 
@@ -235,6 +283,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
           categories={state.categories}
           accounts={state.accounts}
           baseCurrency={state.baseCurrency}
+          rates={state.rates}
           language={state.language}
           initialImage={sharedReceiptImage}
           people={state.people}

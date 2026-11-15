@@ -1,6 +1,7 @@
 import React, { useId, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { CircleCheck, CircleAlert } from 'lucide-react';
+import { CircleCheck, CircleAlert, Landmark } from 'lucide-react';
+import { CurrencyFlag } from '../ui/CurrencyFlag';
 import { TRANSLATIONS } from '../../constants';
 import type { AppState, PaymentDetails } from '../../types';
 import { formatAccountNumber, IPS_LIMITS, parseAccountNumber } from '../../utils/ipsQr';
@@ -18,6 +19,46 @@ interface PaymentDetailsFormProps {
 
 const field = 'h-12 w-full min-w-0 rounded-[14px] border-none bg-chip px-4 text-[16px] outline-none placeholder:text-faint focus:ring-2 focus:ring-accent';
 const label = 'px-1 text-[12px] font-semibold text-muted';
+
+const GROUPS = [3, 13, 2];
+
+/** A small bank card that mirrors the form as you type: account in 3-13-2 groups, missing digits as faint zeros. */
+const AccountCardPreview: React.FC<{ digits: string; name: string; valid: boolean }> = ({ digits, name, valid }) => {
+  let offset = 0;
+  const groups = GROUPS.map(length => {
+    const part = digits.slice(offset, offset + length);
+    offset += length;
+    return { part, rest: '0'.repeat(Math.max(0, length - part.length)) };
+  });
+  return (
+    <div aria-hidden="true" className="relative overflow-hidden rounded-[24px] bg-accent p-4 text-on-accent shadow-[0_14px_30px_-18px_rgb(var(--accent-rgb)/0.9)]">
+      <svg viewBox="0 0 300 160" preserveAspectRatio="xMaxYMid slice" className="pointer-events-none absolute inset-0 h-full w-full">
+        <circle cx="270" cy="20" r="90" fill="currentColor" fillOpacity="0.08" />
+        <circle cx="270" cy="20" r="54" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeWidth="1.5" />
+        <path d="M0 140 C 80 110, 160 170, 300 120" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="1.5" />
+      </svg>
+      <div className="relative flex items-center justify-between">
+        <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/20 ring-1 ring-white/25">
+          <Landmark size={20} />
+        </span>
+        <span className="flex items-center gap-2">
+          {valid && <CircleCheck size={18} />}
+          <span className="flex rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.35)]"><CurrencyFlag currency="RSD" size={28} /></span>
+        </span>
+      </div>
+      <p className="relative mt-5 whitespace-nowrap text-[19px] font-semibold tabular-nums tracking-[0.6px]">
+        {groups.map((group, index) => (
+          <React.Fragment key={index}>
+            {index > 0 && <span className="opacity-60">-</span>}
+            {group.part}
+            <span className="opacity-40">{group.rest}</span>
+          </React.Fragment>
+        ))}
+      </p>
+      <p className="relative mt-1 truncate text-[13px] font-semibold uppercase tracking-[0.8px] opacity-85">{name || '\u00A0'}</p>
+    </div>
+  );
+};
 
 /** Account number (validated as you type), name and optional address for IPS QR requests. */
 export const PaymentDetailsForm: React.FC<PaymentDetailsFormProps> = ({
@@ -64,6 +105,11 @@ export const PaymentDetailsForm: React.FC<PaymentDetailsFormProps> = ({
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+      <AccountCardPreview
+        digits={parsed.ok ? parsed.digits : account.replace(/\D/g, '').slice(0, 18)}
+        name={name.trim()}
+        valid={parsed.ok}
+      />
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-account`} className={label}>{t.payAccount}</label>
         <input

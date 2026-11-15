@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const SHARE_REGRESSION_URL = process.env.SHARE_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const SHARE_REGRESSION_EMAIL = process.env.SHARE_REGRESSION_EMAIL;
@@ -33,8 +34,11 @@ const formatInviteName = (email) => {
 const screenshotDir = 'output/playwright';
 const expectedTooltip = `Invited guest: ${formatInviteName(SHARE_REGRESSION_INVITE)}`;
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const shareDialogName = /^share event$|^podeli događaj$/i;
+
 const signInIfNeeded = async (page) => {
-  const signInButton = page.getByRole('button', { name: 'Sign In' });
+  const signInButton = page.getByRole('button', { name: /sign in|prijavi/i });
 
   if (!(await signInButton.isVisible().catch(() => false))) {
     return;
@@ -47,45 +51,78 @@ const signInIfNeeded = async (page) => {
 };
 
 const navigateToEvents = async (page) => {
-  const eventsHeading = page.getByRole('heading', { name: 'Events', exact: true });
+  const eventsHeading = page.getByRole('heading', { name: /^shared$|^zajedničko$/i, level: 1 });
 
   if (await eventsHeading.isVisible().catch(() => false)) {
     return;
   }
 
-  await page.getByText('Events', { exact: true }).first().click();
+  await page
+    .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+    .getByRole('button', { name: /^shared$|^zajedničko$/i })
+    .click();
   await eventsHeading.waitFor({ timeout: 15000 });
 };
 
 const openEvent = async (page) => {
   await navigateToEvents(page);
-  const eventHeading = page.getByRole('heading', { name: SHARE_REGRESSION_EVENT, exact: true }).first();
-  await eventHeading.waitFor({ timeout: 15000 });
-  await eventHeading.click();
+  // Event cards are buttons; their title is part of the button name, not a heading.
+  const eventCard = page.getByRole('button', { name: new RegExp(escapeRegExp(SHARE_REGRESSION_EVENT)) }).first();
+  await eventCard.waitFor({ timeout: 15000 });
+  await eventCard.click();
   await page.getByRole('heading', { name: SHARE_REGRESSION_EVENT, exact: true }).waitFor({ timeout: 15000 });
 };
 
+const openShareDialog = async (page) => {
+  await page.getByRole('button', { name: /^event actions$|^akcije događaja$/i }).click();
+  const shareAction = page.getByRole('menu', { name: /^event actions$|^akcije događaja$/i })
+    .getByRole('menuitem', { name: shareDialogName });
+  if (!(await shareAction.isVisible().catch(() => false))) {
+    throw new Error(
+      `"Event actions" for "${SHARE_REGRESSION_EVENT}" has no "Share event" item. Only the event owner can share; ` +
+        `${SHARE_REGRESSION_EMAIL} should own this event.`,
+    );
+  }
+  await shareAction.click();
+  const dialog = page.getByRole('dialog', { name: shareDialogName });
+  await dialog.waitFor({ timeout: 10000 });
+  return dialog;
+};
+
 const shareEvent = async (page) => {
-  await page.getByRole('button', { name: 'Event actions' }).click();
-  await page.getByRole('button', { name: 'Share Event' }).click();
-  await page.getByRole('heading', { name: 'Share Event' }).waitFor({ timeout: 10000 });
-  await page.locator('input[type="email"]').last().fill(SHARE_REGRESSION_INVITE);
-  await page.getByRole('button', { name: 'Share', exact: true }).click();
-  await page.getByText('Event shared successfully!').waitFor({ timeout: 15000 });
+  const dialog = await openShareDialog(page);
+  await dialog.getByRole('textbox', { name: /email address|imejl adresa/i }).fill(SHARE_REGRESSION_INVITE);
+  await dialog.getByRole('button', { name: /^share$|^podeli$/i }).click();
+  // Success is confirmed inside the sheet ("Shared with <email>. They'll see ...").
+  await dialog.getByRole('status').filter({ hasText: SHARE_REGRESSION_INVITE }).waitFor({ timeout: 15000 });
   await page.getByTitle(expectedTooltip).waitFor({ timeout: 15000 });
+  return dialog;
+};
+
+// Cleanup: stop sharing with the throwaway invite so runs do not pile guests onto the event.
+const unshareInvite = async (page, dialog) => {
+  await dialog
+    .getByRole('button', { name: new RegExp(`^(?:stop sharing with|prestani da deliš sa) ${escapeRegExp(SHARE_REGRESSION_INVITE)}$`, 'i') })
+    .click();
+  await page.getByTitle(expectedTooltip).waitFor({ state: 'detached', timeout: 15000 });
+  await dialog.getByRole('button', { name: /^close$|^zatvori$/i }).click();
+  await dialog.waitFor({ state: 'detached', timeout: 10000 });
 };
 
 const browser = await chromium.launch({ headless: !SHARE_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
 await guardBackend(context);
 const page = await context.newPage();
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
   await page.goto(SHARE_REGRESSION_URL, { waitUntil: 'networkidle' });
   await signInIfNeeded(page);
   await openEvent(page);
-  await shareEvent(page);
+  const shareDialog = await shareEvent(page);
+  await unshareInvite(page, shareDialog);
+  assertNoConsoleIssues(consoleIssues);
   await page.screenshot({ path: `${screenshotDir}/share-event-regression-success.png`, fullPage: true });
   console.log(`Share regression passed for "${SHARE_REGRESSION_EVENT}" with ${SHARE_REGRESSION_INVITE}.`);
 } catch (error) {

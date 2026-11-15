@@ -6,6 +6,7 @@ import type { AppState } from '../../types';
 import { Segmented } from '../ui/Segmented';
 import { REMINDER_LEADS, type NotificationPrefs, type ReminderLead } from '../../domain/notificationRules';
 import { sendTestNotification, setNotificationPrefs, useNotificationPrefs } from '../../hooks/useNotifications';
+import { IconTile } from '../ui/IconTile';
 import {
     canScheduleReminders,
     getNotificationPermission,
@@ -50,15 +51,7 @@ const Switch: React.FC<{ checked: boolean; onChange: (checked: boolean) => void;
     </>
 );
 
-const Glyph: React.FC<{ icon: LucideIcon; tint: string }> = ({ icon: Icon, tint }) => (
-    <span
-        aria-hidden="true"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] text-white"
-        style={{ background: tint }}
-    >
-        <Icon size={19} strokeWidth={2.2} />
-    </span>
-);
+const Glyph: React.FC<{ icon: LucideIcon; tint: string }> = ({ icon, tint }) => <IconTile icon={icon} color={tint} size={36} />;
 
 export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ language }) => {
     const t = TRANSLATIONS[language];
@@ -100,6 +93,11 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ lang
     };
 
     const update = (patch: Partial<NotificationPrefs>) => setNotificationPrefs(patch);
+    // While the system blocks notifications, bill reminders (system-scheduled only) cannot arrive, so
+    // that switch shows off and locked; the others still show as in-app alerts while the app is open.
+    // Saved choices are kept and come back once notifications are allowed.
+    const blocked = permission === 'denied' || permission === 'unsupported';
+    const needsSystem = (key: string) => key === 'bills';
 
     const permissionText =
         permission === 'granted'
@@ -143,18 +141,31 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ lang
                 )}
             </section>
 
-            <ul className="paper-tile overflow-hidden py-1">
-                {rows.map((row, index) => (
+            {blocked && (
+                <p id="notif-blocked-hint" className="-mb-2 px-4 text-[13px] leading-snug text-muted">{t.notifBlockedSwitches}</p>
+            )}
+
+            <ul className="paper-tile overflow-hidden py-1" aria-describedby={blocked ? 'notif-blocked-hint' : undefined}>
+                {rows.map((row, index) => {
+                    const locked = blocked && needsSystem(row.key);
+                    return (
                     <li key={row.key} className={clsx(index < rows.length - 1 && 'border-b border-hair')}>
-                        <label className="flex min-h-[64px] cursor-pointer items-center gap-3 px-4 py-3">
-                            <Glyph icon={row.icon} tint={row.tint} />
-                            <span className="min-w-0 flex-1">
-                                <span className="block text-[15px] font-semibold">{row.title}</span>
-                                <span className="block text-[13px] leading-snug text-muted">{row.hint}</span>
+                        <label className={clsx('flex min-h-[64px] items-center gap-3 px-4 py-3', locked ? 'cursor-not-allowed' : 'cursor-pointer')}>
+                            <span className={clsx('flex min-w-0 flex-1 items-center gap-3', locked && 'opacity-60')}>
+                                <Glyph icon={row.icon} tint={row.tint} />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block text-[15px] font-semibold">{row.title}</span>
+                                    <span className="block text-[13px] leading-snug text-muted">{row.hint}</span>
+                                </span>
                             </span>
-                            <Switch checked={prefs[row.key]} onChange={checked => update({ [row.key]: checked })} label={row.title} />
+                            <Switch
+                                checked={!locked && prefs[row.key]}
+                                disabled={locked}
+                                onChange={checked => update({ [row.key]: checked })}
+                                label={row.title}
+                            />
                         </label>
-                        {row.key === 'bills' && prefs.bills && (
+                        {row.key === 'bills' && prefs.bills && !locked && (
                             <div className="flex flex-col gap-2 px-4 pb-4">
                                 <span className="text-[13px] font-semibold text-muted">{t.notifLead}</span>
                                 <Segmented<string>
@@ -167,7 +178,8 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ lang
                             </div>
                         )}
                     </li>
-                ))}
+                    );
+                })}
             </ul>
 
             {!native && <p className="px-4 text-[13px] leading-snug text-muted">{t.notifWebHint}</p>}

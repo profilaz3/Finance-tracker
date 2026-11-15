@@ -26,40 +26,6 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let latestState: AppState | null = null;
 let latestSerializedSegments: Partial<Record<PersistedStateSegmentName, string>> | null = null;
 
-const VALID_THEMES: AppState['theme'][] = [
-  'neon',
-  'racing-orange',
-  'graphite',
-  'coffee',
-  'gilded',
-  'crimson-red',
-  'lime-dark',
-  'sterling',
-  'canyon',
-  'cyberpunk-pink',
-  'harbor',
-  'galaxy',
-  'evergreen',
-  'linen',
-  'mist',
-  'light'
-];
-
-const LEGACY_THEME_MAP: Record<string, AppState['theme']> = {
-  'oled': 'graphite',
-  'royal-purple': 'galaxy',
-  'ocean': 'harbor',
-  'rose-gold': 'gilded',
-  'electric-blue': 'sterling',
-  'sunset-orange': 'canyon'
-};
-
-export const normalizeTheme = (theme?: string): AppState['theme'] => {
-  if (!theme) return 'neon';
-  const mappedTheme = LEGACY_THEME_MAP[theme] ?? theme;
-  return VALID_THEMES.includes(mappedTheme as AppState['theme']) ? (mappedTheme as AppState['theme']) : 'neon';
-};
-
 const performSave = () => {
     if (latestState) {
         const segments = buildStateSegments(latestState);
@@ -156,7 +122,6 @@ export const createInitialState = (): AppState => ({
   templates: [],
   recurringTransactions: [],
 
-  theme: 'lime-dark',
   language: 'en',
   events: [],
   sharedExpenses: [],
@@ -182,7 +147,6 @@ export const loadState = (): AppState => {
     if (!mergedState.sharedExpenses) mergedState.sharedExpenses = [];
     if (!mergedState.templates) mergedState.templates = [];
     if (!mergedState.recurringTransactions) mergedState.recurringTransactions = [];
-    mergedState.theme = normalizeTheme(mergedState.theme);
     if (!mergedState.language) mergedState.language = 'en';
 
     // Ensure Special Categories exist

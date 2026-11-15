@@ -5,11 +5,15 @@ import { TRANSLATIONS } from '../../constants';
 import type { AppState, PaymentDetails } from '../../types';
 import { convertAmount } from '../../services/currencyService';
 import { formatMoney } from '../../utils/locale';
+import { formatAmountForInput } from '../../utils/numberInput';
 import { vibrate, HAPTIC_PATTERNS } from '../../utils/haptics';
 import { buildIpsPayload, formatAccountNumber, IPS_LIMITS, sanitizeIpsLine } from '../../utils/ipsQr';
 import { PaymentDetailsForm } from './PaymentDetailsForm';
 import { encodeQr, qrPath, QUIET_ZONE, renderQrPng, sharePng, type QrMatrix } from './qrCode';
 import type { PaymentRequestInput } from './paymentBus';
+import { CurrencyFlag } from '../ui/CurrencyFlag';
+import { AmountInput } from '../ui/AmountInput';
+import { Avatar } from '../home/parts';
 
 export interface PaymentRequestSheetProps {
   isOpen: boolean;
@@ -22,12 +26,6 @@ export interface PaymentRequestSheetProps {
 
 /** The label NBS asks for next to a payee's IPS QR code (K:PR). */
 const NBS_LABEL = 'NBS IPS QR';
-
-const parseDinars = (value: string): number => {
-  const normalized = value.replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : Number.NaN;
-};
 
 /**
  * "Get paid back": an NBS IPS QR code the other person scans in any Serbian bank app.
@@ -47,6 +45,8 @@ export const PaymentRequestSheet: React.FC<PaymentRequestSheetProps> = ({ isOpen
     return Math.max(0, Math.round(value));
   }, [request, state.rates]);
 
+  // Typed in the app language ("1.500,50" in Serbian), parsed by AmountInput.
+  const [amountValue, setAmountValue] = useState<number | undefined>(undefined);
   const [amountText, setAmountText] = useState('');
   const [purpose, setPurpose] = useState('');
   const [matrix, setMatrix] = useState<QrMatrix | null>(null);
@@ -55,14 +55,21 @@ export const PaymentRequestSheet: React.FC<PaymentRequestSheetProps> = ({ isOpen
   // A new request resets the fields.
   useEffect(() => {
     if (!request) return;
+    setAmountValue(owedDinars > 0 ? owedDinars : undefined);
     setAmountText(owedDinars > 0 ? String(owedDinars) : '');
     setPurpose(sanitizeIpsLine(request.purpose ?? t.payPurposeDefault, IPS_LIMITS.purpose));
     setEditingDetails(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when a new request arrives
   }, [request]);
 
-  const dinars = parseDinars(amountText);
+  const dinars = amountValue ?? Number.NaN;
   const amountValid = Number.isFinite(dinars) && dinars >= 1 && dinars <= 999_999_999_999;
+  // Unreadable text ("12a") gets its own message; an empty or too small amount asks for dinars.
+  const amountError = amountValid
+    ? null
+    : amountText.trim() && amountValue === undefined
+      ? t.settleAmountUnreadable
+      : t.payAmountInvalid;
   const payload = useMemo(() => {
     if (!details || !amountValid) return null;
     const result = buildIpsPayload({ ...details, amount: Math.round(dinars * 100) / 100, purpose });
@@ -147,10 +154,20 @@ export const PaymentRequestSheet: React.FC<PaymentRequestSheetProps> = ({ isOpen
         </div>
       ) : (
         <div className="flex flex-col gap-4 pb-1">
-          <p className="-mt-1 text-[14px] text-muted">{subtitle}</p>
+          <div className="-mt-1 flex items-center gap-2.5">
+            {request?.payerName && <Avatar name={request.payerName} size={32} />}
+            <p className="min-w-0 flex-1 text-[14px] text-muted">{subtitle}</p>
+          </div>
 
           {/* Always black on white: bank apps read dark modules on a light quiet zone. */}
-          <figure className="mx-auto flex w-full max-w-[300px] flex-col items-center rounded-[28px] bg-white px-3 pb-3 pt-3 text-slate-700 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.5)]">
+          <div className="relative mx-auto w-full max-w-[324px] p-3">
+          {/* Accent corner marks frame the code like a viewfinder; decoration only. */}
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full text-accent" aria-hidden="true">
+            {['M1 14V6a5 5 0 0 1 5-5h8', 'M86 1h8a5 5 0 0 1 5 5v8', 'M99 86v8a5 5 0 0 1-5 5h-8', 'M14 99H6a5 5 0 0 1-5-5v-8'].map(d => (
+              <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            ))}
+          </svg>
+          <figure className="relative flex w-full flex-col items-center rounded-[28px] bg-white px-3 pb-3 pt-3 text-slate-700 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.5)]">
             <div className="relative aspect-square w-full">
               {matrix ? (
                 <svg
@@ -169,25 +186,35 @@ export const PaymentRequestSheet: React.FC<PaymentRequestSheetProps> = ({ isOpen
                 </div>
               )}
             </div>
-            <figcaption className="pt-1 text-[13px] font-semibold tracking-[0.4px] text-slate-600">{NBS_LABEL}</figcaption>
+            <figcaption className="flex flex-col items-center pt-1">
+              {amountValid && <span className="text-[20px] font-bold tabular-nums tracking-[-0.3px] text-slate-900">{amountLabel}</span>}
+              <span className="text-[12px] font-semibold tracking-[0.4px] text-slate-600">{NBS_LABEL}</span>
+            </figcaption>
           </figure>
+          </div>
 
           <div className="paper-tile flex flex-col gap-3 p-4">
             <div className="flex flex-col gap-1.5">
               <label htmlFor={`${id}-amount`} className="px-1 text-[12px] font-semibold text-muted">{t.payAmount}</label>
               <div className="flex items-center gap-2">
-                <input
+                <AmountInput
                   id={`${id}-amount`}
-                  value={amountText}
-                  onChange={(e) => setAmountText(e.target.value)}
-                  inputMode="decimal"
-                  autoComplete="off"
+                  value={amountValue}
+                  onValueChange={(next, text) => {
+                    setAmountValue(next);
+                    setAmountText(text);
+                  }}
+                  language={state.language}
+                  placeholder={formatAmountForInput(Math.max(owedDinars, 1), state.language)}
                   aria-invalid={!amountValid}
-                  aria-describedby={converted ? `${id}-converted` : undefined}
+                  aria-describedby={[amountError ? `${id}-amount-error` : '', converted ? `${id}-converted` : ''].filter(Boolean).join(' ') || undefined}
                   className="h-12 min-w-0 flex-1 rounded-[14px] bg-chip px-4 text-[20px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-accent"
                 />
-                <span className="flex h-12 shrink-0 items-center rounded-[14px] bg-chip px-3 text-[13px] font-bold text-muted">RSD</span>
+                <span className="flex h-12 shrink-0 items-center gap-1.5 rounded-[14px] bg-chip pl-2.5 pr-3 text-[13px] font-bold text-muted"><CurrencyFlag currency="RSD" size={22} />RSD</span>
               </div>
+              {amountError && (
+                <p id={`${id}-amount-error`} role="alert" className="px-1 text-[12px] font-medium text-neg">{amountError}</p>
+              )}
               {converted && request && (
                 <p id={`${id}-converted`} className="px-1 text-[12px] text-faint">
                   {t.payConverted.replace('{original}', formatMoney(request.amount, request.currency, state.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
@@ -219,7 +246,7 @@ export const PaymentRequestSheet: React.FC<PaymentRequestSheetProps> = ({ isOpen
                 <button
                   type="button"
                   onClick={() => setEditingDetails(true)}
-                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-chip px-3.5 text-[13px] font-semibold"
+                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-chip px-3.5 text-[13px] font-semibold"
                 >
                   <Pencil size={14} aria-hidden="true" /> {t.payEdit}
                 </button>

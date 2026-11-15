@@ -1,4 +1,4 @@
-import { Currency } from '../types.ts';
+import type { Currency, ReceiptData } from '../types.ts';
 
 const VALID_CURRENCIES: Currency[] = ['EUR', 'USD', 'RSD'];
 const VALID_TRANSACTION_TYPES = ['income', 'expense'] as const;
@@ -66,11 +66,7 @@ export interface ParsedReceipt {
   note: string;
   date: string;
   accountName?: string;
-  receiptData: {
-    items: { name: string; price: number; quantity: number }[];
-    total: number;
-    merchant: string;
-  };
+  receiptData: ReceiptData;
   fees?: number;
 }
 

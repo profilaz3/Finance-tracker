@@ -123,18 +123,18 @@ export const BLOCK_TYPE_MAP: Record<HomeBlockType, BlockTypeDef> = Object.fromEn
 
 const blockId = (type: HomeBlockType, index: number) => `${type}-${index}`;
 
-/** Matches the round-6 design: card, budget + today, boxes, event + people, ... */
+/**
+ * Under the Home header, which already holds the budget and this month's numbers (its default face):
+ * wallets, the next bill and who owes you, categories, the trip and rates, then the month and recent entries.
+ */
 export const DEFAULT_HOME_LAYOUT: HomeBlock[] = [
-  { id: 'networth-0', type: 'networth', style: 'card', size: 'm' },
-  { id: 'budget-0', type: 'budget', style: 'ring', size: 's' },
-  { id: 'daily-0', type: 'daily', style: 'week', size: 's' },
-  { id: 'categories-0', type: 'categories', style: 'boxes', size: 'm' },
-  { id: 'event-0', type: 'event', style: 'photo', size: 's' },
-  { id: 'people-0', type: 'people', style: 'stack', size: 's' },
   { id: 'wallets-0', type: 'wallets', style: 'cards', size: 'm' },
   { id: 'upcoming-0', type: 'upcoming', style: 'next', size: 's' },
+  { id: 'people-0', type: 'people', style: 'stack', size: 's' },
+  { id: 'categories-0', type: 'categories', style: 'boxes', size: 'm' },
+  { id: 'event-0', type: 'event', style: 'photo', size: 's' },
   { id: 'rates-0', type: 'rates', style: 'compact', size: 's' },
-  { id: 'daily-1', type: 'daily', style: 'bars', size: 'm' },
+  { id: 'daily-0', type: 'daily', style: 'bars', size: 'm' },
   { id: 'recent-0', type: 'recent', style: 'list', size: 'm' },
 ];
 

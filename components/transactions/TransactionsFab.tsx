@@ -3,6 +3,7 @@ import { AnimatePresence, m } from 'motion/react';
 import clsx from 'clsx';
 import { Banknote, Plus, Split } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
+import { requestAddMenu } from '../../hooks/entryBus';
 
 interface TransactionsFabProps {
   isVisible: boolean;
@@ -64,7 +65,7 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
                     >
                       <span className="text-sm font-medium whitespace-nowrap">{TRANSLATIONS[language].split}</span>
                       <div className="w-10 h-10 bg-tertiary text-on-tertiary rounded-full flex items-center justify-center">
-                        <Split size={20} />
+                        <Split size={20} aria-hidden="true" />
                       </div>
                     </button>
                   )}
@@ -78,7 +79,7 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
                   >
                     <span className="text-sm font-medium whitespace-nowrap">{TRANSLATIONS[language].transaction}</span>
                     <div className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center">
-                      <Banknote size={20} />
+                      <Banknote size={20} aria-hidden="true" />
                     </div>
                   </button>
                 </m.div>
@@ -86,7 +87,12 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
             )}
           </AnimatePresence>
           <m.button
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={(event) => {
+              // Same Add menu as the mobile + button once the app listens for it; the small
+              // menu stays as the fallback (and for the CRUD regression).
+              if (!isOpen && requestAddMenu(event.currentTarget)) return;
+              setIsOpen(!isOpen);
+            }}
             whileTap={{ scale: 0.9 }}
             aria-label={TRANSLATIONS[language].openTransactionActions}
             className={clsx(
@@ -94,7 +100,7 @@ export const TransactionsFab: React.FC<TransactionsFabProps> = ({
               isOpen ? 'rotate-45' : 'hover:scale-105'
             )}
           >
-            <Plus size={28} />
+            <Plus size={28} aria-hidden="true" />
           </m.button>
         </m.div>
       )}

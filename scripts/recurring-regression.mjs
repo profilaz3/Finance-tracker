@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const RECURRING_REGRESSION_URL = process.env.RECURRING_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const RECURRING_REGRESSION_EMAIL = process.env.RECURRING_REGRESSION_EMAIL;
@@ -18,8 +19,9 @@ const successScreenshotPath = `${screenshotDir}/recurring-regression-success.png
 const failureScreenshotPath = `${screenshotDir}/recurring-regression-failure.png`;
 const recurringPrefix = 'Recurring Regression ';
 const recurringName = `Recurring Regression ${Date.now()}`;
+const pauseRecurringLabel = 'Pause recurring';
+const resumeRecurringLabel = 'Resume recurring';
 const deleteRecurringLabel = 'Delete recurring';
-const consoleIssues = [];
 
 const isVisible = async locator => locator.isVisible().catch(() => false);
 const waitForSyncWindow = async page => page.waitForTimeout(2600);
@@ -35,40 +37,22 @@ const waitForRecurringRowCount = async (page, expectedCount) => {
   );
 };
 
-const waitForRowPausedState = async (page, rowIndex, shouldBePaused) => {
+// The row whose title is exactly this run's recurring name.
+const getRecurringRow = page =>
+  page.locator('[data-recurring-row]').filter({
+    has: page.locator('[data-recurring-title]').getByText(recurringName, { exact: true }),
+  });
+
+const waitForRowPausedState = async (page, shouldBePaused) => {
   await page.waitForFunction(
-    ({ prefix, index, paused }) => {
-      const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
-      const matchingTitles = titles.filter(element => element.textContent?.includes(prefix));
-      const title = matchingTitles[index];
+    ({ name, paused }) => {
+      const title = Array.from(document.querySelectorAll('[data-recurring-title]'))
+        .find(element => element.textContent?.trim() === name);
       const row = title?.closest('[data-recurring-row]');
       return row ? (row.getAttribute('data-paused') === 'true') === paused : false;
     },
-    { prefix: recurringPrefix, index: rowIndex, paused: shouldBePaused },
+    { name: recurringName, paused: shouldBePaused },
     { timeout: 15000 },
-  );
-};
-
-const clickRowAction = async (page, rowIndex, buttonIndex) => {
-  await page.evaluate(
-    ({ prefix, recurringIndex, buttonActionIndex }) => {
-      const titles = Array.from(document.querySelectorAll('[data-recurring-title]'));
-      const matchingTitles = titles.filter(element => element.textContent?.includes(prefix));
-      const title = matchingTitles[recurringIndex];
-      const row = title?.closest('[data-recurring-row]');
-      if (!(row instanceof HTMLDivElement)) {
-        throw new Error(`Could not resolve recurring row at index ${recurringIndex}.`);
-      }
-
-      const buttons = Array.from(row.querySelectorAll('button'));
-      const button = buttons[buttonActionIndex];
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error(`Could not resolve recurring action button at index ${buttonActionIndex}.`);
-      }
-
-      button.click();
-    },
-    { prefix: recurringPrefix, recurringIndex: rowIndex, buttonActionIndex: buttonIndex },
   );
 };
 
@@ -85,15 +69,17 @@ const signInIfNeeded = async page => {
 };
 
 const openRecurringSettings = async page => {
-  const settingsHeading = page.getByRole('heading', { name: /settings|podešavanja|podesavanja/i }).first();
+  const settingsHeading = page.getByRole('heading', { name: /^settings$|^podešavanja$/i, level: 1 });
   if (!(await isVisible(settingsHeading))) {
-    await page.locator('aside button, nav button').filter({ hasText: /settings|podešavanja|podesavanja/i }).first().click();
+    await page.getByRole('complementary').getByRole('button', { name: /^settings$|^podešavanja$/i }).click();
     await settingsHeading.waitFor({ timeout: 15000 });
   }
 
-  const recurringTab = page.getByRole('button', { name: /recurring|ponavljaju/i }).first();
+  const recurringTab = page
+    .getByRole('navigation', { name: /^settings$|^podešavanja$/i })
+    .getByRole('button', { name: /recurring|ponavljaju/i });
   await recurringTab.click();
-  await page.getByRole('heading', { name: /recurring|ponavljaju/i }).first().waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: /recurring|ponavljaju/i, level: 2 }).first().waitFor({ timeout: 15000 });
 };
 
 const createRecurring = async page => {
@@ -103,8 +89,10 @@ const createRecurring = async page => {
   ), recurringPrefix);
 
   await page.getByRole('button', { name: /add recurring transaction|dodaj ponavljajuću transakciju|dodaj ponavljajucu transakciju/i }).click();
-  await page.getByPlaceholder(/name|ime/i).fill(recurringName);
-  await page.getByPlaceholder(/amount|iznos/i).fill('19.5');
+  await page.getByLabel(/^name$|^ime$/i).fill(recurringName);
+  await page.getByLabel(/^amount$|^iznos$/i).fill('19.5');
+  // A category must be picked; the wallet is preselected.
+  await page.getByLabel(/^category$|^kategorija$/i).selectOption({ index: 1 });
   await page.getByRole('button', { name: /^add$|^dodaj$/i }).click();
   await waitForRecurringRowCount(page, existingRows + 1);
   await waitForSyncWindow(page);
@@ -112,14 +100,16 @@ const createRecurring = async page => {
   return existingRows;
 };
 
-const toggleRecurring = async (page, rowIndex, _expectedLabel, nextLabel) => {
-  await clickRowAction(page, rowIndex, 0);
-  await waitForRowPausedState(page, rowIndex, nextLabel === 'Resume recurring');
+const toggleRecurring = async (page, expectedLabel, nextLabel) => {
+  const row = getRecurringRow(page);
+  await row.getByRole('button', { name: expectedLabel, exact: true }).click();
+  await waitForRowPausedState(page, nextLabel === resumeRecurringLabel);
+  await row.getByRole('button', { name: nextLabel, exact: true }).waitFor({ timeout: 15000 });
   await waitForSyncWindow(page);
 };
 
-const deleteRecurring = async (page, rowIndex, expectedCountAfterDelete) => {
-  await clickRowAction(page, rowIndex, 1);
+const deleteRecurring = async (page, expectedCountAfterDelete) => {
+  await getRecurringRow(page).getByRole('button', { name: deleteRecurringLabel, exact: true }).click();
   await waitForSyncWindow(page);
 
   const remainingRowCount = await page.evaluate(prefix => (
@@ -145,21 +135,17 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', message => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
   await page.goto(RECURRING_REGRESSION_URL, { waitUntil: 'networkidle' });
   await signInIfNeeded(page);
   await openRecurringSettings(page);
-  const createdRowIndex = await createRecurring(page);
-  await toggleRecurring(page, createdRowIndex, 'Pause recurring', 'Resume recurring');
-  await toggleRecurring(page, createdRowIndex, 'Resume recurring', 'Pause recurring');
-  await deleteRecurring(page, createdRowIndex, createdRowIndex);
+  const existingRegressionRows = await createRecurring(page);
+  await toggleRecurring(page, pauseRecurringLabel, resumeRecurringLabel);
+  await toggleRecurring(page, resumeRecurringLabel, pauseRecurringLabel);
+  await deleteRecurring(page, existingRegressionRows);
   await page.reload({ waitUntil: 'networkidle' });
   await openRecurringSettings(page);
   await page.waitForTimeout(2500);
@@ -167,13 +153,11 @@ try {
   const remainingRows = await page.evaluate(prefix => (
     Array.from(document.querySelectorAll('[data-recurring-title]')).filter(element => element.textContent?.includes(prefix)).length
   ), recurringPrefix);
-  if (remainingRows !== createdRowIndex) {
-    throw new Error(`Recurring regression row count changed after reload. Expected ${createdRowIndex}, got ${remainingRows}.`);
+  if (remainingRows !== existingRegressionRows) {
+    throw new Error(`Recurring regression row count changed after reload. Expected ${existingRegressionRows}, got ${remainingRows}.`);
   }
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 
   await page.screenshot({ path: successScreenshotPath, fullPage: true });
   console.log('Recurring regression passed.');

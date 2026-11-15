@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeBudgetProgress,
   computeMonthSummary,
+  getRatePairs,
   getRecentTransactions,
   getUpcomingRecurring,
   shiftMonth,
@@ -19,7 +20,7 @@ import {
 } from '../domain/homeLayout';
 import { parseSettingsPrefs } from '../utils/settingsPrefs';
 import { buildSettingsSyncPayload } from '../utils/settingsSync';
-import type { Category, ExchangeRates, RecurringTransaction, Transaction } from '../types';
+import type { Category, ExchangeRates, HomeBlock, RecurringTransaction, Transaction } from '../types';
 
 const rates: ExchangeRates = { base: 'EUR', date: '2026-11-01', rates: { EUR: 1, USD: 1.1, RSD: 117 } };
 const categories: Category[] = [
@@ -114,17 +115,29 @@ describe('upcoming and recent', () => {
 describe('home layout', () => {
   it('adds blocks with unique ids and default style', () => {
     const { layout, block } = addBlock(DEFAULT_HOME_LAYOUT, 'daily');
-    expect(block).toEqual({ id: 'daily-2', type: 'daily', style: 'bars', size: 'm' });
+    expect(block).toEqual({ id: 'daily-1', type: 'daily', style: 'bars', size: 'm' });
     expect(layout).toHaveLength(DEFAULT_HOME_LAYOUT.length + 1);
   });
 
   it('removes, moves and updates blocks', () => {
-    const removed = removeBlock(DEFAULT_HOME_LAYOUT, 'networth-0');
+    const layout: HomeBlock[] = [
+      { id: 'networth-0', type: 'networth', style: 'card', size: 'm' },
+      { id: 'budget-0', type: 'budget', style: 'ring', size: 's' },
+      { id: 'daily-0', type: 'daily', style: 'week', size: 's' },
+    ];
+    const removed = removeBlock(layout, 'networth-0');
     expect(removed[0].id).toBe('budget-0');
-    const moved = moveBlock(DEFAULT_HOME_LAYOUT, 0, 2);
-    expect(moved.map(block => block.id).slice(0, 3)).toEqual(['budget-0', 'daily-0', 'networth-0']);
-    const updated = updateBlock(DEFAULT_HOME_LAYOUT, 'budget-0', { style: 'categories', size: 's' });
+    const moved = moveBlock(layout, 0, 2);
+    expect(moved.map(block => block.id)).toEqual(['budget-0', 'daily-0', 'networth-0']);
+    const updated = updateBlock(layout, 'budget-0', { style: 'categories', size: 's' });
     expect(updated[1]).toMatchObject({ style: 'categories', size: 'm' });
+  });
+
+  it('leaves the budget and net worth to the header by default, with S blocks in pairs', () => {
+    expect(DEFAULT_HOME_LAYOUT.map(block => block.type)).not.toContain('budget');
+    expect(DEFAULT_HOME_LAYOUT.map(block => block.type)).not.toContain('networth');
+    expect(DEFAULT_HOME_LAYOUT.filter(block => block.size === 's').length % 2).toBe(0);
+    expect(DEFAULT_HOME_LAYOUT.every(block => normalizeBlock(block)?.style === block.style)).toBe(true);
   });
 
   it('switches style when a size is picked that the style does not support', () => {
@@ -146,7 +159,7 @@ describe('home layout', () => {
 describe('settings prefs', () => {
   it('round-trips through the sync payload', () => {
     const payload = buildSettingsSyncPayload({
-      baseCurrency: 'EUR', theme: 'neon', language: 'en', userProfile: undefined,
+      baseCurrency: 'EUR', language: 'en', userProfile: undefined,
       appearance: { mode: 'dark', accent: 'iris', glass: 'clear' },
       homeLayout: [{ id: 'recent-0', type: 'recent', style: 'list', size: 'm' }],
       budget: { monthly: 1800, categoryLimits: { food: 400 } },
@@ -195,5 +208,28 @@ describe('squarify', () => {
     expect(readableTextOn('#6D5BD0')).toBe('#FFFFFF');
     expect(readableTextOn('#F4D03F')).toBe('#141414');
     expect(readableTextOn('nope')).toBe('#FFFFFF');
+  });
+});
+
+describe('rate pairs', () => {
+  const rates = { RSD: 1, EUR: 0.0085, USD: 0.0094 };
+
+  it('shows one of the stronger currency in the weaker one (1 EUR = 117.65 RSD, not 0.0085)', () => {
+    const pairs = getRatePairs('RSD', rates);
+    expect(pairs.map(pair => `${pair.from}/${pair.to}`)).toEqual(['EUR/RSD', 'USD/RSD', 'EUR/USD']);
+    expect(pairs[0].value).toBeCloseTo(117.647, 3);
+    expect(pairs[1].value).toBeCloseTo(106.383, 3);
+    expect(pairs[2].value).toBeCloseTo(1.1059, 4);
+    expect(pairs.every(pair => pair.value >= 1)).toBe(true);
+  });
+
+  it('keeps the same direction with a euro base', () => {
+    const pairs = getRatePairs('EUR', { EUR: 1, USD: 1.1059, RSD: 117.647 });
+    expect(pairs.map(pair => `${pair.from}/${pair.to}`)).toEqual(['EUR/USD', 'EUR/RSD', 'USD/RSD']);
+    expect(pairs[1].value).toBeCloseTo(117.647, 3);
+  });
+
+  it('leaves a missing rate at zero instead of dividing by it', () => {
+    expect(getRatePairs('RSD', { RSD: 1, EUR: 0, USD: 0.0094 })[0]).toEqual({ from: 'RSD', to: 'EUR', value: 0 });
   });
 });

@@ -31,7 +31,6 @@ const baseState: AppState = {
   },
   templates: [],
   recurringTransactions: [],
-  theme: 'harbor',
   language: 'en',
   events: [],
   sharedExpenses: [],
@@ -44,10 +43,9 @@ describe('buildSettingsSyncPayload', () => {
 
     expect(payload).toEqual({
       baseCurrency: 'EUR',
-      theme: 'harbor',
       language: 'en',
       userProfile: baseState.userProfile,
-      prefs: { appearance: undefined, homeLayout: undefined, budget: null, payment: null },
+      prefs: { appearance: undefined, homeLayout: undefined, budget: null, teamBudgets: {}, payment: null },
     });
     expect(payload).not.toHaveProperty('categories');
   });
@@ -60,10 +58,9 @@ describe('buildSettingsSyncPayload', () => {
 
     expect(payload).toEqual({
       baseCurrency: 'EUR',
-      theme: 'harbor',
       language: 'en',
       userProfile: undefined,
-      prefs: { appearance: undefined, homeLayout: undefined, budget: null, payment: null },
+      prefs: { appearance: undefined, homeLayout: undefined, budget: null, teamBudgets: {}, payment: null },
     });
   });
 });

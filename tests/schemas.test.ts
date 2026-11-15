@@ -13,7 +13,7 @@ describe('state schemas (zod/mini)', () => {
     const result = safeValidateAppState({});
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.theme).toBe('neon');
+      expect(result.data).not.toHaveProperty('theme');
       expect(result.data.language).toBe('en');
       expect(result.data.transactions).toEqual([]);
     }

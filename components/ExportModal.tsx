@@ -50,7 +50,11 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
 
   const t = TRANSLATIONS[state.language];
 
+  // A reversed range would export nothing; say so instead of offering Export.
+  const rangeReversed = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+
   const handleExport = () => {
+    if (rangeReversed) return;
     const options: ExportOptions = {
       format,
       dateFrom: dateFrom || undefined,
@@ -90,7 +94,7 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
     setDateTo(toInputDate(today));
   };
 
-  const exportCount = state.transactions.filter((transaction) => {
+  const exportCount = rangeReversed ? 0 : state.transactions.filter((transaction) => {
     if (dateFrom && transaction.date < dateFrom) {
       return false;
     }
@@ -139,7 +143,7 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
                 aria-label={t.close}
               >
                 <X size={18} aria-hidden="true" />
@@ -182,7 +186,7 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
                     aria-pressed={preset === id}
                     onClick={() => applyPreset(id)}
                     className={clsx(
-                      'h-9 rounded-full px-3.5 text-[14px] font-semibold transition-colors',
+                      'h-10 rounded-full px-4 text-[14px] font-semibold transition-colors',
                       preset === id ? 'bg-accent text-on-accent' : 'bg-chip text-on-surface'
                     )}
                   >
@@ -202,7 +206,9 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
                     value={dateFrom}
                     max={dateTo || undefined}
                     onChange={(event) => { setDateFrom(event.target.value); setPreset(null); }}
-                    className={fieldClass}
+                    aria-invalid={rangeReversed}
+                    aria-describedby={rangeReversed ? 'export-range-error' : undefined}
+                    className={clsx(fieldClass, rangeReversed && 'border-neg ring-2 ring-neg')}
                   />
                 </label>
                 <label className="block">
@@ -212,10 +218,15 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
                     value={dateTo}
                     min={dateFrom || undefined}
                     onChange={(event) => { setDateTo(event.target.value); setPreset(null); }}
-                    className={fieldClass}
+                    aria-invalid={rangeReversed}
+                    aria-describedby={rangeReversed ? 'export-range-error' : undefined}
+                    className={clsx(fieldClass, rangeReversed && 'border-neg ring-2 ring-neg')}
                   />
                 </label>
               </div>
+              {rangeReversed && (
+                <p id="export-range-error" role="alert" className="mt-2 px-1 text-[13px] font-medium text-neg">{t.exportRangeReversed}</p>
+              )}
             </div>
 
             <div>
@@ -263,7 +274,9 @@ const ExportSheet: React.FC<ExportModalProps> = ({ isOpen, onClose, state, onSuc
             <button
               type="button"
               onClick={handleExport}
-              className="flex h-12 flex-[1.4] items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent"
+              disabled={rangeReversed}
+              aria-describedby={rangeReversed ? 'export-range-error' : undefined}
+              className="flex h-12 flex-[1.4] items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-40"
             >
               <Download size={18} aria-hidden="true" />
               {t.export}

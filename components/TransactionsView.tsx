@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useMemo, useRef, useCallback } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
 import { m, Variants } from 'motion/react';
 import { exportToCSV } from '../services/storageService';
@@ -11,7 +11,8 @@ import { TransactionsToolbar } from './transactions/TransactionsToolbar';
 import { TransactionsList } from './transactions/TransactionsList';
 import { TransactionsFab } from './transactions/TransactionsFab';
 import { DuplicateHintBanner } from './transactions/DuplicateHintBanner';
-import { filterTransactions, groupTransactionsByDate } from '../utils/transactionFilters';
+import { ActivityHero } from './transactions/ActivityHero';
+import { filterTransactions, groupTransactionsByDay } from '../utils/transactionFilters';
 import {
   CommonFilterId,
   CommonTransactionFilter,
@@ -27,7 +28,6 @@ interface TransactionsViewProps {
   state: AppState;
   setSelectedTransaction: (transaction: Transaction | null) => void;
   setIsEditModalOpen: (isOpen: boolean) => void;
-  setIsReceiptModalOpen: (isOpen: boolean) => void;
   setIsSplitModalOpen: (isOpen: boolean) => void;
   deleteTransaction: (id: string) => void;
   onEditSplitTransaction?: (transaction: Transaction) => void;
@@ -37,6 +37,7 @@ interface TransactionsViewProps {
   onBatchDelete?: (ids: string[]) => void;
   onAddTransaction?: () => void;
   onOpenSplit?: () => void;
+  onOpenCalendar?: () => void;
 }
 
 const containerVariants: Variants = {
@@ -49,7 +50,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   state,
   setSelectedTransaction,
   setIsEditModalOpen,
-  setIsReceiptModalOpen,
   setIsSplitModalOpen,
   deleteTransaction,
   onEditSplitTransaction,
@@ -59,6 +59,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onBatchDelete,
   onAddTransaction,
   onOpenSplit,
+  onOpenCalendar,
 }) => {
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
@@ -77,28 +78,29 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
   const [isFabVisible, setIsFabVisible] = useState(true);
-  const [showDateFilter, setShowDateFilter] = useState(false);
   const [dismissedDuplicateGroupIds, setDismissedDuplicateGroupIds] = useState<Set<string>>(new Set());
-  const [isScrolled, setIsScrolled] = useState(false);
   const lastScrollTop = useRef(0);
   const aiAvailable = isAIAvailable();
 
-  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = (event.target as HTMLDivElement).scrollTop;
-    const scrollDelta = scrollTop - lastScrollTop.current;
-
-    setIsScrolled(scrollTop > 20);
-
-    if (Math.abs(scrollDelta) > 5) {
-      if (scrollDelta > 0 && scrollTop > 50) {
-        setIsFabVisible(false);
-        setIsFabOpen(false);
-      } else {
-        setIsFabVisible(true);
+  // The page scrolls as one; the desktop add button hides while scrolling down.
+  useEffect(() => {
+    const scroller = document.getElementById('main-content');
+    if (!scroller) return;
+    const onScroll = () => {
+      const scrollTop = scroller.scrollTop;
+      const scrollDelta = scrollTop - lastScrollTop.current;
+      if (Math.abs(scrollDelta) > 5) {
+        if (scrollDelta > 0 && scrollTop > 50) {
+          setIsFabVisible(false);
+          setIsFabOpen(false);
+        } else {
+          setIsFabVisible(true);
+        }
       }
-    }
-
-    lastScrollTop.current = scrollTop;
+      lastScrollTop.current = scrollTop;
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => scroller.removeEventListener('scroll', onScroll);
   }, []);
 
   const toggleSelection = (id: string) => {
@@ -143,13 +145,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     transactions: state.transactions,
     categories: state.categories,
     accounts: state.accounts,
+    people: state.people,
     filterType,
     filterAccount,
     filterCategory,
     filterDateFrom,
     filterDateTo,
     searchQuery,
-  }), [state.transactions, state.categories, state.accounts, filterType, filterAccount, filterCategory, filterDateFrom, filterDateTo, searchQuery]);
+  }), [state.transactions, state.categories, state.accounts, state.people, filterType, filterAccount, filterCategory, filterDateFrom, filterDateTo, searchQuery]);
 
   const commonFilters = useMemo(
     () => getCommonTransactionFilters(state.language),
@@ -191,9 +194,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     }
     if (typeof filter.patch.searchQuery === 'string') {
       setSearchQuery(isActive ? '' : filter.patch.searchQuery);
-    }
-    if (typeof filter.patch.showDateFilter === 'boolean') {
-      setShowDateFilter(isActive ? false : filter.patch.showDateFilter);
     }
   };
 
@@ -260,7 +260,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     setFilterDateFrom('');
     setFilterDateTo('');
     setSearchQuery('');
-    setShowDateFilter(false);
   };
 
   const reviewDuplicateGroup = (group: (typeof duplicateGroups)[number]) => {
@@ -269,95 +268,97 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     setSelectedIds(new Set(group.transactions.map(transaction => transaction.id)));
   };
 
-  const groupedData = useMemo(() => groupTransactionsByDate(filteredTransactions, state.language), [filteredTransactions, state.language]);
+  const groupedData = useMemo(() => groupTransactionsByDay(filteredTransactions, state.language), [filteredTransactions, state.language]);
   const groupCounts = useMemo(() => groupedData.map(group => group.transactions.length), [groupedData]);
   const flatTransactions = useMemo(() => groupedData.flatMap(group => group.transactions), [groupedData]);
 
   return (
-    <m.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="h-[calc(100vh-140px)] flex flex-col">
-      <TransactionsToolbar
+    <m.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="mx-auto max-w-[920px] pb-6">
+      <ActivityHero
         state={state}
-        filterType={filterType}
-        setFilterType={setFilterType}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        smartInput={smartInput}
-        setSmartInput={(value) => {
-          setSmartInput(value);
-          setParseError(null);
-        }}
-        isParsing={isParsing}
-        parseError={parseError}
-        aiAvailable={aiAvailable}
-        inputMode={inputMode}
-        setInputMode={setInputMode}
-        isSelectionMode={isSelectionMode}
-        setIsSelectionMode={setIsSelectionMode}
-        selectedCount={selectedIds.size}
-        allSelected={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
-        hasSelection={selectedIds.size > 0}
-        toggleSelectAll={toggleSelectAll}
-        exitSelectionMode={exitSelectionMode}
-        handleBatchExport={handleBatchExport}
-        handleBatchDelete={handleBatchDelete}
+        onOpenCalendar={() => onOpenCalendar?.()}
+        onSelect={() => setIsSelectionMode(true)}
+        onExport={() => setIsExportModalOpen(true)}
+        onPrintableReport={handlePdfExport}
         isExportingPdf={isExportingPdf}
-        onOpenExportModal={() => setIsExportModalOpen(true)}
-        onOpenPrintableReport={handlePdfExport}
-        onSmartParse={handleSmartParse}
-        filterAccount={filterAccount}
-        setFilterAccount={setFilterAccount}
-        filterCategory={filterCategory}
-        setFilterCategory={setFilterCategory}
-        commonFilters={commonFilters}
-        activeCommonFilterIds={activeCommonFilterIds}
-        onApplyCommonFilter={applyCommonFilter}
-        filterDateFrom={filterDateFrom}
-        setFilterDateFrom={setFilterDateFrom}
-        filterDateTo={filterDateTo}
-        setFilterDateTo={setFilterDateTo}
-        showDateFilter={showDateFilter}
-        setShowDateFilter={setShowDateFilter}
-        hasSearchOrFilters={hasSearchOrFilters}
-        activeFilterCount={activeFilterCount}
-        clearAllFilters={clearAllFilters}
-        isScrolled={isScrolled}
       />
 
-      {!isSelectionMode && !hasSearchOrFilters && duplicateGroups.length > 0 && (
-        <DuplicateHintBanner
-          language={state.language}
-          groups={duplicateGroups}
-          onReviewGroup={reviewDuplicateGroup}
-          onDismissGroup={(groupId) => {
-            setDismissedDuplicateGroupIds(prev => new Set(prev).add(groupId));
+      <div className="screen-sheet">
+        <TransactionsToolbar
+          state={state}
+          filterType={filterType}
+          setFilterType={setFilterType}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          smartInput={smartInput}
+          setSmartInput={(value) => {
+            setSmartInput(value);
+            setParseError(null);
           }}
+          isParsing={isParsing}
+          parseError={parseError}
+          aiAvailable={aiAvailable}
+          inputMode={inputMode}
+          setInputMode={setInputMode}
+          isSelectionMode={isSelectionMode}
+          selectedCount={selectedIds.size}
+          allSelected={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
+          hasSelection={selectedIds.size > 0}
+          toggleSelectAll={toggleSelectAll}
+          exitSelectionMode={exitSelectionMode}
+          handleBatchExport={handleBatchExport}
+          handleBatchDelete={handleBatchDelete}
+          onSmartParse={handleSmartParse}
+          filterAccount={filterAccount}
+          setFilterAccount={setFilterAccount}
+          filterCategory={filterCategory}
+          setFilterCategory={setFilterCategory}
+          commonFilters={commonFilters}
+          activeCommonFilterIds={activeCommonFilterIds}
+          onApplyCommonFilter={applyCommonFilter}
+          filterDateFrom={filterDateFrom}
+          setFilterDateFrom={setFilterDateFrom}
+          filterDateTo={filterDateTo}
+          setFilterDateTo={setFilterDateTo}
+          activeFilterCount={activeFilterCount}
+          clearAllFilters={clearAllFilters}
+          resultCount={filteredTransactions.length}
         />
-      )}
 
-      <TransactionsList
-        state={state}
-        filteredTransactions={filteredTransactions}
-        hasAnyTransactions={hasAnyTransactions}
-        hasSearchOrFilters={hasSearchOrFilters}
-        searchQuery={searchQuery}
-        clearAllFilters={clearAllFilters}
-        onAddTransaction={onAddTransaction}
-        handleScroll={handleScroll}
-        groupedData={groupedData}
-        groupCounts={groupCounts}
-        flatTransactions={flatTransactions}
-        isSelectionMode={isSelectionMode}
-        selectedIds={selectedIds}
-        toggleSelection={toggleSelection}
-        setSelectedTransaction={setSelectedTransaction}
-        setIsEditModalOpen={setIsEditModalOpen}
-        setIsSplitModalOpen={setIsSplitModalOpen}
-        setIsReceiptModalOpen={setIsReceiptModalOpen}
-        deleteTransaction={deleteTransaction}
-        onEditSplitTransaction={onEditSplitTransaction}
-        onDuplicateTransaction={onDuplicateTransaction}
-        onSaveAsTemplate={onSaveAsTemplate}
-      />
+        {!isSelectionMode && !hasSearchOrFilters && duplicateGroups.length > 0 && (
+          <DuplicateHintBanner
+            language={state.language}
+            groups={duplicateGroups}
+            onReviewGroup={reviewDuplicateGroup}
+            onDismissGroup={(groupId) => {
+              setDismissedDuplicateGroupIds(prev => new Set(prev).add(groupId));
+            }}
+          />
+        )}
+
+        <TransactionsList
+          state={state}
+          filteredTransactions={filteredTransactions}
+          hasAnyTransactions={hasAnyTransactions}
+          hasSearchOrFilters={hasSearchOrFilters}
+          searchQuery={searchQuery}
+          clearAllFilters={clearAllFilters}
+          onAddTransaction={onAddTransaction}
+          groupedData={groupedData}
+          groupCounts={groupCounts}
+          flatTransactions={flatTransactions}
+          isSelectionMode={isSelectionMode}
+          selectedIds={selectedIds}
+          toggleSelection={toggleSelection}
+          setSelectedTransaction={setSelectedTransaction}
+          setIsEditModalOpen={setIsEditModalOpen}
+          setIsSplitModalOpen={setIsSplitModalOpen}
+          deleteTransaction={deleteTransaction}
+          onEditSplitTransaction={onEditSplitTransaction}
+          onDuplicateTransaction={onDuplicateTransaction}
+          onSaveAsTemplate={onSaveAsTemplate}
+        />
+      </div>
 
       <Suspense fallback={null}>
         <ExportModal

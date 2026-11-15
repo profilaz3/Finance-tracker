@@ -14,6 +14,8 @@ import { CommonFields } from './CommonFields';
 import { IPaidSection } from './IPaidSection';
 import { TheyPaidSection } from './TheyPaidSection';
 import { excludeOwnProfile } from '../../domain/people';
+import { formatMoney } from '../../utils/locale';
+import { formatSplitPercent } from './format';
 import {
     calculateIPaidSplitSubmission,
     calculateTheyPaidSubmission,
@@ -21,7 +23,10 @@ import {
     calculateRemainingAmount,
     calculateRemainingPercentage,
     calculateTotalSplitAmount,
+    convertFeesToSplitCurrency,
     recalculateSplitShares,
+    seedEvenPercentages,
+    splitEvenlyInCents,
     toggleDebtRecipient,
     updateDebtRecipientAmount,
     updatePercentageShare,
@@ -64,9 +69,14 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     // Mode: "I paid" or "Someone paid for me"
     const [mode, setMode] = useState<SplitMode>(prefill && !transaction && prefill.payerId !== 'self' ? 'they_paid' : 'i_paid');
 
-    // Common fields
-    const [amount, setAmount] = useState('');
-    const [fees, setFees] = useState('');
+    // Common fields. Amounts are numbers (undefined while empty); the fields read the typed text.
+    const [amount, setAmount] = useState<number | undefined>(undefined);
+    const [fees, setFees] = useState<number | undefined>(undefined);
+    // Fields whose text is present but cannot be read; their last readable value is kept.
+    const [amountInvalid, setAmountInvalid] = useState(false);
+    const [feesInvalid, setFeesInvalid] = useState(false);
+    const [invalidShares, setInvalidShares] = useState<Record<string, boolean>>({});
+    const [invalidRecipients, setInvalidRecipients] = useState<Record<string, boolean>>({});
     const [currency, setCurrency] = useState<Currency>(baseCurrency);
     const [note, setNote] = useState('');
     const [categoryId, setCategoryId] = useState('');
@@ -90,10 +100,14 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     // Initialize when modal opens
     useEffect(() => {
         if (isOpen) {
+            setAmountInvalid(false);
+            setFeesInvalid(false);
+            setInvalidShares({});
+            setInvalidRecipients({});
             if (transaction) {
                 // Pre-fill from transaction
-                setAmount(transaction.amount.toString());
-                setFees(transaction.fees?.toString() || '');
+                setAmount(transaction.amount);
+                setFees(transaction.fees || undefined);
                 setCurrency(transaction.currency);
                 setNote(transaction.note || '');
                 setCategoryId(transaction.categoryId);
@@ -134,8 +148,8 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                 }
             } else {
                 // Reset to defaults for new split
-                setAmount('');
-                setFees('');
+                setAmount(undefined);
+                setFees(undefined);
                 setCurrency(baseCurrency);
                 setNote('');
                 setCategoryId(categories.find(c => c.type === 'expense')?.id || categories[0]?.id || '');
@@ -164,8 +178,8 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
             // Exact amounts from a receipt split: "I paid" when I paid, otherwise "Someone paid for me".
             if (prefill && !transaction) {
                 const amountFor = (id: string) => prefill.amounts[id] ?? 0;
-                setAmount(String(prefill.amount));
-                setFees('');
+                setAmount(prefill.amount);
+                setFees(undefined);
                 setCurrency(prefill.currency);
                 setNote(prefill.note);
                 setCategoryId(prefill.categoryId);
@@ -187,43 +201,71 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
         }
     }, [isOpen, transaction, people, categories, accounts, baseCurrency, events, language, prefill]);
 
+    const totalToSplit = calculateTotalSplitAmount(amount, fees, currency, rates);
+
     // Recalculate shares when amount, fees or included people change
     useEffect(() => {
         if (splitMethod === 'equal' || splitMethod === 'percentage') {
-            const totalToSplit = calculateTotalSplitAmount(amount, fees, currency, rates);
             setShares(prev => recalculateSplitShares(prev, splitMethod, totalToSplit));
         }
-    }, [amount, fees, splitMethod, currency, rates]);
+    }, [totalToSplit, splitMethod]);
+
+    /**
+     * Reads what a field emitted. Text that can't be read counts as nothing (so the totals shown
+     * stay honest) and is flagged; the field keeps the text. A negative number is flagged and the
+     * last value kept, since storing 0 would make the field replace the typed text.
+     */
+    const readTyped = (value: number | undefined, text: string) => ({
+        invalid: value === undefined ? text.trim() !== '' : value < 0,
+        keep: value !== undefined && value < 0,
+        value,
+    });
+
+    const handleAmountChange = (value: number | undefined, text: string) => {
+        const typed = readTyped(value, text);
+        setAmountInvalid(typed.invalid);
+        if (!typed.keep) setAmount(typed.value);
+    };
+
+    const handleFeesChange = (value: number | undefined, text: string) => {
+        const typed = readTyped(value, text);
+        setFeesInvalid(typed.invalid);
+        if (!typed.keep) setFees(typed.value);
+    };
+
+    const handleSplitMethodChange = (method: SplitMethod) => {
+        setInvalidShares({});
+        setSplitMethod(method);
+        // Percentages start everyone, me included, on an even share; the effect fills the amounts.
+        if (method === 'percentage') setShares(prev => seedEvenPercentages(prev, totalToSplit));
+    };
 
     const togglePersonIncluded = (personId: string) => {
+        setInvalidShares(prev => ({ ...prev, [personId]: false }));
         setShares(prev => {
             const newShares = prev.map(s =>
                 s.personId === personId ? { ...s, isIncluded: !s.isIncluded } : s
             );
-            const totalToSplit = calculateTotalSplitAmount(amount, fees, currency, rates);
             return recalculateSplitShares(newShares, splitMethod, totalToSplit);
         });
     };
 
-    const updateShareAmount = (personId: string, value: string) => {
-        const newAmount = parseFloat(value) || 0;
+    const updateShareAmount = (personId: string, value: number | undefined, text: string) => {
+        const typed = readTyped(value, text);
+        setInvalidShares(prev => ({ ...prev, [personId]: typed.invalid }));
+        if (typed.keep) return;
+        const newAmount = Math.round((typed.value ?? 0) * 100) / 100;
         setShares(prev => prev.map(s =>
-            s.personId === personId ? { ...s, amount: Math.round(newAmount * 100) / 100 } : s
+            s.personId === personId ? { ...s, amount: newAmount } : s
         ));
     };
 
-    const updateSharePercentage = (personId: string, value: string) => {
-        const totalToSplit = calculateTotalSplitAmount(amount, fees, currency, rates);
-        setShares(prev => updatePercentageShare(prev, personId, value, totalToSplit));
-    };
-
-    const getRemainingAmount = () => {
-        const totalToSplit = calculateTotalSplitAmount(amount, fees, currency, rates);
-        return calculateRemainingAmount(shares, totalToSplit);
-    };
-
-    const getRemainingPercentage = () => {
-        return calculateRemainingPercentage(shares);
+    // Above 100% is kept as typed: the indicator and the reason under the button say it is over.
+    const updateSharePercentage = (personId: string, value: number | undefined, text: string) => {
+        const typed = readTyped(value, text);
+        setInvalidShares(prev => ({ ...prev, [personId]: typed.invalid }));
+        if (typed.keep) return;
+        setShares(prev => updatePercentageShare(prev, personId, typed.value ?? 0, totalToSplit));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -296,11 +338,15 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
     const getPerson = (id: string) => people.find(p => p.id === id);
 
     const toggleRecipient = (personId: string) => {
+        setInvalidRecipients(prev => ({ ...prev, [personId]: false }));
         setRecipients(prev => toggleDebtRecipient(prev, personId));
     };
 
-    const updateRecipientAmount = (personId: string, value: string) => {
-        setRecipients(prev => updateDebtRecipientAmount(prev, personId, value));
+    const updateRecipientAmount = (personId: string, value: number | undefined, text: string) => {
+        const typed = readTyped(value, text);
+        setInvalidRecipients(prev => ({ ...prev, [personId]: typed.invalid }));
+        if (typed.keep) return;
+        setRecipients(prev => updateDebtRecipientAmount(prev, personId, typed.value ?? 0));
     };
 
     const { availableRecipients, includedRecipients, recipientTotal } = deriveTheyPaidRecipients(recipients, payerId);
@@ -310,18 +356,37 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
 
     if (!isOpen) return null;
 
-    const remainingAmount = getRemainingAmount();
-    const remainingPercentage = getRemainingPercentage();
-    const totalToSplit = calculateTotalSplitAmount(amount, fees, currency, rates);
-    // For exact mode: remaining >= 0 is valid (remaining is your portion)
-    // For percentage mode: remaining should be ~0 (percentages should add to 100%)
-    const isValidSplit = splitMethod === 'equal' ||
-        (splitMethod === 'exact' && remainingAmount >= -0.01) ||
-        (splitMethod === 'percentage' && Math.abs(remainingPercentage) < 0.01);
+    const remainingAmount = calculateRemainingAmount(shares, totalToSplit);
+    const remainingPercentage = calculateRemainingPercentage(shares);
     const includedCount = shares.filter(s => s.isIncluded).length;
     const yourPortionPreview = splitMethod === 'equal'
-        ? (includedCount > 0 ? totalToSplit / (includedCount + 1) : 0)
+        ? (includedCount > 0 ? splitEvenlyInCents(totalToSplit, includedCount + 1)[0] : 0)
         : remainingAmount;
+    const feesInSplitCurrency = convertFeesToSplitCurrency(fees, currency, rates);
+
+    // Why the button is disabled, shown under it. My share is what the others leave, so in
+    // exact and percentage splits anything from zero up is fine; only going over blocks.
+    const blockReason = (() => {
+        if (mode === 'i_paid') {
+            const sharesUnreadable = splitMethod !== 'equal' && shares.some(s => s.isIncluded && invalidShares[s.personId]);
+            if (amountInvalid || feesInvalid || sharesUnreadable) return t.splitBlockUnreadable;
+            if (!(totalToSplit > 0)) return t.splitBlockNoAmount;
+            if (includedCount === 0) return t.splitBlockNoPeople;
+            if (splitMethod === 'exact' && remainingAmount < -0.005) {
+                return t.splitSharesOverTotal.replace('{amount}', formatMoney(-remainingAmount, currency, language));
+            }
+            if (splitMethod === 'percentage' && remainingPercentage < -0.005) {
+                return t.splitPercentOver.replace('{percent}', formatSplitPercent(-remainingPercentage, language));
+            }
+            return null;
+        }
+        if (!payerId) return t.splitBlockNoPayer;
+        if (includedRecipients.length === 0) return t.splitBlockNoRecipients;
+        if (includedRecipients.some(r => invalidRecipients[r.personId])) return t.splitBlockUnreadable;
+        if (recipientTotal <= 0) return t.splitBlockNoAmounts;
+        return null;
+    })();
+    const blockReasonId = 'split-expense-block-reason';
 
     return (
         <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
@@ -352,7 +417,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                             type="button"
                             onClick={onClose}
                             aria-label={t.close}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
                         >
                             <X size={18} aria-hidden="true" />
                         </button>
@@ -367,13 +432,16 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                     <CommonFields
                         mode={mode}
                         amount={amount}
-                        setAmount={setAmount}
+                        onAmountChange={handleAmountChange}
+                        amountInvalid={amountInvalid}
                         currency={currency}
                         setCurrency={setCurrency}
                         transactionDate={transactionDate}
                         setTransactionDate={setTransactionDate}
                         fees={fees}
-                        setFees={setFees}
+                        onFeesChange={handleFeesChange}
+                        feesInvalid={feesInvalid}
+                        feesInSplitCurrency={feesInSplitCurrency}
                         note={note}
                         setNote={setNote}
                         categoryId={categoryId}
@@ -390,11 +458,9 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                     {mode === 'i_paid' ? (
                         <IPaidSection
                             splitMethod={splitMethod}
-                            setSplitMethod={setSplitMethod}
+                            setSplitMethod={handleSplitMethodChange}
                             shares={shares}
-                            setShares={setShares}
-                            amount={amount}
-                            fees={fees}
+                            totalToSplit={totalToSplit}
                             currency={currency}
                             people={people}
                             language={language}
@@ -402,6 +468,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                             togglePersonIncluded={togglePersonIncluded}
                             updateShareAmount={updateShareAmount}
                             updateSharePercentage={updateSharePercentage}
+                            invalidShares={invalidShares}
                             remainingAmount={remainingAmount}
                             remainingPercentage={remainingPercentage}
                             includedCount={includedCount}
@@ -417,6 +484,7 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                             recipientTotal={recipientTotal}
                             toggleRecipient={toggleRecipient}
                             updateRecipientAmount={updateRecipientAmount}
+                            invalidRecipients={invalidRecipients}
                             currency={currency}
                             language={language}
                             getPerson={getPerson}
@@ -424,19 +492,24 @@ export const SplitExpenseModal: React.FC<SplitExpenseModalProps> = ({
                     )}
 
                     {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={
-                            (mode === 'i_paid' && (includedCount === 0 || !isValidSplit || !(parseFloat(amount) > 0))) ||
-                            (mode === 'they_paid' && (!payerId || includedRecipients.length === 0 || recipientTotal <= 0))
-                        }
-                        className="mt-2 h-12 w-full rounded-full bg-accent text-[16px] font-semibold text-on-accent transition-colors disabled:cursor-not-allowed disabled:bg-chip disabled:text-faint"
-                    >
-                        {mode === 'i_paid'
-                            ? t.splitExpense
-                            : t.addDebt
-                        }
-                    </button>
+                    <div>
+                        <button
+                            type="submit"
+                            disabled={!!blockReason}
+                            aria-describedby={blockReason ? blockReasonId : undefined}
+                            className="mt-2 h-12 w-full rounded-full bg-accent text-[16px] font-semibold text-on-accent transition-colors disabled:cursor-not-allowed disabled:bg-chip disabled:text-faint"
+                        >
+                            {mode === 'i_paid'
+                                ? t.splitExpense
+                                : t.addDebt
+                            }
+                        </button>
+                        {blockReason && (
+                            <p id={blockReasonId} aria-live="polite" className="mt-2 px-2 text-center text-[13px] font-medium text-muted">
+                                {blockReason}
+                            </p>
+                        )}
+                    </div>
                 </form>
             </m.div>
             </div>

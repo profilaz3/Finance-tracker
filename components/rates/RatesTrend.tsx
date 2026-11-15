@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import clsx from 'clsx';
 import { TRANSLATIONS } from '../../constants';
 import { formatNumber, formatPercent, type AppLanguage } from '../../utils/locale';
 import { belgradeToday, type NbsCurrency } from '../../utils/nbsRates';
 import { pointsSince, rangeStart, rangeStats } from '../../domain/exchangeRates';
-import { RateChart } from './RateChart';
+import { Sparkline } from '../ui/Sparkline';
+import { CurrencyPair } from '../ui/CurrencyFlag';
+import { DeltaPill } from '../ui/primitives';
 import { useNbsHistory } from './useNbsHistory';
 
 type Strings = (typeof TRANSLATIONS)['en'];
@@ -38,29 +39,23 @@ export const RatesTrend: React.FC<{ language: AppLanguage; t: Strings; fallback:
         const pct = stats?.rangeChangePct ?? 0;
         return (
           <div key={currency} className="flex min-w-0 flex-col rounded-2xl bg-chip px-3 pb-2 pt-2.5">
-            <span className="text-[12px] font-medium text-muted">{currency}/RSD</span>
-            <span className="truncate text-[17px] font-bold tabular-nums">
+            <span className="flex min-w-0 items-center justify-between gap-1.5">
+              <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-muted">
+                <CurrencyPair base={currency} size={18} on="chip" />
+                <span className="truncate">{currency}/RSD</span>
+              </span>
+            </span>
+            <span className="mt-1 truncate text-[17px] font-bold tabular-nums">
               {value > 0 ? formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }, language) : '...'}
             </span>
             {stats && (
-              <span className={clsx('text-[11px] font-semibold tabular-nums', Math.abs(pct) < 0.005 ? 'text-muted' : 'text-accent')}>
-                {Math.abs(pct) < 0.005 ? t.ratesUnchanged : `${pct > 0 ? '+' : '−'}${formatPercent(Math.abs(pct), 2, language)}`}
-              </span>
+              <DeltaPill direction={Math.abs(pct) < 0.005 ? 'flat' : pct > 0 ? 'up' : 'down'} className="self-start">
+                {Math.abs(pct) < 0.005 ? t.ratesUnchanged : formatPercent(Math.abs(pct), 2, language)}
+              </DeltaPill>
             )}
-            <div className="mt-1">
-              {points.length > 1 ? (
-                <RateChart
-                  points={points}
-                  height={40}
-                  bare
-                  formatTick={() => ''}
-                  formatDateLabel={() => ''}
-                  ariaLabel={`${currency}/RSD, ${t.ratesOver_1M}`}
-                />
-              ) : (
-                <div className="h-10" aria-hidden="true" />
-              )}
-            </div>
+            {points.length > 1 && (
+              <Sparkline className="mt-1.5" values={points.map(([, rate]) => rate)} height={36} label={`${currency}/RSD, ${t.ratesOver_1M}`} />
+            )}
           </div>
         );
       })}

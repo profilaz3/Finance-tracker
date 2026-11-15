@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const CLEANUP_RECURRING_URL = process.env.CLEANUP_RECURRING_URL ?? 'http://127.0.0.1:3000';
 const CLEANUP_RECURRING_EMAIL = process.env.CLEANUP_RECURRING_EMAIL;
@@ -17,7 +18,6 @@ if (!CLEANUP_RECURRING_EMAIL || !CLEANUP_RECURRING_PASSWORD) {
 const screenshotDir = 'output/playwright';
 const successScreenshotPath = `${screenshotDir}/cleanup-recurring-regressions-success.png`;
 const failureScreenshotPath = `${screenshotDir}/cleanup-recurring-regressions-failure.png`;
-const consoleIssues = [];
 
 const isVisible = async locator => locator.isVisible().catch(() => false);
 const waitForSyncWindow = async page => page.waitForTimeout(2600);
@@ -35,13 +35,16 @@ const signInIfNeeded = async page => {
 };
 
 const openRecurringSettings = async page => {
-  const settingsHeading = page.getByRole('heading', { name: /settings|podesavanja/i }).first();
+  const settingsHeading = page.getByRole('heading', { name: /^settings$|^podešavanja$/i, level: 1 });
   if (!(await isVisible(settingsHeading))) {
-    await page.locator('aside button, nav button').filter({ hasText: /settings|podesavanja/i }).first().click();
+    await page.getByRole('complementary').getByRole('button', { name: /^settings$|^podešavanja$/i }).click();
     await settingsHeading.waitFor({ timeout: 15000 });
   }
 
-  await page.getByRole('button', { name: /recurring|ponavljaju/i }).first().click();
+  await page
+    .getByRole('navigation', { name: /^settings$|^podešavanja$/i })
+    .getByRole('button', { name: /recurring|ponavljaju/i })
+    .click();
   await page.waitForTimeout(2500);
 };
 
@@ -59,8 +62,8 @@ const deleteFirstRegressionRow = async page => {
       return false;
     }
 
-    const buttons = Array.from(row.querySelectorAll('button'));
-    const deleteButton = buttons[1];
+    // The row itself is an edit button; delete is the marked action.
+    const deleteButton = row.querySelector('button[data-recurring-action="delete"]');
     if (!(deleteButton instanceof HTMLButtonElement)) {
       return false;
     }
@@ -82,11 +85,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', message => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
@@ -110,9 +109,7 @@ try {
     throw new Error(`Expected 0 recurring regression rows after cleanup, got ${remaining}.`);
   }
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 
   await page.screenshot({ path: successScreenshotPath, fullPage: true });
   console.log('Recurring cleanup passed.');

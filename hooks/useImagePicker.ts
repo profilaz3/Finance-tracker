@@ -10,6 +10,8 @@ export interface ImageResult {
   dataUrl: string;     // data:image/... format for display
   file?: File;         // Downscaled, re-encoded file ready for upload
   webPath?: string;    // Web path for native display
+  /** The picked image before downscaling, in memory only: a receipt QR code needs every pixel. */
+  original?: Blob;
 }
 
 interface UseImagePickerOptions {
@@ -126,7 +128,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}): UseImagePic
       quality: encoderQuality,
       fileName: `photo_${Date.now()}`,
     });
-    return { base64: processed.base64, dataUrl: processed.dataUrl, file: processed.file, webPath };
+    return { base64: processed.base64, dataUrl: processed.dataUrl, file: processed.file, webPath, original: source };
   }, [encoderQuality, maxDimension]);
 
   const fromMediaResult = useCallback(async (media: MediaResult | undefined): Promise<ImageResult | null> => {

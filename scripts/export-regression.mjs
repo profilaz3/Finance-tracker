@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const EXPORT_REGRESSION_URL = process.env.EXPORT_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const EXPORT_REGRESSION_EMAIL = process.env.EXPORT_REGRESSION_EMAIL;
@@ -18,7 +19,6 @@ const successScreenshotPath = 'output/playwright/export-regression-success.png';
 const failureScreenshotPath = 'output/playwright/export-regression-failure.png';
 const csvArtifactPath = `${screenshotDir}/export-regression.csv`;
 const jsonArtifactPath = `${screenshotDir}/export-regression.json`;
-const consoleIssues = [];
 
 const isVisible = async (locator) => locator.isVisible().catch(() => false);
 
@@ -36,10 +36,14 @@ const signInIfNeeded = async (page) => {
 };
 
 const openTransactions = async (page) => {
-  const transactionsHeading = page.getByRole('heading', { name: /transactions|transakcije/i }).first();
+  const transactionsHeading = page.getByRole('heading', { name: /^transactions$|^transakcije$/i }).first();
 
   if (!(await isVisible(transactionsHeading))) {
-    await page.getByText(/transactions|transakcije/i).first().click();
+    // Transactions are the List tab of Activity.
+    await page
+      .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+      .getByRole('button', { name: /^activity$|^aktivnost$/i })
+      .click();
     await transactionsHeading.waitFor({ timeout: 15000 });
   }
 };
@@ -158,11 +162,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', (message) => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
@@ -173,9 +173,7 @@ try {
   await verifyJsonExport(page);
   await verifyPrintableReport(page);
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 
   await page.screenshot({ path: successScreenshotPath, fullPage: true });
   console.log('Export regression passed.');

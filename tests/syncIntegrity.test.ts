@@ -238,7 +238,7 @@ describe('hydration merge (H1, H2)', () => {
     }, []);
 
     expect(merged.transactions.map(tx => tx.id)).toEqual(['tx-local']);
-    expect(merged.theme).toBe(local.theme);
+    expect(merged.language).toBe(local.language);
   });
 
   it('re-applies still-pending writes over the fetched snapshot', async () => {

@@ -13,6 +13,8 @@ interface RateChartProps {
   ariaLabel: string;
   /** Sparkline mode: no axes, no scrub. */
   bare?: boolean;
+  /** Value text for the scrub bubble and the low/high markers; without it neither shows. */
+  formatValue?: (value: number) => string;
 }
 
 const PAD = { top: 10, right: 6, bottom: 22, left: 46 };
@@ -40,7 +42,7 @@ const r = (value: number) => Number(value.toFixed(2));
  * Line chart for one exchange rate. Rates never start at zero: the domain hugs the data with a
  * little padding so a 0.5% move is visible. Drag or hover to read any day.
  */
-export const RateChart: React.FC<RateChartProps> = ({ points, height = 180, formatTick, formatDateLabel, onScrub, ariaLabel, bare = false }) => {
+export const RateChart: React.FC<RateChartProps> = ({ points, height = 180, formatTick, formatDateLabel, onScrub, ariaLabel, bare = false, formatValue }) => {
   const [boxRef, width] = useWidth();
   const [active, setActive] = useState<number | null>(null);
   const gradientId = useId();
@@ -66,7 +68,9 @@ export const RateChart: React.FC<RateChartProps> = ({ points, height = 180, form
     const coords = points.map(([, value], index) => ({ x: r(x(index)), y: r(y(value)) }));
     const line = coords.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`).join(' ');
     const area = `${line} L${coords[coords.length - 1].x} ${innerH} L${coords[0].x} ${innerH} Z`;
-    return { min, max, y, coords, line, area, ticks: buildLinearTicks(min + span * 0.08, max - span * 0.08, 3) };
+    const lowIndex = values.indexOf(Math.min(...values));
+    const highIndex = values.indexOf(Math.max(...values));
+    return { min, max, y, coords, line, area, lowIndex, highIndex, ticks: buildLinearTicks(min + span * 0.08, max - span * 0.08, 3) };
   }, [points, innerW, innerH]);
 
   const scrubTo = (clientX: number, target: Element) => {
@@ -84,9 +88,33 @@ export const RateChart: React.FC<RateChartProps> = ({ points, height = 180, form
 
   const activePoint = active !== null && geometry ? geometry.coords[active] : null;
   const last = geometry?.coords[geometry.coords.length - 1];
+  const showMarkers = !bare && Boolean(formatValue) && points.length > 2 && geometry && geometry.lowIndex !== geometry.highIndex;
+  // Keeps a marker label inside the plot near either edge.
+  const anchorFor = (x: number) => (x < 36 ? 'start' : x > innerW - 36 ? 'end' : 'middle');
+
+  const marker = (index: number, kind: 'low' | 'high') => {
+    if (!geometry) return null;
+    const point = geometry.coords[index];
+    const labelY = kind === 'high' ? point.y - 8 : point.y + 15;
+    return (
+      <g key={kind} aria-hidden="true">
+        <circle cx={point.x} cy={point.y} r={3.5} className="fill-tile stroke-accent" strokeWidth={1.75} />
+        <text
+          x={point.x}
+          y={Math.min(innerH - 2, Math.max(9, labelY))}
+          textAnchor={anchorFor(point.x)}
+          className="fill-muted"
+          fontSize={10.5}
+          fontWeight={600}
+        >
+          {formatValue?.(points[index][1])}
+        </text>
+      </g>
+    );
+  };
 
   return (
-    <div ref={boxRef} className="w-full" style={{ height }} data-no-swipe>
+    <div ref={boxRef} className="relative w-full" style={{ height }} data-no-swipe>
       {width > 0 && geometry && (
         <svg
           width={width}
@@ -124,6 +152,12 @@ export const RateChart: React.FC<RateChartProps> = ({ points, height = 180, form
                 <text x={innerW} y={innerH + 17} textAnchor="end" className="fill-muted" fontSize={11}>{formatDateLabel(points[points.length - 1][0])}</text>
               </>
             )}
+            {showMarkers && !activePoint && geometry && (
+              <>
+                {marker(geometry.highIndex, 'high')}
+                {marker(geometry.lowIndex, 'low')}
+              </>
+            )}
             {activePoint ? (
               <>
                 <line x1={activePoint.x} x2={activePoint.x} y1={0} y2={innerH} className="stroke-muted" strokeWidth={1} strokeDasharray="2 4" />
@@ -134,6 +168,16 @@ export const RateChart: React.FC<RateChartProps> = ({ points, height = 180, form
             )}
           </g>
         </svg>
+      )}
+      {!bare && formatValue && activePoint && active !== null && (
+        <span
+          className="pointer-events-none absolute top-0 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-on-surface px-2.5 py-1 text-[11px] font-semibold tabular-nums text-surface shadow-sm"
+          style={{ left: `clamp(56px, ${pad.left + activePoint.x}px, ${Math.max(56, width - 56)}px)` }}
+          aria-hidden="true"
+        >
+          <span className="opacity-70">{formatDateLabel(points[active][0])}</span>
+          {formatValue(points[active][1])}
+        </span>
       )}
     </div>
   );

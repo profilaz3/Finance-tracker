@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { ArrowRight, Check, Loader2, Shapes, SpellCheck, Merge } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, Loader2, Shapes, SpellCheck, Merge, RotateCcw } from 'lucide-react';
 import type { AppState } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import {
@@ -31,7 +31,7 @@ interface CleanupSheetProps {
 
 type Phase =
   | { name: 'working'; done: number; total: number }
-  | { name: 'ready'; notice?: string };
+  | { name: 'ready'; notice?: string; failure?: 'quota' | 'offline' | 'failed' };
 
 const KIND_ICON: Record<CleanupKind, typeof Merge> = { merge: Merge, category: Shapes, note: SpellCheck };
 
@@ -41,6 +41,8 @@ export const CleanupSheet: React.FC<CleanupSheetProps> = ({ isOpen, onClose, sta
   const [suggestions, setSuggestions] = useState<CleanupSuggestion[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  // Bumped by "Try again" after the AI step failed; reruns the whole check.
+  const [attempt, setAttempt] = useState(0);
   // Snapshot at open: the review list must not shift while the user reads it.
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -67,20 +69,21 @@ export const CleanupSheet: React.FC<CleanupSheetProps> = ({ isOpen, onClose, sta
       const all = combineSuggestions(habit, ai);
       setSuggestions(all);
       setSelected(new Set(all.map(s => s.id)));
-      const notice = result.ok
+      const failure = result.ok
         ? undefined
         : result.reason === 'quota'
-          ? t.cleanupQuota
+          ? 'quota'
           : result.reason === 'offline' || result.reason === 'network'
-            ? t.cleanupOffline
-            : t.cleanupFailed;
-      setPhase({ name: 'ready', notice });
+            ? 'offline'
+            : 'failed';
+      const notice = failure === 'quota' ? t.cleanupQuota : failure === 'offline' ? t.cleanupOffline : failure ? t.cleanupFailed : undefined;
+      setPhase({ name: 'ready', notice, failure });
     })();
     return () => {
       signal.cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per opening
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per opening (and per retry)
+  }, [isOpen, attempt]);
 
   const groups = useMemo(() => {
     const order: CleanupKind[] = ['merge', 'category', 'note'];
@@ -127,6 +130,9 @@ export const CleanupSheet: React.FC<CleanupSheetProps> = ({ isOpen, onClose, sta
 
   const kindLabel: Record<CleanupKind, string> = { merge: t.cleanupMerge, category: t.cleanupCategory, note: t.cleanupNote };
   const working = phase.name === 'working';
+  const failure = phase.name === 'ready' ? phase.failure : undefined;
+  // The quota resets tomorrow, so only a failed or offline AI step offers a retry.
+  const canRetry = failure === 'failed' || failure === 'offline';
 
   return (
     <GlassSheet
@@ -174,16 +180,39 @@ export const CleanupSheet: React.FC<CleanupSheetProps> = ({ isOpen, onClose, sta
         )}
 
         {!working && phase.notice && (
-          <p className="rounded-[16px] bg-chip px-4 py-3 text-[13px] text-muted" role="status">{phase.notice}</p>
+          canRetry ? (
+            <div className="flex flex-col items-start gap-2 rounded-[16px] bg-chip px-4 py-3" role="alert">
+              <p className="flex items-center gap-1.5 text-[14px] font-semibold">
+                <AlertCircle size={16} className="shrink-0 text-neg" aria-hidden="true" />
+                {t.cleanupAiFailedTitle}
+              </p>
+              <p className="text-[13px] text-muted">{phase.notice}</p>
+              <button
+                type="button"
+                onClick={() => setAttempt(value => value + 1)}
+                className="flex h-10 items-center gap-1.5 rounded-full bg-accent-soft px-4 text-[14px] font-semibold text-accent"
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                {t.cleanupRetry}
+              </button>
+            </div>
+          ) : (
+            <p className="rounded-[16px] bg-chip px-4 py-3 text-[13px] text-muted" role="status">{phase.notice}</p>
+          )
         )}
 
         {!working && suggestions.length === 0 && (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-chip text-pos">
-              <Check size={24} aria-hidden="true" />
-            </span>
-            <p className="text-[15px] font-semibold">{t.cleanupNone}</p>
-          </div>
+          failure ? (
+            // The AI step did not run, so "everything looks tidy" would be a guess.
+            <p className="px-1 py-4 text-center text-[14px] text-muted">{t.cleanupNoneHabits}</p>
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-chip text-pos">
+                <Check size={24} aria-hidden="true" />
+              </span>
+              <p className="text-[15px] font-semibold">{t.cleanupNone}</p>
+            </div>
+          )
         )}
 
         {!working &&

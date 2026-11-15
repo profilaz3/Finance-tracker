@@ -22,16 +22,20 @@ export const BlockGallerySheet: React.FC<BlockGallerySheetProps> = ({ isOpen, on
           const block = { id: `preview-${def.type}`, type: def.type, style: def.defaultStyle, size: def.defaultSize };
           const name = t[`block_${def.type}` as const];
           return (
-            <button
+            // The preview holds real block markup (some blocks have buttons), so it sits beside the
+            // button, not inside it; the button's ::after stretches over the whole card.
+            <div
               key={def.type}
-              type="button"
-              onClick={() => onAdd(def.type)}
-              className="flex flex-col overflow-hidden rounded-[22px] bg-tile text-left shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+              className="relative flex flex-col overflow-hidden rounded-[22px] bg-tile text-left shadow-[0_1px_2px_rgba(0,0,0,0.06)] has-[button:focus-visible]:outline has-[button:focus-visible]:outline-2 has-[button:focus-visible]:outline-[rgb(var(--md-sys-color-primary))]"
             >
               <span className="flex h-[104px] items-start justify-center overflow-hidden bg-chip px-2 pt-2">
                 <BlockPreview block={block} data={data} scale={0.44} />
               </span>
-              <span className="flex flex-col gap-0.5 px-3 pb-3 pt-2.5">
+              <button
+                type="button"
+                onClick={() => onAdd(def.type)}
+                className="flex flex-col gap-0.5 px-3 pb-3 pt-2.5 text-left outline-none after:absolute after:inset-0 after:content-['']"
+              >
                 <span className="flex items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold">{name}</span>
                   {def.isNew && (
@@ -41,8 +45,8 @@ export const BlockGallerySheet: React.FC<BlockGallerySheetProps> = ({ isOpen, on
                   )}
                 </span>
                 <span className="line-clamp-2 text-[12px] leading-4 text-muted">{t[`blockDesc_${def.type}` as const]}</span>
-              </span>
-            </button>
+              </button>
+            </div>
           );
         })}
       </div>

@@ -107,6 +107,17 @@ export function usePasswordRecovery() {
         return { needsConfirmation: !data.session };
     }, []);
 
+    /** Sends the sign-up confirmation email again (Supabase allows one per minute). */
+    const resendConfirmation = useCallback(async (email: string) => {
+        const service = await getSupabaseService();
+        const { error } = await service.client.auth.resend({
+            type: 'signup',
+            email,
+            options: { emailRedirectTo: getEmailRedirectUrl() },
+        });
+        if (error) throw error;
+    }, []);
+
     const requestPasswordReset = useCallback(async (email: string) => {
         const service = await getSupabaseService();
         const { error } = await service.client.auth.resetPasswordForEmail(email, {
@@ -129,6 +140,7 @@ export function usePasswordRecovery() {
         isRecovering,
         redirectErrorCode,
         signUp,
+        resendConfirmation,
         requestPasswordReset,
         updatePassword,
         finishRecovery,

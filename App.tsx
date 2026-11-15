@@ -12,11 +12,13 @@ import { useToasts } from './hooks/useToasts';
 import { vibrate, HAPTIC_PATTERNS } from './utils/haptics';
 import { playPageEnter, resetPageMotion, useSwipePager, type SwipeDirection } from './hooks/useSwipePager';
 import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
-import { createTransactionDraft } from './domain/transactions';
+import { createTransactionDraft, draftFromParsed } from './domain/transactions';
 import { installPreloadErrorReload, lazyWithReload } from './utils/lazyWithReload';
 
 installPreloadErrorReload();
 
+// Reminders, alerts and the monthly letter: loaded after first paint, see BackgroundJobs.
+const BackgroundJobs = lazyWithReload(() => import('./components/app/BackgroundJobs'));
 const AuthView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
 const SetNewPasswordView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.SetNewPasswordView })));
 import type { ParsedTransaction } from './services/aiService';
@@ -31,17 +33,19 @@ import { preloadViews, subViewGroup, type PeekControl } from './components/app/A
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
+import { useAddMenuRequests } from './hooks/entryBus';
+import { useReceiptPhotoCleanup } from './hooks/useReceiptPhotoCleanup';
+import { useTransactionDetailsRequests } from './components/transaction-details/detailsBus';
 import { usePasswordRecovery } from './hooks/usePasswordRecovery';
 import { useAppState } from './hooks/useAppState';
 import { useModals } from './hooks/useModals';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useBackNavigation, type BackLayer } from './hooks/useBackNavigation';
+import { BackLayerContext, useBackLayerRegistry } from './hooks/useBackLayer';
 import { useExchangeRates } from './hooks/useExchangeRates';
 import { useEventHandlers } from './hooks/useEventHandlers';
 import { usePeopleHandlers } from './hooks/usePeopleHandlers';
 import { useRecurringProcessor } from './hooks/useRecurringProcessor';
-import { useNotifications } from './hooks/useNotifications';
-import { useMonthlyLetter } from './components/insights/useMonthlyLetter';
 import { useRecurringHandlers } from './hooks/useRecurringHandlers';
 import { useSync } from './hooks/useSync';
 import { useScrollRestore } from './hooks/useScrollRestore';
@@ -136,40 +140,10 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
   useSync(state, isAuthenticated, areSlicesHydrated('settings'));
 
-  // Fetch remote state on auth
+  // Fetch remote state on auth. Syncing never navigates: a shared active event shows up in the
+  // Events list (and the Home event block), it does not pull the person away from what they opened.
   useEffect(() => {
-    if (isAuthenticated) {
-      let cancelled = false;
-
-      fetchRemoteState().then(remoteState => {
-        if (remoteState?.events && remoteState.events.length > 0) {
-          getSupabaseService()
-            .then(service => service.getUser())
-            .then(user => {
-              if (cancelled || !user) {
-                return;
-              }
-
-              const sharedActiveEvents = (remoteState.events || []).filter((e: Event) =>
-                e.status === 'active' &&
-                e.userId !== user.id &&
-                e.sharedEmails?.includes(user.email || '')
-              );
-              if (sharedActiveEvents.length > 0) {
-                setSelectedEvent(sharedActiveEvents[0]);
-                setCurrentView('events');
-              }
-            })
-            .catch(error => {
-              console.error('Failed to resolve authenticated user during remote state hydration:', error);
-            });
-        }
-      });
-
-      return () => {
-        cancelled = true;
-      };
-    }
+    if (isAuthenticated) void fetchRemoteState();
   }, [isAuthenticated, fetchRemoteState]);
 
   // Close menu when clicking outside
@@ -178,20 +152,6 @@ const App: React.FC = () => {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
-
-  // Auto-open active event when navigating to events page
-  const hasAutoOpenedRef = useRef(false);
-  useEffect(() => {
-    if (currentView === 'events' && !selectedEvent && !hasAutoOpenedRef.current) {
-      const active = state.events.find(e => e.status === 'active');
-      if (active) {
-        setSelectedEvent(active);
-        hasAutoOpenedRef.current = true;
-      }
-    } else if (currentView !== 'events') {
-      hasAutoOpenedRef.current = false;
-    }
-  }, [currentView, state.events, selectedEvent]);
 
   // Local storage full: tell the user instead of silently losing data.
   const storageWarningLanguageRef = useRef(state.language);
@@ -227,7 +187,6 @@ const App: React.FC = () => {
     createId,
     setSelectedTransaction,
     closeEditModal: () => modals.setIsEditModalOpen(false),
-    closeReceiptModal: () => modals.setIsReceiptModalOpen(false),
   });
 
   const { handleUpdateAccount } = useAccountHandlers({
@@ -342,41 +301,17 @@ const App: React.FC = () => {
     [handleAddCategory, workspaceId]
   );
 
-  // Handler for AI parsed transactions
+  // Smart (typed or voice) entry opens the form with what was understood, in this workspace.
   const handleParsedTransaction = (parsed: ParsedTransaction) => {
-    const category = state.categories.find(c =>
-      c.name.toLowerCase() === parsed.categoryName.toLowerCase()
-    ) || state.categories.find(c => c.type === parsed.type) || state.categories[0];
-
-    const account = parsed.accountName
-      ? state.accounts.find(a => a.name.toLowerCase() === parsed.accountName?.toLowerCase())
-      : state.accounts[0];
-
-    let personId: string | undefined;
-    if (parsed.debtName) {
-      const person = state.people.find(p => p.name.toLowerCase() === parsed.debtName?.toLowerCase());
-      if (person) personId = person.id;
-    } else if (parsed.loanName) {
-      const person = state.people.find(p => p.name.toLowerCase() === parsed.loanName?.toLowerCase());
-      if (person) personId = person.id;
-    }
-
-    const eventId = linkToActiveEvent && activeEvent ? activeEvent.id : undefined;
-
-    const newTransaction: Transaction = {
-      id: createId(),
-      date: new Date(parsed.date || new Date()).toISOString(),
-      amount: parsed.amount || 0,
-      currency: parsed.currency || state.baseCurrency,
-      categoryId: category?.id || state.categories[0]?.id,
-      accountId: account?.id || state.accounts[0]?.id,
-      type: parsed.type || 'expense',
-      note: parsed.note || '',
-      subcategory: parsed.subcategory,
-      personId,
-      fees: parsed.fees,
-      eventId
-    };
+    const newTransaction = draftFromParsed(parsed, {
+      createId,
+      accounts: scopedState.accounts,
+      categories: scopedState.categories,
+      people: scopedState.people,
+      baseCurrency: state.baseCurrency,
+      rates: state.rates,
+      eventId: linkToActiveEvent && activeEvent ? activeEvent.id : undefined,
+    });
 
     setSelectedTransaction(newTransaction);
     modals.setIsEditModalOpen(true);
@@ -472,29 +407,42 @@ const App: React.FC = () => {
     vibrate(HAPTIC_PATTERNS.light);
   }, [handleViewChange]);
 
-  useNotifications({
-    state,
-    isAuthenticated: !!isAuthenticated,
-    currentUserId,
-    hydrationStatus,
-    fetchRemoteState,
-    addToast,
-    onNavigate: handleViewChange,
-    onOpenEvent: (event: Event) => {
-      setSelectedEvent(event);
-      handleViewChange('events');
-    },
-  });
-
-  useMonthlyLetter({
-    state: scopedState,
-    workspaceId,
-    currentUserId,
-    isAuthenticated: !!isAuthenticated,
-    hydrated: hydrationStatus === 'hydrated' || hydrationStatus === 'partial',
-    addToast,
-    onNavigate: handleViewChange,
-  });
+  // Same element at the same place in every signed-in or signed-out render (see withBackgroundJobs),
+  // so it survives signing in and out and its effects see the change.
+  const backgroundJobs = (
+    <Suspense fallback={null}>
+      <BackgroundJobs
+        notifications={{
+          state,
+          isAuthenticated: !!isAuthenticated,
+          currentUserId,
+          hydrationStatus,
+          fetchRemoteState,
+          addToast,
+          onNavigate: handleViewChange,
+          onOpenEvent: (event: Event) => {
+            setSelectedEvent(event);
+            handleViewChange('events');
+          },
+        }}
+        letter={{
+          state: scopedState,
+          workspaceId,
+          currentUserId,
+          isAuthenticated: !!isAuthenticated,
+          hydrated: hydrationStatus === 'hydrated' || hydrationStatus === 'partial',
+          addToast,
+          onNavigate: handleViewChange,
+        }}
+      />
+    </Suspense>
+  );
+  const withBackgroundJobs = (content: React.ReactNode) => (
+    <>
+      {content}
+      {backgroundJobs}
+    </>
+  );
 
   const currentPage = () => pagerRef.current?.querySelector<HTMLElement>(':scope > [data-pager-page]');
   // A page with a visible in-page back button (a settings section) swipes back through it.
@@ -635,7 +583,7 @@ const App: React.FC = () => {
     { id: 'event-creation', isOpen: modals.isEventCreationModalOpen, close: () => modals.setIsEventCreationModalOpen(false) },
     { id: 'receipt-scan', isOpen: modals.isReceiptScanModalOpen, close: () => modals.setIsReceiptScanModalOpen(false) },
     { id: 'edit-transaction', isOpen: modals.isEditModalOpen, close: () => modals.setIsEditModalOpen(false) },
-    { id: 'receipt', isOpen: modals.isReceiptModalOpen, close: () => modals.setIsReceiptModalOpen(false) },
+    { id: 'transaction-details', isOpen: modals.detailsId !== null, close: modals.closeDetails },
     { id: 'split', isOpen: modals.isSplitModalOpen, close: () => modals.setIsSplitModalOpen(false) },
     {
       id: 'split-expense',
@@ -645,7 +593,7 @@ const App: React.FC = () => {
         setSplitTransactionContext(undefined);
       },
     },
-    { id: 'add-sheet', isOpen: modals.isAddSheetOpen, close: () => modals.setIsAddSheetOpen(false) },
+    { id: 'add-menu', isOpen: modals.isAddMenuOpen, close: () => modals.setIsAddMenuOpen(false) },
     { id: 'profile-menu', isOpen: modals.isProfileMenuOpen, close: () => modals.setIsProfileMenuOpen(false) },
     { id: 'appearance-sheet', isOpen: modals.isAppearanceSheetOpen, close: () => modals.setIsAppearanceSheetOpen(false) },
     { id: 'export', isOpen: modals.isExportModalOpen, close: () => modals.setIsExportModalOpen(false) },
@@ -653,11 +601,26 @@ const App: React.FC = () => {
     { id: 'home-editing', isOpen: currentView === 'dashboard' && homeEditing, close: () => setHomeEditing(false) },
   ], [currentView, selectedEvent, selectedPerson, modals, homeEditing]);
 
+  // Sheets and sub-pages that keep their open state locally register through BackLayerContext.
+  const { registry: backLayerRegistry, layers: registeredBackLayers } = useBackLayerRegistry();
+  const allBackLayers = useMemo(() => [...backLayers, ...registeredBackLayers], [backLayers, registeredBackLayers]);
+
   const { closeTopLayer } = useBackNavigation({
     currentView,
     setView: handleViewChange,
-    layers: backLayers,
+    layers: allBackLayers,
   });
+
+  // Tapping the tab that is already active returns to that view's root and scrolls to the top.
+  const handleReselectView = useCallback(() => {
+    if (currentView === 'events' && selectedEvent) setSelectedEvent(null);
+    if (selectedPerson) setSelectedPerson(null);
+    scrollRestore.save(currentView, 0);
+    const main = mainRef.current;
+    if (!main) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    main.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }, [currentView, selectedEvent, selectedPerson, scrollRestore]);
 
   const shortcutHandlers = useMemo(() => ({
     onNewTransaction: () => handleOpenAddTransaction(),
@@ -666,6 +629,10 @@ const App: React.FC = () => {
   }), [handleOpenAddTransaction, closeTopLayer]);
 
   useKeyboardShortcuts(shortcutHandlers);
+  // The desktop Activity "+" asks for the Add sheet through hooks/entryBus.ts.
+  useAddMenuRequests(modals.openAddMenu);
+  useTransactionDetailsRequests(modals.openDetails);
+  useReceiptPhotoCleanup(state.transactions, currentUserId);
 
   // Android: the home screen widget mirrors this month, and its "+" and the share sheet open the app.
   const [sharedReceiptImage, setSharedReceiptImage] = useState<string | null>(null);
@@ -694,7 +661,7 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return (
+    return withBackgroundJobs(
       <Suspense fallback={<DashboardSkeleton />}>
         <AuthView
           onAuthSuccess={async () => {
@@ -705,6 +672,7 @@ const App: React.FC = () => {
           onLanguageChange={(language) => setState(prev => ({ ...prev, language }))}
           onSignUp={authFlow.signUp}
           onRequestPasswordReset={authFlow.requestPasswordReset}
+          onResendConfirmation={authFlow.resendConfirmation}
           redirectErrorCode={authFlow.redirectErrorCode}
           onDismissRedirectError={authFlow.clearRedirectError}
         />
@@ -713,7 +681,7 @@ const App: React.FC = () => {
   }
 
   if (authFlow.isRecovering) {
-    return (
+    return withBackgroundJobs(
       <Suspense fallback={<DashboardSkeleton />}>
         <SetNewPasswordView
           language={state.language}
@@ -727,13 +695,16 @@ const App: React.FC = () => {
     );
   }
 
-  return (
+  return withBackgroundJobs(
+    <BackLayerContext.Provider value={backLayerRegistry}>
     <div className={themeClass}>
       <AppNavigation
         currentView={currentView}
         onNavigate={handleNavigate}
-        onAdd={() => modals.setIsAddSheetOpen(true)}
+        onReselect={handleReselectView}
+        onAdd={modals.openAddMenu}
         labels={{
+          mainNavigation: t.mainNavigation,
           home: t.navHome,
           activity: t.navActivity,
           events: t.navEvents,
@@ -747,7 +718,7 @@ const App: React.FC = () => {
 
       {/* Edge-to-edge (Android 15+): keep scrolled content from showing through the status bar. */}
       <div
-        className="fixed top-0 inset-x-0 z-40 h-[env(safe-area-inset-top)] bg-surface pointer-events-none md:hidden"
+        className="status-scrim fixed top-0 inset-x-0 z-40 h-[env(safe-area-inset-top)] bg-surface pointer-events-none md:hidden"
         aria-hidden="true"
       />
 
@@ -776,7 +747,7 @@ const App: React.FC = () => {
                 setHomeEditing={setHomeEditing}
                 onNavigate={handleNavigate}
                 onOpenProfile={() => modals.setIsProfileMenuOpen(true)}
-                onOpenAdd={() => modals.setIsAddSheetOpen(true)}
+                onOpenAdd={() => modals.openAddMenu()}
                 selectedEvent={selectedEvent}
                 setSelectedEvent={setSelectedEvent}
                 setSelectedPerson={setSelectedPerson}
@@ -813,7 +784,6 @@ const App: React.FC = () => {
                 setState={setState}
                 setIsAddPersonModalOpen={modals.setIsAddPersonModalOpen}
                 setIsEditModalOpen={modals.setIsEditModalOpen}
-                setIsReceiptModalOpen={modals.setIsReceiptModalOpen}
                 setIsSplitModalOpen={modals.setIsSplitModalOpen}
                 setIsEventCreationModalOpen={modals.setIsEventCreationModalOpen}
                 setIsReceiptScanModalOpen={modals.setIsReceiptScanModalOpen}
@@ -849,6 +819,9 @@ const App: React.FC = () => {
         setSelectedPerson={setSelectedPerson}
         setPersonToEdit={setPersonToEdit}
         setSplitTransactionContext={setSplitTransactionContext}
+        setSelectedTransaction={setSelectedTransaction}
+        onSaveAsTemplate={handleSaveAsTemplate}
+        createId={createId}
         handleSplitTransaction={handleSplitTransaction}
         deletePerson={deletePerson}
         handleSettleUp={handleSettleUp}
@@ -893,6 +866,7 @@ const App: React.FC = () => {
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+    </BackLayerContext.Provider>
   );
 };
 

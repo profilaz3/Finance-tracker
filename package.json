@@ -1,13 +1,14 @@
 {
   "name": "gemini-finance-sheet",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "prebuild": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "vite build",
     "preview": "vite preview",
+    "deploy:cloudflare": "npm run build && node scripts/deploy-cloudflare.mjs",
     "test": "vitest run",
     "test:integration": "vitest run tests/integration",
     "test:share-regression": "node scripts/share-event-regression.mjs",

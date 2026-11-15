@@ -22,6 +22,8 @@ export const tabForView = (view: View): NavTab | null =>
   NAV_TABS.find(tab => TAB_VIEWS[tab].includes(view)) ?? null;
 
 interface NavigationLabels {
+  /** Accessible name of the tab bar and the sidebar list (not "Home", which is a tab). */
+  mainNavigation: string;
   home: string;
   activity: string;
   events: string;
@@ -34,7 +36,10 @@ interface NavigationLabels {
 interface AppNavigationProps {
   currentView: View;
   onNavigate: (view: View) => void;
-  onAdd: () => void;
+  /** The active tab was tapped again: back to its root, scrolled to the top. */
+  onReselect: () => void;
+  /** Opens the Add menu, growing from the button that was tapped. */
+  onAdd: (anchor: HTMLElement) => void;
   labels: NavigationLabels;
 }
 
@@ -43,17 +48,18 @@ interface TabButtonProps {
   label: string;
   currentView: View;
   onNavigate: (view: View) => void;
+  onReselect: () => void;
   className: string;
   activeClassName: string;
   pillItem?: boolean;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ tab, label, currentView, onNavigate, className, activeClassName, pillItem }) => {
+const TabButton: React.FC<TabButtonProps> = ({ tab, label, currentView, onNavigate, onReselect, className, activeClassName, pillItem }) => {
   const isActive = tabForView(currentView) === tab;
   return (
     <button
       type="button"
-      onClick={() => onNavigate(isActive ? currentView : TAB_VIEWS[tab][0])}
+      onClick={() => (isActive ? onReselect() : onNavigate(TAB_VIEWS[tab][0]))}
       aria-current={isActive ? 'page' : undefined}
       data-pill-item={pillItem ? '' : undefined}
       className={clsx(className, isActive ? activeClassName : 'text-muted')}
@@ -64,7 +70,7 @@ const TabButton: React.FC<TabButtonProps> = ({ tab, label, currentView, onNaviga
 };
 
 /** Mobile glass tab bar. The active pill glides between tabs and can be dragged across them. */
-const TabBar: React.FC<Pick<AppNavigationProps, 'currentView' | 'onNavigate' | 'labels'>> = ({ currentView, onNavigate, labels }) => {
+const TabBar: React.FC<Pick<AppNavigationProps, 'currentView' | 'onNavigate' | 'onReselect' | 'labels'>> = ({ currentView, onNavigate, onReselect, labels }) => {
   const activeTab = tabForView(currentView);
   const { trackRef, pillRef, trackProps } = usePillTrack(activeTab ? NAV_TABS.indexOf(activeTab) : -1, index => {
     const tab = NAV_TABS[index];
@@ -73,9 +79,9 @@ const TabBar: React.FC<Pick<AppNavigationProps, 'currentView' | 'onNavigate' | '
   return (
     <nav
       ref={trackRef}
-      aria-label={labels.home}
+      aria-label={labels.mainNavigation}
       style={{ ...lgStyle('lg-nav'), ['--pill-hot' as string]: 'rgb(var(--accent-rgb))' }}
-      className="glass pill-track pointer-events-auto relative flex h-[62px] w-[286px] touch-pan-y select-none items-center gap-0.5 rounded-full p-[5px]"
+      className="glass pill-track pointer-events-auto relative flex h-[62px] w-[min(296px,calc(100vw-96px))] touch-pan-y select-none items-center gap-0.5 rounded-full p-[5px]"
       {...trackProps}
     >
       <span
@@ -90,8 +96,9 @@ const TabBar: React.FC<Pick<AppNavigationProps, 'currentView' | 'onNavigate' | '
           label={labels[tab]}
           currentView={currentView}
           onNavigate={onNavigate}
+          onReselect={onReselect}
           pillItem
-          className="pill-item relative z-[1] h-full min-w-0 flex-1 truncate rounded-full px-1 text-[13px] font-semibold transition-colors duration-200"
+          className="pill-item relative z-[1] h-full min-w-0 flex-auto whitespace-nowrap rounded-full px-1.5 text-[13px] font-semibold tracking-[-0.2px] transition-colors duration-200"
           activeClassName="text-accent"
         />
       ))}
@@ -100,7 +107,7 @@ const TabBar: React.FC<Pick<AppNavigationProps, 'currentView' | 'onNavigate' | '
   );
 };
 
-export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNavigate, onAdd, labels }) => (
+export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNavigate, onReselect, onAdd, labels }) => (
   <>
     <aside className="z-20 hidden h-full flex-col gap-1 border-r border-hair bg-paper p-4 md:flex md:w-[220px] lg:w-[248px]">
       <div className="mb-4 flex items-center gap-2.5 px-3 pt-2">
@@ -112,14 +119,16 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
 
       <button
         type="button"
-        onClick={onAdd}
+        onClick={event => onAdd(event.currentTarget)}
+        data-add-trigger=""
+        aria-haspopup="dialog"
         className="mb-3 flex h-11 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent"
       >
         <Plus size={18} aria-hidden="true" />
         {labels.add}
       </button>
 
-      <nav className="flex flex-col gap-1" aria-label={labels.home}>
+      <nav className="flex flex-col gap-1" aria-label={labels.mainNavigation}>
         {NAV_TABS.map(tab => (
           <TabButton
             key={tab}
@@ -127,6 +136,7 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
             label={labels[tab]}
             currentView={currentView}
             onNavigate={onNavigate}
+            onReselect={onReselect}
             className="flex h-11 items-center rounded-full px-4 text-left text-[15px] font-semibold"
             activeClassName="bg-chip text-on-surface"
           />
@@ -141,7 +151,7 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
           <button
             key={view}
             type="button"
-            onClick={() => onNavigate(view)}
+            onClick={() => (currentView === view ? onReselect() : onNavigate(view))}
             aria-current={currentView === view ? 'page' : undefined}
             className={clsx(
               'flex h-11 items-center gap-3 rounded-full px-4 text-left text-[15px] font-medium',
@@ -165,10 +175,12 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 md:hidden">
       <div className="paper-fade absolute inset-x-0 bottom-0 h-[calc(120px+env(safe-area-inset-bottom))]" aria-hidden="true" />
       <div className="relative flex items-center justify-center gap-2.5 pb-[calc(env(safe-area-inset-bottom)+12px)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-        <TabBar currentView={currentView} onNavigate={onNavigate} labels={labels} />
+        <TabBar currentView={currentView} onNavigate={onNavigate} onReselect={onReselect} labels={labels} />
         <button
           type="button"
-          onClick={onAdd}
+          onClick={event => onAdd(event.currentTarget)}
+          data-add-trigger=""
+          aria-haspopup="dialog"
           aria-label={labels.add}
           title={labels.add}
           style={lgStyle('lg-fab')}

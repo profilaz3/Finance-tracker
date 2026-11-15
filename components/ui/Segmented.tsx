@@ -31,7 +31,8 @@ export function Segmented<T extends string>({ options, value, onChange, ariaLabe
       role="radiogroup"
       aria-label={ariaLabel}
       data-no-swipe
-      className={clsx('pill-track relative flex touch-pan-y select-none gap-0.5 rounded-full bg-chip p-[3px]', className)}
+      // Options share the width but never shrink below their label; a track wider than its box scrolls.
+      className={clsx('pill-track scrollbar-none relative flex max-w-full touch-pan-y select-none gap-0.5 overflow-x-auto rounded-full bg-chip p-[3px]', className)}
       {...trackProps}
     >
       <span
@@ -51,8 +52,10 @@ export function Segmented<T extends string>({ options, value, onChange, ariaLabe
             data-pill-item
             onClick={() => onChange(option.value)}
             className={clsx(
-              'pill-item relative z-[1] flex-1 rounded-full font-semibold transition-colors duration-200 disabled:opacity-35',
-              size === 'sm' ? 'h-8 px-3 text-[13px]' : 'h-9 px-4 text-sm',
+              // The ::after extends the hit area over the track padding: 40px tall for sm, 42px for md.
+              'pill-item relative z-[1] min-w-fit flex-1 whitespace-nowrap rounded-full font-semibold transition-colors duration-200 disabled:opacity-35',
+              "after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-['']",
+              size === 'sm' ? 'h-[34px] px-3 text-[13px]' : 'h-9 px-4 text-sm',
               selected ? 'text-on-surface' : 'text-muted',
             )}
           >

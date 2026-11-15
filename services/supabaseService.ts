@@ -18,10 +18,15 @@ import {
 } from './supabaseMappers';
 import type { SupabaseRecurringTransactionRow, SupabaseSettingsRow, SupabaseTeamMemberRow, SupabaseTeamRow } from './supabaseMappers';
 import { toSyncError } from './syncErrors';
+
+/** RLS hid the row from the write (0 rows changed): permanent, like an explicit 42501. */
+const permissionDenied = (operation: string, status?: number) =>
+    toSyncError({ code: '42501', message: `Permission denied: ${operation} changed no rows` }, status && status >= 400 ? status : 403);
 import { normalizeInviteEmail, normalizeTeamName } from '../domain/teams';
 
 export type { RemoteSlice, RemoteStateResult } from './hydration';
 import type { RemoteSlice, RemoteStateResult } from './hydration';
+import { RECEIPT_PHOTO_BUCKET, receiptPhotoPath } from '../domain/receiptPhoto';
 
 export type UserVerification = 'valid' | 'invalid' | 'unknown';
 
@@ -86,21 +91,28 @@ export class SupabaseService {
      * storage, so fall back to `scope: 'local'` (no network) and finally remove
      * the stored session ourselves.
      */
-    async signOut(): Promise<{ error: null }> {
+    /**
+     * Ends this device's session (the server revokes only this session). `everywhere` revokes
+     * every session of the user, so other phones and browsers are signed out on their next check.
+     * If the server cannot be reached the session is still dropped on this device.
+     */
+    async signOut({ everywhere = false }: { everywhere?: boolean } = {}): Promise<{ error: null }> {
         this.invalidateUserCache();
 
         try {
-            const { error } = await this.client.auth.signOut();
+            const { error } = await this.client.auth.signOut({ scope: everywhere ? 'global' : 'local' });
             if (!error) return { error: null };
-            console.warn('Global sign-out failed, signing out locally:', error);
+            console.warn('Sign-out failed on the server, signing out on this device:', error);
         } catch (error) {
-            console.warn('Global sign-out threw, signing out locally:', error);
+            console.warn('Sign-out threw, signing out on this device:', error);
         }
 
-        try {
-            await this.client.auth.signOut({ scope: 'local' });
-        } catch (error) {
-            console.warn('Local sign-out failed:', error);
+        if (everywhere) {
+            try {
+                await this.client.auth.signOut({ scope: 'local' });
+            } catch (error) {
+                console.warn('Local sign-out failed:', error);
+            }
         }
 
         this.removeStoredSession();
@@ -448,7 +460,8 @@ export class SupabaseService {
             id: person.id,
             user_id: user.id,
             name: person.name,
-            avatar: person.avatar,
+            // null, not undefined (which JSON drops), so removing a photo clears it on the server.
+            avatar: person.avatar ?? null,
             color: person.color,
             default_currency: person.defaultCurrency,
             balances: person.balances,
@@ -503,7 +516,6 @@ export class SupabaseService {
         const { error, status } = await this.client.from('settings').upsert({
             user_id: user.id,
             base_currency: settings.baseCurrency,
-            theme: settings.theme,
             language: settings.language,
             user_profile: settings.userProfile ? {
                 id: settings.userProfile.id,
@@ -543,27 +555,76 @@ export class SupabaseService {
         return publicUrl;
     }
 
+    /** Uploads a receipt photo into the user's folder of the private `receipts` bucket; returns its path. */
+    async uploadReceiptPhoto(blob: Blob, id: string): Promise<string> {
+        const user = await this.getUser();
+        if (!user) throw new Error('User not authenticated');
+        const contentType = blob.type === 'image/jpeg' ? 'image/jpeg' : 'image/webp';
+        const path = receiptPhotoPath(user.id, id, contentType);
+        const { error } = await this.client.storage
+            .from(RECEIPT_PHOTO_BUCKET)
+            .upload(path, blob, { contentType, upsert: false, cacheControl: '31536000' });
+        if (error) throw error;
+        return path;
+    }
+
+    /** A short-lived link to a receipt photo; Storage refuses photos the user cannot see. */
+    async receiptPhotoUrl(path: string, expiresInSeconds: number): Promise<string> {
+        const { data, error } = await this.client.storage
+            .from(RECEIPT_PHOTO_BUCKET)
+            .createSignedUrl(path, expiresInSeconds);
+        if (error || !data?.signedUrl) throw error ?? new Error('No receipt photo link');
+        return data.signedUrl;
+    }
+
+    /** Deletes the user's own receipt photos (others' are silently left alone by Storage). */
+    async deleteReceiptPhotos(paths: string[]): Promise<void> {
+        if (paths.length === 0) return;
+        const { error } = await this.client.storage.from(RECEIPT_PHOTO_BUCKET).remove(paths);
+        if (error) throw error;
+    }
+
     // Events
+    /**
+     * Creates or updates an event. An event someone else owns (shared by email or through a team)
+     * already exists and is updated in place: an upsert would also run the INSERT policy
+     * (user_id = auth.uid()), which always refuses a guest. The guest update leaves out the owner,
+     * the shared emails and the team, which only the owner may change. Zero updated rows means the
+     * server refused (no access any more) and is reported as a permission error.
+     */
     async syncEvent(event: Event) {
         const user = await this.getUser();
         if (!user) throw new Error('User not authenticated');
 
-        // If user is owner, use their ID. If not (participant), we don't change user_id (it stays as owner's)
-        const ownerId = event.userId || user.id;
-
-        const { error, status } = await this.client.from('events').upsert({
-            id: event.id,
-            user_id: ownerId,
+        // null, not undefined (which JSON drops): reopening an event clears its end date.
+        const fields = {
             name: event.name,
-            description: event.description,
-            start_date: event.startDate,
-            end_date: event.endDate,
+            description: event.description ?? null,
+            start_date: event.startDate ?? null,
+            end_date: event.endDate ?? null,
             person_ids: event.personIds,
-            shared_emails: event.sharedEmails,
             icon: event.icon,
             color: event.color,
             image_url: event.imageUrl,
             status: event.status,
+        };
+
+        if (event.userId && event.userId !== user.id) {
+            const { data, error, status } = await this.client
+                .from('events')
+                .update(fields)
+                .eq('id', event.id)
+                .select('id');
+            if (error) throw toSyncError(error, status);
+            if (!data || data.length === 0) throw permissionDenied('event update', status);
+            return;
+        }
+
+        const { error, status } = await this.client.from('events').upsert({
+            id: event.id,
+            user_id: user.id,
+            ...fields,
+            shared_emails: event.sharedEmails,
             ...teamIdColumn(event.teamId)
         });
 
@@ -571,8 +632,26 @@ export class SupabaseService {
     }
 
     async deleteEvent(id: string) {
-        const { error, status } = await this.client.from('events').delete().eq('id', id);
+        await this.deleteVisibleRow('events', id);
+    }
+
+    /**
+     * Deletes a row and fails loudly when RLS silently filtered the delete: PostgREST answers a
+     * refused delete with 0 rows and no error. A row that is gone already (a replayed delete)
+     * counts as done; a row that is still there means the user may not delete it.
+     */
+    private async deleteVisibleRow(table: 'events' | 'shared_expenses', id: string) {
+        const { data, error, status } = await this.client.from(table).delete().eq('id', id).select('id');
         if (error) throw toSyncError(error, status);
+        if (data && data.length > 0) return;
+
+        const { data: remaining, error: readError, status: readStatus } = await this.client
+            .from(table)
+            .select('id')
+            .eq('id', id)
+            .maybeSingle();
+        if (readError) throw toSyncError(readError, readStatus);
+        if (remaining) throw permissionDenied(`${table} delete`, status);
     }
 
     async uploadEventPhoto(file: File, eventId: string, oldImageUrl?: string): Promise<string> {
@@ -643,8 +722,7 @@ export class SupabaseService {
     }
 
     async deleteSharedExpense(id: string) {
-        const { error, status } = await this.client.from('shared_expenses').delete().eq('id', id);
-        if (error) throw toSyncError(error, status);
+        await this.deleteVisibleRow('shared_expenses', id);
     }
 
     async syncRecurring(recurring: RecurringTransaction) {

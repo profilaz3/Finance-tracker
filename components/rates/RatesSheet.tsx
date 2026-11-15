@@ -1,6 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { ArrowDownUp, Info, Loader2, RotateCcw, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowDownUp, Info, Loader2, RotateCcw } from 'lucide-react';
+import { AnimatePresence, m } from 'motion/react';
+import { MOTION } from '../../config';
+import { DeltaPill } from '../ui/primitives';
+import { Illustration } from '../ui/Illustration';
 import type { AppState } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { GlassSheet } from '../ui/GlassSheet';
@@ -17,9 +21,11 @@ import {
   rsdPer,
   type RateRange,
 } from '../../domain/exchangeRates';
-import { parseOptionalNumberInput } from '../../utils/numberInput';
+import { AmountInput } from '../ui/AmountInput';
+import { formatAmountForInput } from '../../utils/numberInput';
 import { RateChart } from './RateChart';
 import { useNbsHistory } from './useNbsHistory';
+import { CurrencyFlag, CurrencyPair } from '../ui/CurrencyFlag';
 
 type Strings = (typeof TRANSLATIONS)['en'];
 
@@ -46,19 +52,17 @@ const formatSignedPct = (value: number, language: AppLanguage) =>
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? '');
 
+/** Rates are neither good nor bad, so the change reads in the accent, not green or red. */
 const ChangeChip: React.FC<{ change: number; pct: number; language: AppLanguage; t: Strings }> = ({ change, pct, language, t }) => {
   const flat = Math.abs(change) < 0.00005;
-  const Icon = change > 0 ? TrendingUp : TrendingDown;
   return (
-    <span
-      className={clsx(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums',
-        flat ? 'bg-chip text-muted' : 'bg-accent-soft text-accent',
-      )}
+    <DeltaPill
+      direction={flat ? 'flat' : change > 0 ? 'up' : 'down'}
+      size="md"
+      className={flat ? undefined : 'bg-accent-soft! text-accent!'}
     >
-      {!flat && <Icon size={13} aria-hidden="true" />}
       {flat ? t.ratesUnchanged : `${formatSigned(change, language)} (${formatSignedPct(pct, language)})`}
-    </span>
+    </DeltaPill>
   );
 };
 
@@ -80,20 +84,27 @@ const PairCard: React.FC<{
 
   return (
     <section className="paper-tile flex flex-col gap-3 p-4" aria-label={`${currency}/RSD`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-muted">1 {currency} = RSD</p>
-          <p className="text-[28px] font-bold leading-tight tracking-[-0.5px] tabular-nums" aria-live="polite">
-            {formatRate(shown[1], language)}
-          </p>
-          <p className="text-[12px] text-muted">{formatMediumDate(day(shown[0]), language)}</p>
+      <div className="flex items-center gap-3">
+        <CurrencyPair base={currency} size={30} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-bold">{currency}/RSD</p>
+          <p className="truncate text-[12px] text-muted">1 {currency} = RSD</p>
         </div>
-        {!scrub && stats.previousDate && (
-          <div className="flex shrink-0 flex-col items-end gap-1 pt-1">
-            <ChangeChip change={stats.dayChange} pct={stats.dayChangePct} language={language} t={t} />
-            <span className="text-[11px] text-muted">{fill(t.ratesVsPrevious, { date: formatShortDate(day(stats.previousDate), language) })}</span>
-          </div>
-        )}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-[36px] font-bold leading-none tracking-[-1px] tabular-nums" aria-live="polite">
+          {formatRate(shown[1], language)}
+        </p>
+        <div className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1">
+          {!scrub && stats.previousDate ? (
+            <>
+              <ChangeChip change={stats.dayChange} pct={stats.dayChangePct} language={language} t={t} />
+              <span className="text-[12px] text-muted">{fill(t.ratesVsPrevious, { date: formatShortDate(day(stats.previousDate), language) })}</span>
+            </>
+          ) : (
+            <span className="text-[12px] text-muted">{formatMediumDate(day(shown[0]), language)}</span>
+          )}
+        </div>
       </div>
 
       <RateChart
@@ -101,13 +112,15 @@ const PairCard: React.FC<{
         formatTick={(value) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }, language)}
         formatDateLabel={rangeDate}
         onScrub={setScrub}
+        formatValue={(value) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }, language)}
         ariaLabel={fill(t.ratesChartAria, { pair: `${currency}/RSD`, range: rangeLabel })}
       />
 
       <dl className="grid grid-cols-3 gap-2 text-[12px]">
         <div className="flex min-w-0 flex-col rounded-2xl bg-chip px-3 py-2">
           <dt className="text-muted">{rangeLabel}</dt>
-          <dd className={clsx('truncate font-semibold tabular-nums', stats.rangeChange > 0 ? 'text-accent' : '')}>
+          <dd className={clsx('truncate font-semibold tabular-nums', stats.rangeChange !== 0 && 'text-accent')}>
+            <span aria-hidden="true">{stats.rangeChange > 0 ? '↑ ' : stats.rangeChange < 0 ? '↓ ' : ''}</span>
             {formatSignedPct(stats.rangeChangePct, language)}
           </dd>
         </div>
@@ -126,14 +139,33 @@ const PairCard: React.FC<{
   );
 };
 
-const Converter: React.FC<{ rsdPerUnit: Record<NbsCurrency, number>; language: AppLanguage; t: Strings }> = ({ rsdPerUnit, language, t }) => {
+const CodeChip: React.FC<{ code: NbsCurrency | 'RSD' }> = ({ code }) => (
+  <span className="flex h-9 flex-none items-center gap-1.5 rounded-full bg-tile pl-1.5 pr-3 text-[14px] font-semibold shadow-[0_0_0_1px_var(--paper-line)]">
+    <CurrencyFlag currency={code} size={22} />
+    {code}
+  </span>
+);
+
+const Converter: React.FC<{
+  rsdPerUnit: Record<NbsCurrency, number>;
+  /** Whether each rate is the NBS middle rate (else the app's market fallback). */
+  nbsRate: Record<NbsCurrency, boolean>;
+  language: AppLanguage;
+  t: Strings;
+}> = ({ rsdPerUnit, nbsRate, language, t }) => {
   const [currency, setCurrency] = useState<NbsCurrency>('EUR');
   const [toRsd, setToRsd] = useState(true);
+  // Parsed in the app language ("1.500,50" in Serbian); unreadable text says so instead of showing 0.
+  const [amount, setAmount] = useState<number | undefined>(100);
   const [text, setText] = useState('100');
-  const amount = parseOptionalNumberInput(text.replace(/\s/g, '').replace(',', '.')) ?? 0;
-  const result = convertWithRate(amount, rsdPerUnit[currency], toRsd ? 'toRsd' : 'fromRsd');
+  const unreadable = text.trim() !== '' && amount === undefined;
+  const negative = amount !== undefined && amount < 0;
+  const usable = amount !== undefined && amount >= 0 ? amount : 0;
+  const result = convertWithRate(usable, rsdPerUnit[currency], toRsd ? 'toRsd' : 'fromRsd');
   const fromCode = toRsd ? currency : 'RSD';
   const toCode = toRsd ? 'RSD' : currency;
+  const errorId = 'rates-converter-error';
+  const error = unreadable ? t.amountUnreadable : negative ? t.amountAboveZero : null;
 
   return (
     <section className="paper-tile flex flex-col gap-3 p-4">
@@ -144,39 +176,75 @@ const Converter: React.FC<{ rsdPerUnit: Record<NbsCurrency, number>; language: A
           ariaLabel={t.ratesConverter}
           value={currency}
           onChange={setCurrency}
-          options={PAIRS.map((code) => ({ value: code, label: code }))}
+          options={PAIRS.map((code) => ({
+            value: code,
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                <CurrencyFlag currency={code} size={16} />
+                {code}
+              </span>
+            ),
+          }))}
         />
       </div>
-      <div className="flex items-center gap-2">
-        <label className="paper-field flex h-14 min-w-0 flex-1 items-center gap-2 rounded-[18px] px-4">
+      <div className="relative flex flex-col gap-1.5">
+        <label className="paper-field flex h-14 min-w-0 items-center gap-2 rounded-[18px] pl-4 pr-2">
           <span className="sr-only">{fill(t.ratesAmount, { currency: fromCode })}</span>
-          <input
-            inputMode="decimal"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
+          <AmountInput
+            value={amount}
+            onValueChange={(next, raw) => {
+              setAmount(next);
+              setText(raw);
+            }}
+            language={language}
+            enterKeyHint="done"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
             className="min-w-0 flex-1 bg-transparent text-[20px] font-bold tabular-nums focus:outline-none"
           />
-          <span className="text-[14px] font-semibold text-muted">{fromCode}</span>
+          <CodeChip code={fromCode} />
         </label>
-        <button
+        <m.button
           type="button"
           onClick={() => {
             setToRsd((value) => !value);
-            if (result > 0) setText(String(result));
+            if (result > 0 && !error) {
+              // The result becomes the new amount, written the way the app language types it.
+              const next = Math.round(result * 100) / 100;
+              setAmount(next);
+              setText(formatAmountForInput(next, language));
+            }
           }}
           aria-label={t.ratesSwap}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chip text-accent"
+          animate={{ rotate: toRsd ? 0 : 180 }}
+          transition={MOTION.modal.spring}
+          className="absolute left-1/2 top-1/2 z-10 -ml-5 -mt-5 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-on-accent shadow-[0_0_0_4px_var(--paper-tile)]"
         >
           <ArrowDownUp size={18} aria-hidden="true" />
-        </button>
+        </m.button>
+        <p className="flex h-14 items-center justify-between gap-2 rounded-[18px] bg-chip pl-4 pr-2">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <m.span
+              key={`${toCode}-${currency}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={MOTION.view.transition}
+              className="truncate text-[22px] font-bold tabular-nums"
+            >
+              {formatNumber(result, { minimumFractionDigits: 2, maximumFractionDigits: 2 }, language)}
+            </m.span>
+          </AnimatePresence>
+          <CodeChip code={toCode} />
+        </p>
       </div>
-      <p className="flex items-baseline justify-between gap-2 rounded-[18px] bg-chip px-4 py-3">
-        <span className="truncate text-[22px] font-bold tabular-nums">
-          {formatNumber(result, { minimumFractionDigits: 2, maximumFractionDigits: 2 }, language)}
-        </span>
-        <span className="text-[14px] font-semibold text-muted">{toCode}</span>
+      {error && (
+        <p id={errorId} role="alert" className="-mt-1 px-1 text-[12px] font-medium text-neg">{error}</p>
+      )}
+      <p className="text-center text-[12px] font-semibold tabular-nums text-muted">
+        1 {currency} = {formatRate(rsdPerUnit[currency], language)} RSD
       </p>
-      <p className="text-[12px] text-muted">{t.ratesConverterNote}</p>
+      <p className="text-[12px] text-muted">{nbsRate[currency] ? t.ratesConverterNote : t.ratesConverterNoteMarket}</p>
     </section>
   );
 };
@@ -205,6 +273,16 @@ export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }
     USD: latest?.rates.USD ?? series.USD.at(-1)?.[1] ?? rsdPer(state.rates, 'USD'),
   };
   const hasSeries = series.EUR.length > 0 || series.USD.length > 0;
+  // Which rate the converter really uses: NBS when it came from the list or history, else the market fallback.
+  const nbsRate: Record<NbsCurrency, boolean> = {
+    EUR: Boolean(latest?.rates.EUR) || series.EUR.length > 0 || appIsNbs,
+    USD: Boolean(latest?.rates.USD) || series.USD.length > 0 || appIsNbs,
+  };
+  const showsNbs = Boolean(latest) || hasSeries || appIsNbs;
+  // After a failed refresh only the ranges the saved history covers can be shown.
+  const failed = status === 'error' || status === 'offline';
+  const rangeAvailable = (value: RateRange) =>
+    !failed || value === range || Boolean(history && history.coveredFrom <= rangeStart(today, value));
   const sourceLine = listDate
     ? fill(t.ratesNbsMiddle, { date: formatMediumDate(day(listDate), language) })
     : fill(t.ratesMarketRate, { date: formatMediumDate(new Date(state.rates.date), language) });
@@ -227,7 +305,7 @@ export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }
           ariaLabel={t.ratesRangeAria}
           value={range}
           onChange={setRange}
-          options={RATE_RANGES.map((value) => ({ value, label: t[`ratesRange_${value}` as const] }))}
+          options={RATE_RANGES.map((value) => ({ value, label: t[`ratesRange_${value}` as const], disabled: !rangeAvailable(value) }))}
         />
 
         {status === 'loading' && !hasSeries && (
@@ -238,14 +316,21 @@ export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }
         )}
 
         {(status === 'error' || status === 'offline') && (
-          <div className="paper-tile flex items-center justify-between gap-3 p-4" role="status">
-            <p className="text-[13px] text-muted">{status === 'offline' ? t.ratesOffline : t.ratesUnavailable}</p>
-            {status === 'error' && (
-              <button type="button" onClick={retry} className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-chip px-3 text-[13px] font-semibold text-accent">
-                <RotateCcw size={14} aria-hidden="true" />
-                {t.ratesRetry}
-              </button>
-            )}
+          <div className="paper-tile flex items-center gap-3 p-3 pr-4" role="status">
+            <span className="h-[72px] w-[88px] shrink-0" aria-hidden="true">
+              <Illustration name="offline" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+              <p className="text-[13px] text-muted">
+                {status === 'offline' ? t.ratesOffline : (hasSeries ? `${t.ratesUnavailable} ${t.ratesTryAgainHint}` : t.ratesUnavailable)}
+              </p>
+              {status === 'error' && (
+                <button type="button" onClick={retry} className="flex h-10 items-center gap-1.5 rounded-full bg-accent-soft px-3.5 text-[13px] font-semibold text-accent">
+                  <RotateCcw size={14} aria-hidden="true" />
+                  {t.ratesRetry}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -255,9 +340,9 @@ export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }
           )
         ))}
 
-        {rsdPerUnit.EUR > 0 && rsdPerUnit.USD > 0 && <Converter rsdPerUnit={rsdPerUnit} language={language} t={t} />}
+        {rsdPerUnit.EUR > 0 && rsdPerUnit.USD > 0 && <Converter rsdPerUnit={rsdPerUnit} nbsRate={nbsRate} language={language} t={t} />}
 
-        <p className="px-1 text-[12px] text-muted">{t.ratesNbsSource}</p>
+        <p className="px-1 text-[12px] text-muted">{showsNbs ? t.ratesNbsSource : t.ratesMarketSource}</p>
       </div>
     </GlassSheet>
   );

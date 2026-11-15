@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const EVENT_SUMMARY_REGRESSION_URL = process.env.EVENT_SUMMARY_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const EVENT_SUMMARY_REGRESSION_EMAIL = process.env.EVENT_SUMMARY_REGRESSION_EMAIL;
@@ -17,7 +18,6 @@ if (!EVENT_SUMMARY_REGRESSION_EMAIL || !EVENT_SUMMARY_REGRESSION_PASSWORD) {
 const screenshotDir = 'output/playwright';
 const successScreenshotPath = `${screenshotDir}/event-summary-regression-success.png`;
 const failureScreenshotPath = `${screenshotDir}/event-summary-regression-failure.png`;
-const consoleIssues = [];
 
 const isVisible = async locator => locator.isVisible().catch(() => false);
 
@@ -34,9 +34,12 @@ const signInIfNeeded = async page => {
 };
 
 const openEventSummary = async page => {
-  const eventsHeading = page.getByRole('heading', { name: /events/i }).first();
+  const eventsHeading = page.getByRole('heading', { name: /^shared$|^zajedničko$/i, level: 1 });
   if (!(await isVisible(eventsHeading))) {
-    await page.getByText(/events/i).first().click();
+    await page
+      .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+      .getByRole('button', { name: /^shared$|^zajedničko$/i })
+      .click();
     await eventsHeading.waitFor({ timeout: 15000 });
   }
 
@@ -72,9 +75,7 @@ const verifySummary = async page => {
     throw new Error('Summary currency toggle did not activate USD.');
   }
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 };
 
 const browser = await chromium.launch({ headless: !EVENT_SUMMARY_REGRESSION_HEADED });
@@ -82,11 +83,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', message => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });

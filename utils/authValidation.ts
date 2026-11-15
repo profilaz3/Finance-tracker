@@ -15,6 +15,19 @@ export const validatePassword = (password: string): PasswordIssue | null => {
     return null;
 };
 
+/** Each rule of the password policy on its own, for the live checklist under the field. */
+export interface PasswordChecks {
+    length: boolean;
+    letter: boolean;
+    digit: boolean;
+}
+
+export const passwordChecks = (password: string): PasswordChecks => ({
+    length: password.length >= PASSWORD_MIN_LENGTH,
+    letter: /\p{L}/u.test(password),
+    digit: /\p{Nd}/u.test(password),
+});
+
 export const PASSWORD_ISSUE_KEYS: Record<PasswordIssue, TranslationKey> = {
     tooShort: 'authPasswordTooShort',
     needsLetterAndDigit: 'authPasswordNeedsLetterAndDigit',

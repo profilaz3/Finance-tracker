@@ -42,7 +42,6 @@ const createState = (): AppState => ({
   rates: { base: 'EUR', date: '2026-04-05', rates: { EUR: 1, USD: 1.08, RSD: 117 } },
   templates: [],
   recurringTransactions: [],
-  theme: 'neon',
   language: 'en',
   events: [],
   sharedExpenses: [],
@@ -56,7 +55,6 @@ describe('buildStateSegments', () => {
     expect(buildStateSegments(state)).toEqual({
       preferences: {
         baseCurrency: 'EUR',
-        theme: 'neon',
         language: 'en',
         isGuest: false,
       },
@@ -106,7 +104,6 @@ describe('mergeStateSegments', () => {
     const merged = mergeStateSegments(baseState, {
       preferences: {
         baseCurrency: 'USD',
-        theme: 'graphite',
         language: 'sr',
         isGuest: true,
       },
@@ -114,7 +111,6 @@ describe('mergeStateSegments', () => {
     });
 
     expect(merged.baseCurrency).toBe('USD');
-    expect(merged.theme).toBe('graphite');
     expect(merged.language).toBe('sr');
     expect(merged.isGuest).toBe(true);
     expect(merged.transactions).toEqual([]);

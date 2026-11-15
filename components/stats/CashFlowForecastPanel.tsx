@@ -38,13 +38,13 @@ export const CashFlowForecastPanel: React.FC<CashFlowForecastPanelProps> = ({ fo
     </div>
     <div className="grid grid-cols-2 gap-2.5">
       <div className="min-w-0 rounded-[18px] bg-chip p-3">
-        <p className="truncate text-[12px] font-semibold uppercase tracking-wide text-faint">{labels.forecastEstimate}</p>
+        <p className="text-[12px] font-semibold uppercase leading-tight tracking-wide text-faint [overflow-wrap:anywhere]">{labels.forecastEstimate}</p>
         <p className={`mt-1 text-[19px] font-bold tabular-nums tracking-[-0.4px] break-words ${signClass(forecast.projectedNet) ?? ''}`}>
           {compactMoney(forecast.projectedNet, baseCurrency, language)}
         </p>
       </div>
       <div className="min-w-0 rounded-[18px] bg-chip p-3">
-        <p className="truncate text-[12px] font-semibold uppercase tracking-wide text-faint">{labels.recurringImpact}</p>
+        <p className="text-[12px] font-semibold uppercase leading-tight tracking-wide text-faint [overflow-wrap:anywhere]">{labels.recurringImpact}</p>
         <p className={`mt-1 text-[19px] font-bold tabular-nums tracking-[-0.4px] break-words ${signClass(forecast.recurringImpact) ?? ''}`}>
           {compactMoney(forecast.recurringImpact, baseCurrency, language)}
         </p>

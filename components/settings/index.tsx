@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { m } from 'motion/react';
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { SettingsViewProps, containerVariants } from './types';
 import { GeneralSettings } from './GeneralSettings';
 import { AppearanceSettings } from './AppearanceSettings';
@@ -13,26 +13,19 @@ import { PaymentSettings } from './PaymentSettings';
 import { useSettingsViewState } from './useSettingsViewState';
 import type { SettingsTab, SettingsTabId } from './useSettingsViewState';
 import { resolveAppearance } from '../../utils/appearance';
-import { Avatar } from '../home/parts';
+import { Avatar, fill } from '../home/parts';
+import { IconTile } from '../ui/IconTile';
+import { CurrencyFlag } from '../ui/CurrencyFlag';
 import { playPageEnter } from '../../hooks/useSwipePager';
 
 export type { SettingsViewProps } from './types';
 
 const MODE_KEYS = { light: 'modeLight', dark: 'modeDark', system: 'modeSystem' } as const;
 
-/** Solid rounded tile with a white icon, like a system settings list. */
-const TabGlyph: React.FC<{ tab: SettingsTab; size?: number }> = ({ tab, size = 32 }) => {
-    const Icon = tab.icon;
-    return (
-        <span
-            aria-hidden="true"
-            className="flex shrink-0 items-center justify-center rounded-[10px] text-white"
-            style={{ width: size, height: size, background: tab.tint }}
-        >
-            <Icon size={Math.round(size * 0.56)} strokeWidth={2.2} />
-        </span>
-    );
-};
+/** The shared icon tile, tinted with the tab's colour. */
+const TabGlyph: React.FC<{ tab: SettingsTab; size?: number; tone?: 'soft' | 'solid' }> = ({ tab, size = 32, tone = 'soft' }) => (
+    <IconTile icon={tab.icon} color={tab.tint} size={size} tone={tone} />
+);
 
 export const SettingsView: React.FC<SettingsViewProps> = (props) => {
     const {
@@ -46,6 +39,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         handleOpenAddTransaction,
         getAccountBalance,
         onLogout,
+        onLogoutEverywhere,
         onDeleteAccount,
         onAddCategory,
         onUpdateCategory,
@@ -105,6 +99,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         handleDeleteAccount,
         getAccountBalance,
         onLogout,
+        onLogoutEverywhere,
         onDeleteAccount,
         onCreateUserProfile,
         onEditUserProfile,
@@ -133,6 +128,9 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         { id: 'together', label: t.settingsGroupTogether },
     ];
     const profile = state.userProfile;
+    // Wallets, categories, recurring and people show the active workspace's rows; say which.
+    const activeTeam = workspaceId ? state.teams?.find(team => team.id === workspaceId) : undefined;
+    const TEAM_SCOPED_TABS: SettingsTabId[] = ['wallets', 'categories', 'recurring', 'people'];
 
     return (
         <m.div
@@ -146,6 +144,18 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
             <header className={clsx('mb-4 min-h-[60px] flex-col justify-center', activeTab ? 'hidden md:flex' : 'flex')}>
                 <h1 className="text-[28px] font-bold leading-tight tracking-[-0.6px]">{t.settings}</h1>
                 <p className="truncate text-[13px] text-muted">{t.settingsSubtitle}</p>
+                {activeTeam && (
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('team')}
+                        className="-mb-1 mt-1 flex min-h-10 max-w-full items-center gap-2 self-start rounded-full text-left text-[13px] font-semibold text-accent"
+                    >
+                        <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-accent-soft" aria-hidden="true">
+                            <Users size={15} />
+                        </span>
+                        <span className="min-w-0 truncate">{fill(t.settingsTeamWorkspace, { team: activeTeam.name })}</span>
+                    </button>
+                )}
             </header>
 
             <div className="md:grid md:grid-cols-[300px_minmax(0,1fr)] md:items-start md:gap-6">
@@ -160,13 +170,20 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
                         )}
                     >
                         {profile ? (
-                            <Avatar name={profile.name} color={profile.color} image={/^(data:|http)/.test(profile.avatar ?? '') ? profile.avatar : undefined} size={52} />
+                            <span className="rounded-full p-[3px]" style={{ background: `color-mix(in oklab, ${profile.color || 'rgb(var(--accent-rgb))'} 26%, transparent)` }}>
+                                <span className="block rounded-full shadow-[0_0_0_2.5px_var(--paper-tile)]">
+                                    <Avatar name={profile.name} color={profile.color} image={/^(data:|http)/.test(profile.avatar ?? '') ? profile.avatar : undefined} size={52} />
+                                </span>
+                            </span>
                         ) : (
                             <TabGlyph tab={tabs[0]} size={52} />
                         )}
                         <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-[17px] font-bold">{profile?.name ?? t.settingsSetUpProfile}</span>
                             <span className="truncate text-[13px] text-muted">{t.settingsProfileHint}</span>
+                        </span>
+                        <span className="flex shrink-0 rounded-full shadow-[0_0_0_2px_var(--paper-tile),0_0_0_3px_var(--paper-line)]">
+                            <CurrencyFlag currency={state.baseCurrency} size={26} label={state.baseCurrency} />
                         </span>
                         <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden="true" />
                     </button>
@@ -186,7 +203,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
                                                 shownTab === tab.id && 'md:bg-chip',
                                             )}
                                         >
-                                            <TabGlyph tab={tab} />
+                                            <TabGlyph tab={tab} tone="solid" />
                                             <span
                                                 className={clsx(
                                                     'flex min-h-[52px] min-w-0 flex-1 items-center gap-2',
@@ -194,7 +211,20 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
                                                 )}
                                             >
                                                 <span className="min-w-0 flex-1 truncate text-[16px] font-medium">{tab.label}</span>
-                                                {hints[tab.id] && <span className="shrink-0 text-[14px] text-muted">{hints[tab.id]}</span>}
+                                                {tab.id === 'appearance' && (
+                                                    <span className="h-3 w-3 shrink-0 rounded-full bg-accent shadow-[0_0_0_2px_var(--paper-tile),0_0_0_3px_var(--paper-line)]" aria-hidden="true" />
+                                                )}
+                                                {tab.id === 'payments' && state.paymentDetails && <CurrencyFlag currency="RSD" size={16} />}
+                                                {hints[tab.id] && (
+                                                    <span
+                                                        className={clsx(
+                                                            'shrink-0 text-[14px] tabular-nums',
+                                                            tab.id === 'payments' && !state.paymentDetails ? 'rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-semibold text-accent' : 'text-muted',
+                                                        )}
+                                                    >
+                                                        {hints[tab.id]}
+                                                    </span>
+                                                )}
                                                 <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden="true" />
                                             </span>
                                         </button>
@@ -223,9 +253,17 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
                             <ChevronLeft size={22} aria-hidden="true" />
                         </button>
                         <TabGlyph tab={currentTab} size={36} />
-                        <h2 id="settings-section-title" className="min-w-0 flex-1 truncate text-[24px] font-bold tracking-[-0.4px]">
-                            {currentTab.label}
-                        </h2>
+                        <div className="min-w-0 flex-1">
+                            <h2 id="settings-section-title" className="truncate text-[24px] font-bold tracking-[-0.4px]">
+                                {currentTab.label}
+                            </h2>
+                            {activeTeam && TEAM_SCOPED_TABS.includes(shownTab) && (
+                                <p className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
+                                    <Users size={13} aria-hidden="true" className="flex-none" />
+                                    <span className="truncate">{fill(t.settingsTeamWorkspace, { team: activeTeam.name })}</span>
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     {shownTab === 'profile' && (

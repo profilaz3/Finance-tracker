@@ -6,7 +6,12 @@ import {
   deriveTheyPaidRecipients,
   toggleDebtRecipient,
   calculateTotalSplitAmount,
+  calculateRemainingPercentage,
+  convertFeesToSplitCurrency,
+  percentShareAmount,
+  readAmount,
   recalculateSplitShares,
+  seedEvenPercentages,
   updateDebtRecipientAmount,
   updatePercentageShare,
 } from '../utils/splitExpenseCalculator';
@@ -50,7 +55,7 @@ describe('splitExpenseCalculator', () => {
     ]);
   });
 
-  it('autofills the last remaining percentage share', () => {
+  it('sets only the edited percentage; what the others leave of 100% is mine', () => {
     const shares = updatePercentageShare(
       createShares([
         { personId: 'p-1', isIncluded: true, percentage: 0, amount: 0 },
@@ -63,8 +68,136 @@ describe('splitExpenseCalculator', () => {
 
     expect(shares).toEqual([
       { personId: 'p-1', isIncluded: true, percentage: 25, amount: 25 },
-      { personId: 'p-2', isIncluded: true, percentage: 75, amount: 75 },
+      { personId: 'p-2', isIncluded: true, percentage: 0, amount: 0 },
     ]);
+    expect(calculateRemainingPercentage(shares)).toBe(75);
+  });
+
+  it('reads typed amounts in the app language', () => {
+    expect(readAmount('45,50', 'en')).toBe(45.5);
+    expect(readAmount('45,50', 'sr')).toBe(45.5);
+    expect(readAmount('2.000', 'sr')).toBe(2000);
+    expect(readAmount('abc', 'sr')).toBe(0);
+    expect(readAmount(undefined)).toBe(0);
+    expect(readAmount(12.5)).toBe(12.5);
+    expect(calculateTotalSplitAmount('45,50', '', 'EUR', baseRates, 'sr')).toBe(45.5);
+    expect(calculateTotalSplitAmount('2.000', undefined, 'RSD', baseRates, 'sr')).toBe(2000);
+  });
+
+  it('reads Serbian decimal commas in percentages and debt amounts', () => {
+    const shares = updatePercentageShare(
+      createShares([{ personId: 'p-1', isIncluded: true }]),
+      'p-1',
+      '33,5',
+      200,
+      'sr'
+    );
+    expect(shares[0]).toMatchObject({ percentage: 33.5, amount: 67 });
+
+    const recipients = [{ personId: 'p-1', name: 'Alex', amount: 0, isIncluded: true }];
+    expect(updateDebtRecipientAmount(recipients, 'p-1', '12,5', 'sr')[0].amount).toBe(12.5);
+  });
+
+  it('converts USD fees into the split currency', () => {
+    expect(convertFeesToSplitCurrency(10, 'RSD', baseRates)).toBe(1083.33);
+    expect(convertFeesToSplitCurrency(10, 'USD', baseRates)).toBe(10);
+    expect(convertFeesToSplitCurrency(undefined, 'EUR', baseRates)).toBe(0);
+  });
+
+  it('keeps the payer share in a percentage split (30% + 30% leaves me 40%)', () => {
+    const shares = createShares([
+      { personId: 'p-1', isIncluded: true, percentage: 30 },
+      { personId: 'p-2', isIncluded: true, percentage: 30 },
+    ]);
+    expect(calculateRemainingPercentage(shares)).toBe(40);
+
+    const result = calculateIPaidSplitSubmission({
+      amount: 200,
+      fees: undefined,
+      currency: 'EUR',
+      categoryId: 'food',
+      accountId: 'cash',
+      note: '',
+      transactionDate: '2026-04-05T10:00:00.000Z',
+      splitMethod: 'percentage',
+      shares,
+      rates: baseRates,
+      transactionId: 'tx-pct',
+      language: 'en',
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.transaction?.splitDetails?.myPortion).toBe(80);
+    expect(result.transaction?.splitDetails?.shares.map(share => share.amount)).toEqual([60, 60]);
+    expect(result.balanceUpdates).toEqual([
+      { personId: 'p-1', currency: 'EUR', delta: 60 },
+      { personId: 'p-2', currency: 'EUR', delta: 60 },
+    ]);
+  });
+
+  it('rejects percentages that add up to more than 100%', () => {
+    const shares = createShares([
+      { personId: 'p-1', isIncluded: true, percentage: 60 },
+      { personId: 'p-2', isIncluded: true, percentage: 50 },
+    ]);
+    expect(calculateRemainingPercentage(shares)).toBe(-10);
+    const result = calculateIPaidSplitSubmission({
+      amount: 100,
+      fees: undefined,
+      currency: 'EUR',
+      categoryId: 'food',
+      accountId: 'cash',
+      note: '',
+      transactionDate: '2026-04-05T10:00:00.000Z',
+      splitMethod: 'percentage',
+      shares,
+      rates: baseRates,
+      language: 'en',
+    });
+    expect(result.error).toBe('exceeds-total');
+  });
+
+  it('rounds percentage shares down to the cent and leaves the leftover cents to me', () => {
+    expect(percentShareAmount(10.01, 50)).toBe(5);
+    expect(percentShareAmount(100, 33.33)).toBe(33.33);
+    expect(percentShareAmount(0, 50)).toBe(0);
+
+    const result = calculateIPaidSplitSubmission({
+      amount: '10,01',
+      fees: '',
+      currency: 'EUR',
+      categoryId: 'food',
+      accountId: 'cash',
+      note: '',
+      transactionDate: '2026-04-05T10:00:00.000Z',
+      splitMethod: 'percentage',
+      shares: createShares([{ personId: 'p-1', isIncluded: true, percentage: 50 }]),
+      rates: baseRates,
+      language: 'sr',
+    });
+    expect(result.transaction?.amount).toBe(10.01);
+    expect(result.transaction?.splitDetails?.shares[0].amount).toBe(5);
+    expect(result.transaction?.splitDetails?.myPortion).toBe(5.01);
+  });
+
+  it('seeds even percentages, me included, only when none are set yet', () => {
+    const seeded = seedEvenPercentages(
+      createShares([
+        { personId: 'p-1', isIncluded: true },
+        { personId: 'p-2', isIncluded: true },
+        { personId: 'p-3', isIncluded: false },
+      ]),
+      90
+    );
+    expect(seeded.map(share => share.percentage)).toEqual([33.33, 33.33, 0]);
+    expect(seeded.map(share => share.amount)).toEqual([29.99, 29.99, 0]);
+    expect(calculateRemainingPercentage(seeded)).toBe(33.34);
+
+    const alreadySet = createShares([
+      { personId: 'p-1', isIncluded: true, percentage: 10 },
+      { personId: 'p-2', isIncluded: true },
+    ]);
+    expect(seedEvenPercentages(alreadySet, 90)).toBe(alreadySet);
   });
 
   it('computes edited split deltas and removed participants correctly', () => {

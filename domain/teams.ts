@@ -1,4 +1,4 @@
-import type { RecurringTransaction, Team, TeamMember, TeamRole } from '../types';
+import type { Budget, RecurringTransaction, Team, TeamMember, TeamRole } from '../types';
 
 /**
  * Who is asking. Membership matches on either the user id (always set for the
@@ -185,7 +185,25 @@ interface WorkspaceScopedSlices {
   recurringTransactions: { teamId?: string | null }[];
   categories: { teamId?: string | null }[];
   people: { teamId?: string | null }[];
+  budget?: Budget | null;
+  teamBudgets?: Record<string, Budget>;
 }
+
+type BudgetSlices = { budget?: Budget | null; teamBudgets?: Record<string, Budget> };
+
+/**
+ * The user's budget for a workspace. Budgets are personal in every workspace: the Personal one is
+ * `budget`, and each team workspace has the user's own budget in `teamBudgets[teamId]`.
+ */
+export const budgetForWorkspace = (state: BudgetSlices, workspaceId: string | null): Budget | null =>
+  (workspaceId ? state.teamBudgets?.[workspaceId] : state.budget) ?? null;
+
+/** Stores the budget of a workspace (null removes it) in the full, unscoped state. */
+export const withWorkspaceBudget = <S extends BudgetSlices>(state: S, workspaceId: string | null, budget: Budget | null): S => {
+  if (!workspaceId) return { ...state, budget };
+  const others = Object.fromEntries(Object.entries(state.teamBudgets ?? {}).filter(([teamId]) => teamId !== workspaceId));
+  return { ...state, teamBudgets: budget ? { ...others, [workspaceId]: budget } : others };
+};
 
 /**
  * What one workspace sees. Wallets, transactions, events and recurring items
@@ -204,5 +222,7 @@ export const scopeStateToWorkspace = <S extends WorkspaceScopedSlices>(state: S,
     recurringTransactions: itemsForTeam(state.recurringTransactions, workspaceId),
     categories: inclusive(state.categories),
     people: inclusive(state.people),
+    // A team workspace shows the user's budget for that team; Personal keeps `budget` as stored.
+    ...(workspaceId ? { budget: budgetForWorkspace(state, workspaceId) } : {}),
   };
 };

@@ -2,7 +2,8 @@ import React from 'react';
 import { AppState, Currency } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { Segmented } from '../ui/Segmented';
-import { ChevronRight, LineChart } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { CurrencyFlag, CurrencyPair } from '../ui/CurrencyFlag';
 import { formatMediumDate } from '../../utils/locale';
 import { openRates } from '../rates/ratesBus';
 
@@ -31,7 +32,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
     return (
         <>
             <section className="paper-tile flex flex-wrap items-center justify-between gap-3 p-4">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[150px] flex-1">
                     <h3 className="text-[15px] font-bold">{t.baseCurrency}</h3>
                     <p className="text-[13px] text-muted">{t.baseCurrencyDesc}</p>
                 </div>
@@ -40,7 +41,15 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                     ariaLabel={t.baseCurrency}
                     value={state.baseCurrency}
                     onChange={currency => setState(prev => ({ ...prev, baseCurrency: currency }))}
-                    options={CURRENCIES.map(currency => ({ value: currency, label: currency }))}
+                    options={CURRENCIES.map(currency => ({
+                        value: currency,
+                        label: (
+                            <span className="flex items-center gap-1.5">
+                                <CurrencyFlag currency={currency} size={16} />
+                                {currency}
+                            </span>
+                        ),
+                    }))}
                     className="shrink-0"
                 />
             </section>
@@ -50,9 +59,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                 onClick={openRates}
                 className="paper-tile flex w-full items-center gap-3 p-4 text-left"
             >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
-                    <LineChart size={19} aria-hidden="true" />
-                </span>
+                <CurrencyPair base="EUR" quote="RSD" size={30} className="w-[52px]" />
                 <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-bold">{t.ratesTitle}</span>
                     <span className="block truncate text-[13px] text-muted">

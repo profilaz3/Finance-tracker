@@ -6,6 +6,9 @@ import type { ParsedTransaction } from '../../services/aiService';
 import { duplicateTransactionDraft } from '../../domain/transactions';
 import { Segmented } from '../ui/Segmented';
 import { PAGE_GAP, type SwipeDirection } from '../../hooks/useSwipePager';
+import { PageActiveContext } from '../../hooks/useBackLayer';
+import { requestSettingsSection } from '../settings/settingsSectionBus';
+import { openTransactionDetails } from '../transaction-details/detailsBus';
 
 const Stats = lazyWithReload(() => import('../Stats').then(m => ({ default: m.Stats })));
 const HomeView = lazyWithReload(() => import('../home').then(m => ({ default: m.HomeView })));
@@ -26,16 +29,10 @@ export const preloadViews = (): Promise<unknown> =>
 type Strings = (typeof TRANSLATIONS)['en'];
 type StringKey = { [K in keyof Strings]: Strings[K] extends string ? K : never }[keyof Strings];
 
-const ACTIVITY: Array<[View, StringKey]> = [['transactions', 'tabList'], ['calendar', 'calendar']];
-const EVENTS: Array<[View, StringKey]> = [['events', 'events'], ['people', 'people']];
 const INSIGHTS: Array<[View, StringKey]> = [['analytics', 'analytics'], ['insights', 'aiInsights']];
 
 /** The two views behind each tab, switched with a segmented control at the top. */
 const SUB_VIEWS: Partial<Record<View, { label: StringKey; views: Array<[View, StringKey]> }>> = {
-  transactions: { label: 'navActivity', views: ACTIVITY },
-  calendar: { label: 'navActivity', views: ACTIVITY },
-  events: { label: 'navEvents', views: EVENTS },
-  people: { label: 'navEvents', views: EVENTS },
   analytics: { label: 'navInsights', views: INSIGHTS },
   insights: { label: 'navInsights', views: INSIGHTS },
 };
@@ -284,9 +281,11 @@ const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPee
     >
       {role !== 'current' && header ? renderHeader(view) : null}
       <div data-pager-content="">
-        <Suspense fallback={role === 'current' ? fallback : null}>
-          <PageBody content={content} defer={role === 'parked'} />
-        </Suspense>
+        <PageActiveContext.Provider value={role === 'current'}>
+          <Suspense fallback={role === 'current' ? fallback : null}>
+            <PageBody content={content} defer={role === 'parked'} />
+          </Suspense>
+        </PageActiveContext.Provider>
       </div>
     </div>
   );
@@ -347,11 +346,10 @@ interface AppViewRouterProps {
   handleAddAccount: (account: AppState['accounts'][number]) => void;
   handleDeleteAccount: (accountId: string) => void;
   handleDeleteUserAccount: () => Promise<AppState>;
-  handleLogout: () => Promise<AppState>;
+  handleLogout: (options?: { everywhere?: boolean }) => Promise<AppState>;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   setIsAddPersonModalOpen: (isOpen: boolean) => void;
   setIsEditModalOpen: (isOpen: boolean) => void;
-  setIsReceiptModalOpen: (isOpen: boolean) => void;
   setIsSplitModalOpen: (isOpen: boolean) => void;
   setIsEventCreationModalOpen: (isOpen: boolean) => void;
   setIsReceiptScanModalOpen: (isOpen: boolean) => void;
@@ -433,7 +431,6 @@ const PageContent: React.FC<AppViewRouterProps> = ({
   setState,
   setIsAddPersonModalOpen,
   setIsEditModalOpen,
-  setIsReceiptModalOpen,
   setIsSplitModalOpen,
   setIsEventCreationModalOpen,
   setIsSplitExpenseModalOpen,
@@ -461,6 +458,7 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         editing={homeEditing}
         onEditingChange={setHomeEditing}
         onLayoutChange={homeLayout => setState(prev => ({ ...prev, homeLayout }))}
+        onHeaderChange={homeHeader => setState(prev => ({ ...prev, homeHeader }))}
         onOpenProfile={onOpenProfile}
         actions={{
           openBudgets: () => onNavigate('budgets'),
@@ -474,21 +472,28 @@ const PageContent: React.FC<AppViewRouterProps> = ({
           createEvent: () => setIsEventCreationModalOpen(true),
           openPeople: () => onNavigate('people'),
           openPerson: person => setSelectedPerson(person),
-          openWallets: () => onNavigate('settings'),
-          openTransaction: transaction => {
-            setSelectedTransaction(transaction);
-            setIsEditModalOpen(true);
+          openWallets: () => {
+            requestSettingsSection('wallets');
+            onNavigate('settings');
           },
-          openRecurring: () => onNavigate('settings'),
+          openTransaction: transaction => openTransactionDetails(transaction.id),
+          openRecurring: () => {
+            requestSettingsSection('recurring');
+            onNavigate('settings');
+          },
           useTemplate: handleUseTemplate,
           addEntry: onOpenAdd,
         }}
+        onToast={addToast}
       />
     )}
     {currentView === 'budgets' && (
       <BudgetsView
+        // Each workspace has its own budget: switching workspaces starts the form from that one.
+        key={workspaceId ?? 'personal'}
         state={state}
         setState={setState}
+        workspaceId={workspaceId}
         onBack={() => onNavigate('dashboard')}
         onSaved={message => addToast(message, 'success')}
         onAddRecurring={handleAddRecurring}
@@ -505,6 +510,9 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         baseCurrency={state.baseCurrency}
         rates={state.rates}
         language={state.language}
+        selfId={state.userProfile?.id}
+        homeHeader={state.homeHeader}
+        onBack={() => onNavigate('events')}
       />
     )}
     {currentView === 'transactions' && (
@@ -512,7 +520,6 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         state={state}
         setSelectedTransaction={setSelectedTransaction}
         setIsEditModalOpen={setIsEditModalOpen}
-        setIsReceiptModalOpen={setIsReceiptModalOpen}
         setIsSplitModalOpen={setIsSplitModalOpen}
         deleteTransaction={deleteTransaction}
         onEditSplitTransaction={(tx) => {
@@ -529,6 +536,7 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         onBatchDelete={batchDeleteTransactions}
         onAddTransaction={handleOpenAddTransaction}
         onOpenSplit={() => setIsSplitExpenseModalOpen(true)}
+        onOpenCalendar={() => onNavigate('calendar')}
       />
     )}
     {currentView === 'events' && (
@@ -555,17 +563,22 @@ const PageContent: React.FC<AppViewRouterProps> = ({
           state={state}
           onCreateEvent={() => setIsEventCreationModalOpen(true)}
           onSelectEvent={setSelectedEvent}
+          onOpenPeople={() => onNavigate('people')}
+          onAddPerson={() => setIsAddPersonModalOpen(true)}
+          onSelectPerson={setSelectedPerson}
         />
       )
     )}
     {currentView === 'calendar' && (
       <CalendarView
         state={state}
-        onAddTransaction={addTransaction}
-        setCurrentView={setCurrentView}
+        onOpenList={() => onNavigate('transactions')}
+        onOpenRecurring={() => {
+          requestSettingsSection('recurring');
+          onNavigate('settings');
+        }}
         setSelectedTransaction={setSelectedTransaction}
         setIsEditModalOpen={setIsEditModalOpen}
-        setIsReceiptModalOpen={setIsReceiptModalOpen}
         setIsSplitModalOpen={setIsSplitModalOpen}
         deleteTransaction={deleteTransaction}
         onEditSplitTransaction={(tx) => {
@@ -609,6 +622,10 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         getAccountBalance={getAccountBalance}
         onLogout={async () => {
           const freshState = await handleLogout();
+          setState(freshState);
+        }}
+        onLogoutEverywhere={async () => {
+          const freshState = await handleLogout({ everywhere: true });
           setState(freshState);
         }}
         onDeleteAccount={async () => {

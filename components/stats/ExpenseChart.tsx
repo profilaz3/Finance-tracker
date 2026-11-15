@@ -208,6 +208,8 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
             valueKey="expense"
             stroke={chartColors.expense}
             fill={chartColors.expense}
+            ariaLabel={t.spendingTrend}
+            seriesLabel={t.expense}
             yTickFormatter={formatCompactNumber}
             valueFormatter={(value) => formatCurrency(value, baseCurrency)}
           />
@@ -231,6 +233,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
         </ChartHead>
           <div className="h-[240px] w-full sm:h-[300px]">
             <GroupedBarChart
+              ariaLabel={t.incomeVsExpense}
               rows={comparisonData}
               labelKey="label"
               series={[
@@ -269,6 +272,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
                 rows={savingsRateData}
                 labelKey="label"
                 valueKey="rate"
+                ariaLabel={t.savingsRate}
                 stroke={chartColors.accent}
                 fill={chartColors.accent}
                 yTickFormatter={(value) => formatPercent(value)}
@@ -300,6 +304,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
               <>
                 <div className="h-[240px] w-full sm:h-[300px]">
                   <StackedSignedBarChart
+                    ariaLabel={t.cashflowByAccount}
                     rows={accountCashflowData}
                     labelKey="name"
                     series={[

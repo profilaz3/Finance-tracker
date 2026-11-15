@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bell, Palette, QrCode, Repeat, Shapes, UserRound, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
 import type { AppState } from '../../types';
+import { useBackLayer } from '../../hooks/useBackLayer';
+import { clearPendingSettingsSection, peekPendingSettingsSection, subscribeSettingsSection } from './settingsSectionBus';
 
 export type SettingsTabId = 'profile' | 'appearance' | 'notifications' | 'wallets' | 'categories' | 'people' | 'recurring' | 'payments' | 'team';
 
@@ -20,7 +22,14 @@ export interface SettingsTab {
  */
 export function useSettingsViewState(language: AppState['language']) {
   const t = TRANSLATIONS[language];
-  const [activeTab, setActiveTab] = useState<SettingsTabId | null>(null);
+  // Another screen may have asked for a section (Home's Wallets tile): start there.
+  const [activeTab, setActiveTab] = useState<SettingsTabId | null>(peekPendingSettingsSection);
+  useEffect(() => {
+    clearPendingSettingsSection();
+    return subscribeSettingsSection(setActiveTab);
+  }, []);
+  // An open section is a step in the back history: Back returns to the Settings list.
+  useBackLayer('settings-section', activeTab !== null, () => setActiveTab(null));
 
   const tabs = useMemo<SettingsTab[]>(() => ([
     { id: 'profile', label: t.settingsTabProfile, icon: UserRound, tint: '#64748B', group: 'app' },

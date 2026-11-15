@@ -26,14 +26,14 @@ describe('app shell contracts', () => {
 
     [
       'setIsEditModalOpen(false)',
-      'setIsReceiptModalOpen(false)',
+      'setDetailsId(null)',
       'setIsSplitModalOpen(false)',
       'setIsAddPersonModalOpen(false)',
       'setIsEventCreationModalOpen(false)',
       'setIsReceiptScanModalOpen(false)',
       'setIsSplitExpenseModalOpen(false)',
       'setIsUserProfileModalOpen(false)',
-      'setIsAddSheetOpen(false)',
+      'setIsAddMenuOpen(false)',
       'setIsProfileMenuOpen(false)',
       'setIsAppearanceSheetOpen(false)',
       'setIsExportModalOpen(false)',
@@ -63,7 +63,7 @@ describe('app shell contracts', () => {
     expect(app).toContain('useBackNavigation({');
     [
       'modals.isEditModalOpen',
-      'modals.isReceiptModalOpen',
+      'modals.detailsId',
       'modals.isSplitModalOpen',
       'modals.isAddPersonModalOpen',
       'modals.isEventCreationModalOpen',
@@ -94,6 +94,6 @@ describe('app shell contracts', () => {
     expect(navigation).toContain("aria-current={isActive ? 'page' : undefined}");
     expect(navigation).toContain('aria-label={labels.add}');
     expect(navigation).toContain('title={labels.add}');
-    expect(navigation).toContain('onClick={onAdd}');
+    expect(navigation).toContain('onClick={event => onAdd(event.currentTarget)}');
   });
 });

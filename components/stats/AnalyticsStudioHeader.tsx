@@ -12,12 +12,15 @@ export interface AnalyticsStudioHeaderProps {
   onPeriodChange: (period: AnalyticsPeriod) => void;
 }
 
-/** "November 2026", "Q4 2026" or "2026" for the selected analytics period. */
+/** "November 2026", "Q4 2026" ("4. kvartal 2026") or "2026" for the selected analytics period. */
 export const formatPeriodLabel = (range: AnalyticsPeriodRange, language: AppLanguage): string => {
   const start = range.currentStart;
   const locale = getIntlLocale(language);
   if (range.period === 'year') return String(start.getFullYear());
-  if (range.period === 'quarter') return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
+  if (range.period === 'quarter') {
+    const quarter = Math.floor(start.getMonth() / 3) + 1;
+    return language === 'sr' ? `${quarter}. kvartal ${start.getFullYear()}` : `Q${quarter} ${start.getFullYear()}`;
+  }
   const label = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(start);
   return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
 };

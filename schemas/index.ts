@@ -54,7 +54,16 @@ export const ReceiptItemSchema = z.object({
 export const ReceiptDataSchema = z.object({
     items: z.array(ReceiptItemSchema),
     total: z.number(),
-    merchant: z.string()
+    merchant: z.string(),
+    // Fiscal receipt details (Serbian tax portal); older entries have none of them.
+    url: z.optional(z.string()),
+    companyName: z.optional(z.string()),
+    address: z.optional(z.string()),
+    city: z.optional(z.string()),
+    pib: z.optional(z.string()),
+    invoiceNumber: z.optional(z.string()),
+    // Path in the `receipts` Storage bucket; checked again with receiptPhotoOf before use.
+    photo: z.optional(z.string())
 });
 
 // Split Details
@@ -189,20 +198,17 @@ export const SharedExpenseSchema = z.object({
     category: z.optional(z.string())
 });
 
-// Theme
-export const ThemeSchema = z.enum([
-    'neon', 'racing-orange', 'graphite', 'coffee', 'gilded',
-    'crimson-red', 'lime-dark', 'sterling', 'canyon',
-    'cyberpunk-pink', 'harbor', 'galaxy', 'evergreen', 'linen', 'mist', 'light'
-]);
-
 // Language
 export const LanguageSchema = z.enum(['en', 'sr']);
 
 // Appearance, Home layout and budget (stored in settings.prefs)
+// mode and glass stay strict, so a malformed object never replaces the local appearance;
+// theme and accent repair themselves (paper / teal) so values from newer versions still load.
 export const AppearanceSchema = z.object({
     mode: z.enum(['light', 'dark', 'system']),
-    accent: z.enum(['teal', 'ember', 'iris', 'ink']),
+    theme: z.optional(z.catch(z.optional(z.enum(['paper', 'midnight', 'sand', 'forest', 'ocean', 'rose'])), 'paper')),
+    accent: z.catch(z.enum(['teal', 'moss', 'sky', 'iris', 'grape', 'berry', 'ember', 'amber', 'cocoa', 'ink', 'custom']), 'teal'),
+    customAccent: z.optional(z.catch(z.optional(z.string().check(z.regex(/^#[0-9a-fA-F]{6}$/))), undefined)),
     glass: z.enum(['frosted', 'clear', 'solid'])
 });
 
@@ -215,10 +221,21 @@ export const HomeBlockSchema = z.object({
 
 export const HomeLayoutSchema = z.array(HomeBlockSchema).check(z.maxLength(40));
 
+// Unknown faces and tones repair themselves, so values from newer versions still load.
+export const HomeHeaderSchema = z.object({
+    face: z.catch(z.enum(['budget', 'networth', 'today', 'month', 'owed', 'rate']), 'budget'),
+    stats: z.catch(z.array(z.string().check(z.maxLength(80))).check(z.maxLength(3)), ['in', 'spent', 'budget']),
+    trip: z.catch(z.boolean(), true),
+    tone: z.catch(z.enum(['accent', 'dark']), 'accent')
+});
+
 export const BudgetSchema = z.object({
     monthly: z.number().check(z.minimum(0), z.maximum(1e9)),
     categoryLimits: z.record(z.string(), z.number().check(z.minimum(0), z.maximum(1e9)))
 });
+
+/** Each team workspace's budget by team id (at most 50 teams). */
+export const TeamBudgetsSchema = z.record(z.string().check(z.minLength(1), z.maxLength(64)), BudgetSchema);
 
 // The user's own account for IPS QR payment requests (settings.prefs.payment)
 export const PaymentDetailsSchema = z.object({
@@ -241,14 +258,15 @@ export const AppStateSchema = z.object({
     rates: z.optional(ExchangeRatesSchema),
     templates: z._default(z.array(TransactionTemplateSchema), []),
     recurringTransactions: z._default(z.array(RecurringTransactionSchema), []),
-    theme: z._default(ThemeSchema, 'neon'),
     language: z._default(LanguageSchema, 'en'),
     events: z._default(z.array(EventSchema), []),
     sharedExpenses: z._default(z.array(SharedExpenseSchema), []),
     isGuest: z.optional(z.boolean()),
     appearance: z.optional(z.catch(z.optional(AppearanceSchema), undefined)),
     homeLayout: z.optional(z.catch(z.optional(HomeLayoutSchema), undefined)),
+    homeHeader: z.optional(z.catch(z.optional(HomeHeaderSchema), undefined)),
     budget: z.optional(z.catch(z.optional(z.nullable(BudgetSchema)), undefined)),
+    teamBudgets: z.optional(z.catch(z.optional(TeamBudgetsSchema), undefined)),
     paymentDetails: z.optional(z.catch(z.optional(z.nullable(PaymentDetailsSchema)), undefined)),
     teams: z.optional(z.catch(z.optional(z.array(TeamSchema)), undefined))
 });

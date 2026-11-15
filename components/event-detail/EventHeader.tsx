@@ -2,16 +2,18 @@ import React, { useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
 import {
-    ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MoreHorizontal, Share2, Trash2,
+    ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MoreHorizontal, Pencil, Share2, Trash2,
 } from 'lucide-react';
 import { Event, Person } from '../../types';
-import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
 import { getTranslations } from '../../utils/i18n';
 import { eventBannerStyle } from '../../utils/eventVisuals';
 import { useEscapeKey } from '../../hooks/useFocusTrap';
 import { MOTION } from '../../config';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { EventStatusChip, formatEventDates } from '../EventCard';
+import { getParticipantInitials, getParticipantTooltipLabel } from '../../utils/eventParticipants';
+import { stableColor } from '../../utils/stableColor';
+import { EventCoverArt, EventDateLeaf, EventStatusChip, eventDayCount, formatDayCount, formatEventDates } from '../EventCard';
+import type { EventPermissions } from '../../domain/eventPermissions';
 
 interface EventHeaderProps {
     event: Event;
@@ -31,6 +33,10 @@ interface EventHeaderProps {
     openPicker: () => void;
     handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     language?: 'en' | 'sr';
+    /** What the signed-in user may do (domain/eventPermissions); omitted, everything is offered. */
+    permissions?: Pick<EventPermissions, 'canDelete' | 'canShare'>;
+    /** Opens the edit sheet (name, dates, description, participants). */
+    onEditEvent?: () => void;
 }
 
 const glassButton = 'flex h-11 w-11 items-center justify-center rounded-full bg-black/25 text-white ring-1 ring-white/20 backdrop-blur-md';
@@ -51,9 +57,12 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
     openPicker,
     handleFileChange,
     language = 'en',
+    permissions = { canDelete: true, canShare: true },
+    onEditEvent,
 }) => {
     const t = getTranslations();
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const days = eventDayCount(event);
     useEscapeKey(() => setIsMenuOpen(false), isMenuOpen);
 
     const handleEndEvent = () => {
@@ -74,6 +83,7 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                 className="relative flex h-[300px] flex-col justify-between overflow-hidden rounded-[30px] p-3 text-white shadow-[0_14px_40px_-18px_rgba(0,0,0,0.55)] md:h-[340px] md:p-4"
                 style={eventBannerStyle(event)}
             >
+                {!event.imageUrl && <EventCoverArt eventId={event.id} />}
                 {event.imageUrl && (
                     <img
                         key={`${event.imageUrl}-v${imageVersion}`}
@@ -108,30 +118,36 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                 </div>
 
                 <div className="relative flex flex-col gap-2 px-1 pb-1">
-                    <span><EventStatusChip status={event.status} t={t} /></span>
+                    <span className="flex items-end justify-between gap-3">
+                        <EventStatusChip status={event.status} t={t} />
+                        <EventDateLeaf date={event.startDate} language={language} />
+                    </span>
                     <h1 className="text-[32px] font-bold leading-[1.1] tracking-[-0.8px] md:text-[40px]">{event.name}</h1>
                     {event.description && <p className="line-clamp-2 max-w-xl text-[14px] text-white/80">{event.description}</p>}
                     <div className="flex items-center justify-between gap-3">
-                        <span className="flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium text-white/85">
+                        <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-white/85">
                             <CalendarDays size={14} aria-hidden="true" className="shrink-0" />
-                            {formatEventDates(event, t, language)}
+                            <span className="min-w-0 truncate">
+                                {formatEventDates(event, t, language)}
+                                {days !== null && <span className="text-white/60"> · {formatDayCount(days, t, language)}</span>}
+                            </span>
                         </span>
-                        <span className="flex -space-x-2">
-                            {eventPeople.slice(0, 5).map(person => (
+                        <span className="flex shrink-0 -space-x-2">
+                            {eventPeople.slice(0, 4).map(person => (
                                 <span
                                     key={person.id}
                                     title={getParticipantTooltipLabel(person)}
                                     className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white ring-2 ring-black/30"
-                                    style={{ background: person.color }}
+                                    style={{ background: person.color || stableColor(person.name) }}
                                 >
-                                    {person.avatar
+                                    {person.avatar && /^(data:|http)/.test(person.avatar)
                                         ? <img src={person.avatar} alt={person.name} className="h-full w-full object-cover" />
                                         : getParticipantInitials(person.name)}
                                 </span>
                             ))}
-                            {eventPeople.length > 5 && (
+                            {eventPeople.length > 4 && (
                                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/25 text-[11px] font-bold ring-2 ring-black/30 backdrop-blur-md">
-                                    +{eventPeople.length - 5}
+                                    +{eventPeople.length - 4}
                                 </span>
                             )}
                         </span>
@@ -154,6 +170,8 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                         <div className="fixed inset-0 z-30" onClick={() => setIsMenuOpen(false)} aria-hidden="true" />
                         <m.div
                             key="event-menu"
+                            role="menu"
+                            aria-label={t.eventActions}
                             initial={{ opacity: 0, scale: 0.92, y: -6 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.92, y: -6 }}
@@ -161,23 +179,33 @@ export const EventHeader: React.FC<EventHeaderProps> = ({
                             style={{ transformOrigin: 'top right' }}
                             className="glass-sheet absolute right-3 top-[60px] z-40 w-[232px] rounded-[26px] p-1.5 text-on-surface"
                         >
-                            <button type="button" onClick={runFromMenu(openPicker)} disabled={isUploadingPhoto} className={menuItem}>
+                            {onEditEvent && (
+                                <button type="button" role="menuitem" autoFocus onClick={runFromMenu(onEditEvent)} className={menuItem}>
+                                    <Pencil size={19} className="text-muted" aria-hidden="true" />
+                                    {t.editEvent}
+                                </button>
+                            )}
+                            <button type="button" role="menuitem" autoFocus={!onEditEvent} onClick={runFromMenu(openPicker)} disabled={isUploadingPhoto} className={menuItem}>
                                 {isUploadingPhoto ? <Loader2 size={19} className="animate-spin text-muted" aria-hidden="true" /> : <Camera size={19} className="text-muted" aria-hidden="true" />}
                                 {isUploadingPhoto ? t.uploading : t.changePhoto}
                             </button>
-                            <button type="button" onClick={runFromMenu(onOpenShareModal)} className={menuItem}>
-                                <Share2 size={19} className="text-muted" aria-hidden="true" />
-                                {t.shareEvent}
-                            </button>
+                            {permissions.canShare && (
+                                <button type="button" role="menuitem" onClick={runFromMenu(onOpenShareModal)} className={menuItem}>
+                                    <Share2 size={19} className="text-muted" aria-hidden="true" />
+                                    {t.shareEvent}
+                                </button>
+                            )}
                             {event.status === 'active' && (
-                                <button type="button" onClick={runFromMenu(handleEndEvent)} className={menuItem}>
+                                <button type="button" role="menuitem" onClick={runFromMenu(handleEndEvent)} className={menuItem}>
                                     <CheckCircle2 size={19} className="text-muted" aria-hidden="true" />
                                     {t.endEvent}
                                 </button>
                             )}
-                            {event.status === 'completed' && (
+                            {/* Owner (or team admin) only, in any state; the dialog below confirms. */}
+                            {permissions.canDelete && (
                                 <button
                                     type="button"
+                                    role="menuitem"
                                     onClick={runFromMenu(() => setIsConfirmingDelete(true))}
                                     className={clsx(menuItem, 'mt-1 border-t border-hair text-neg')}
                                 >

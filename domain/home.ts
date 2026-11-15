@@ -1,5 +1,5 @@
 import type { AppState, Budget, Category, Currency, RecurringTransaction, Transaction } from '../types';
-import { getCountedExpenseAmount, getCountedIncomeAmount } from './money';
+import { FEE_CURRENCY, getCountedExpenseAmount, getCountedIncomeAmount } from './money';
 import { convertAmount } from '../services/currencyService';
 
 /** A calendar month in local time. `month` is 0-based like Date#getMonth. */
@@ -55,6 +55,8 @@ export interface MonthSummary {
   monthElapsed: number;
   /** Change in net worth from this month's entries (all flows, not just counted spending). */
   netChange: number;
+  /** `netChange` per day of the month (index 0 = day 1), for the net worth trend line. */
+  netByDay: number[];
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
@@ -68,6 +70,7 @@ export function computeMonthSummary(
 ): MonthSummary {
   const days = daysInMonth(key);
   const byDay = new Array<number>(days).fill(0);
+  const netByDay = new Array<number>(days).fill(0);
   const byCategoryMap = new Map<string, number>();
   let income = 0;
   let spent = 0;
@@ -86,8 +89,10 @@ export function computeMonthSummary(
     income += getCountedIncomeAmount(transaction, state.baseCurrency, state.rates);
 
     const amount = convertAmount(transaction.amount, transaction.currency, state.baseCurrency, state.rates);
-    const fees = transaction.fees ? convertAmount(transaction.fees, 'USD', state.baseCurrency, state.rates) : 0;
-    netChange += transaction.type === 'income' ? amount - fees : -amount - fees;
+    const fees = transaction.fees ? convertAmount(transaction.fees, FEE_CURRENCY, state.baseCurrency, state.rates) : 0;
+    const net = transaction.type === 'income' ? amount - fees : -amount - fees;
+    netChange += net;
+    netByDay[date.getDate() - 1] += net;
   }
 
   const categoriesById = new Map(state.categories.map(category => [category.id, category] as const));
@@ -120,6 +125,7 @@ export function computeMonthSummary(
     todayIndex,
     monthElapsed: todayIndex / days,
     netChange: round2(netChange),
+    netByDay: netByDay.map(round2),
   };
 }
 
@@ -222,7 +228,11 @@ export function getRecentTransactions(transactions: Transaction[], count: number
     .map(entry => entry.transaction);
 }
 
-/** Pairs shown on the Rates block, relative to the base currency. */
+/**
+ * Pairs shown on the Rates block: the two with the base currency first, then the other two.
+ * Each reads as "1 of the stronger currency is so many of the other" (1 EUR = 117.2 RSD), never
+ * 1 RSD = 0.0085 EUR.
+ */
 export function getRatePairs(base: Currency, rates: Record<Currency, number>): Array<{ from: Currency; to: Currency; value: number }> {
   const all: Currency[] = ['EUR', 'USD', 'RSD'];
   const others = all.filter(currency => currency !== base);
@@ -233,6 +243,6 @@ export function getRatePairs(base: Currency, rates: Record<Currency, number>): A
   ];
   return pairs.map(({ from, to }) => {
     const value = rates[from] ? rates[to] / rates[from] : 0;
-    return { from, to, value };
+    return value > 0 && value < 1 ? { from: to, to: from, value: 1 / value } : { from, to, value };
   });
 }

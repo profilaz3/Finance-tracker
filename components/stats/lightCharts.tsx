@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { formatNumber } from '../../utils/locale';
 import {
   buildLinearTicks,
   buildPolylinePoints,
@@ -125,6 +126,47 @@ const useBoxSize = () => {
   return [ref, size] as const;
 };
 
+/** One value under the finger, and one cell of the screen-reader table. */
+interface ReadoutItem {
+  label: string;
+  value: string;
+  color: string;
+}
+
+/** The chart as data: the readout and the visually hidden table read from it. */
+interface ChartData {
+  /** Accessible name; also the hidden table's caption. */
+  ariaLabel?: string;
+  /** Values for the x position at `index`, in series order. */
+  itemsAt: (index: number) => ReadoutItem[];
+}
+
+/**
+ * Touch and screen-reader access to the values, which otherwise live only in the drawing:
+ * tap (or drag across, or hover with a mouse) to see the values at a position; a visually hidden
+ * table lists every value. Same pattern as the rates chart's scrub readout.
+ */
+const useChartReadout = (count: number) => {
+  const [active, setActive] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  // A readout from a tap stays until the next tap elsewhere.
+  useEffect(() => {
+    if (active === null) return;
+    const clear = (event: PointerEvent) => {
+      if (boxRef.current && !boxRef.current.contains(event.target as Node)) setActive(null);
+    };
+    document.addEventListener('pointerdown', clear);
+    return () => document.removeEventListener('pointerdown', clear);
+  }, [active]);
+
+  useEffect(() => {
+    setActive(prev => (prev !== null && prev >= count ? null : prev));
+  }, [count]);
+
+  return { active, setActive, boxRef };
+};
+
 const ChartSurface: React.FC<{
   width?: number;
   height?: number;
@@ -132,12 +174,30 @@ const ChartSurface: React.FC<{
   max: number;
   yTickFormatter?: (value: number) => string;
   xLabels: string[];
+  data?: ChartData;
   children: (plot: ReturnType<typeof getPlot>) => React.ReactNode;
-}> = ({ width: fallbackWidth = DEFAULT_WIDTH, height: fallbackHeight = DEFAULT_HEIGHT, min, max, yTickFormatter, xLabels, children }) => {
-  const [boxRef, box] = useBoxSize();
+}> = ({ width: fallbackWidth = DEFAULT_WIDTH, height: fallbackHeight = DEFAULT_HEIGHT, min, max, yTickFormatter, xLabels, data, children }) => {
+  const [sizeRef, box] = useBoxSize();
+  const { active, setActive, boxRef } = useChartReadout(xLabels.length);
   const width = box?.width ?? fallbackWidth;
   const height = box?.height ?? fallbackHeight;
   const plot = getPlot(width, height);
+  const count = xLabels.length;
+  const setBoxRef = (node: HTMLDivElement | null) => {
+    sizeRef.current = node;
+    boxRef.current = node;
+  };
+  // The SVG is drawn 1:1 with its box, so client x maps straight onto the plot.
+  const pick = (clientX: number, element: HTMLElement) => {
+    if (!data || count === 0) return;
+    const x = clientX - element.getBoundingClientRect().left - plot.left;
+    const index = count <= 1 ? 0 : Math.round(x / (plot.innerWidth / (count - 1)));
+    setActive(clamp(index, 0, count - 1));
+  };
+  const activeX = active !== null ? scaleX(active, count, plot.innerWidth) : 0;
+  const columnWidth = Math.min(48, plot.innerWidth / Math.max(count, 1));
+  const columnX = clamp(activeX - columnWidth / 2, 0, Math.max(0, plot.innerWidth - columnWidth));
+  const activeItems = active !== null && data ? data.itemsAt(active) : [];
   const ticks = buildLinearTicks(min, max, 4);
   // Thin the x labels so they never collide on a narrow phone chart (~64px per label).
   const lastIndex = xLabels.length - 1;
@@ -149,9 +209,30 @@ const ChartSurface: React.FC<{
   );
 
   return (
-    <div ref={boxRef} className="h-full w-full" data-no-swipe>
+    <div
+      ref={setBoxRef}
+      className="relative h-full w-full touch-pan-y"
+      data-no-swipe
+      onPointerDown={data ? event => pick(event.clientX, event.currentTarget) : undefined}
+      onPointerMove={data ? event => {
+        if (event.pointerType === 'mouse' || event.buttons > 0) pick(event.clientX, event.currentTarget);
+      } : undefined}
+      onPointerLeave={data ? event => {
+        if (event.pointerType === 'mouse') setActive(null);
+      } : undefined}
+    >
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" role="img" aria-hidden="true">
         <g transform={`translate(${plot.left}, ${plot.top})`}>
+          {active !== null && (
+            <rect
+              x={formatSvgNumber(columnX)}
+              y={0}
+              width={formatSvgNumber(columnWidth)}
+              height={formatSvgNumber(plot.innerHeight)}
+              rx={8}
+              fill="var(--paper-chip, rgb(var(--md-sys-color-surface-container-high)))"
+            />
+          )}
           {ticks.map((tick) => {
             const y = scaleY(tick, min, max, plot.innerHeight);
             return (
@@ -192,6 +273,41 @@ const ChartSurface: React.FC<{
           ))}
         </g>
       </svg>
+      {active !== null && activeItems.length > 0 && (
+        <div
+          aria-hidden="true"
+          data-chart-readout
+          className="pointer-events-none absolute top-0 z-[1] flex -translate-x-1/2 flex-col gap-0.5 whitespace-nowrap rounded-[14px] bg-on-surface px-2.5 py-1.5 text-[12px] font-semibold tabular-nums text-surface shadow-md"
+          style={{ left: `clamp(84px, ${plot.left + activeX}px, calc(100% - 84px))` }}
+        >
+          <span className="opacity-70">{xLabels[active]}</span>
+          {activeItems.map(item => (
+            <span key={item.label || 'value'} className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} />
+              {item.label && <span className="font-medium opacity-80">{item.label}</span>}
+              <span>{item.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {data && count > 0 && (
+        // A table ignores width: 1px, so the wrapper is what hides and clips it.
+        <div className="sr-only">
+          <table>
+            {data.ariaLabel && <caption>{data.ariaLabel}</caption>}
+            <tbody>
+              {xLabels.map((label, index) => (
+                <tr key={`${label}-${index}`}>
+                  <th scope="row">{label}</th>
+                  {data.itemsAt(index).map(item => (
+                    <td key={item.label || 'value'}>{item.label ? `${item.label}: ${item.value}` : item.value}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };
@@ -206,6 +322,10 @@ export const LineAreaChart: React.FC<{
   yTickFormatter?: (value: number) => string;
   referenceLine?: { value: number; color: string; dashed?: boolean };
   includeZero?: boolean;
+  /** Names the chart for screen readers (caption of the hidden value table). */
+  ariaLabel?: string;
+  /** What the values are ("Expense"), shown in the tap readout. */
+  seriesLabel?: string;
 }> = ({
   rows,
   labelKey,
@@ -216,10 +336,15 @@ export const LineAreaChart: React.FC<{
   yTickFormatter,
   referenceLine,
   includeZero = true,
+  ariaLabel,
+  seriesLabel = '',
 }) => {
   const values = rows.map((row) => Number(row[valueKey] ?? 0));
   const extraValues = referenceLine ? [...values, referenceLine.value] : values;
   const domain = resolveDomain(extraValues, { includeZero });
+  const gradientId = `area-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  // Every point gets a dot on short series; long ones only mark the latest value.
+  const dotAll = rows.length <= 12;
 
   return (
     <ChartSurface
@@ -227,6 +352,7 @@ export const LineAreaChart: React.FC<{
       max={domain.max}
       yTickFormatter={yTickFormatter}
       xLabels={rows.map((row) => String(row[labelKey] ?? ''))}
+      data={{ ariaLabel, itemsAt: index => [{ label: seriesLabel, value: valueFormatter(values[index] ?? 0), color: stroke }] }}
     >
       {(plot) => {
         const points = buildPolylinePoints(values, {
@@ -249,7 +375,13 @@ export const LineAreaChart: React.FC<{
                 strokeDasharray={referenceLine.dashed ? '4 6' : undefined}
               />
             )}
-            <path d={areaPath} fill={fill} opacity={0.18} />
+            <defs>
+              <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={fill} stopOpacity={0.34} />
+                <stop offset="100%" stopColor={fill} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill={`url(#${gradientId})`} />
             <path
               d={points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${formatSvgNumber(point.x)} ${formatSvgNumber(point.y)}`).join(' ')}
               fill="none"
@@ -258,13 +390,24 @@ export const LineAreaChart: React.FC<{
               strokeLinejoin="round"
               strokeLinecap="round"
             />
-            {points.map((point, index) => (
-              <g key={`${point.x}-${point.y}`}>
-                <circle cx={point.x} cy={point.y} r={3.5} fill={stroke}>
-                  <title>{`${rows[index][labelKey]}: ${valueFormatter(values[index])}`}</title>
-                </circle>
-              </g>
-            ))}
+            {points.map((point, index) => {
+              const last = index === points.length - 1;
+              return (
+                <g key={`${point.x}-${point.y}`}>
+                  {last && <circle cx={point.x} cy={point.y} r={7} fill={stroke} opacity={0.18} />}
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={last ? 4 : dotAll ? 3 : 6}
+                    fill={dotAll || last ? stroke : 'transparent'}
+                    stroke={dotAll || last ? 'var(--paper-tile, rgb(var(--md-sys-color-surface)))' : 'none'}
+                    strokeWidth={dotAll || last ? 1.5 : 0}
+                  >
+                    <title>{`${rows[index][labelKey]}: ${valueFormatter(values[index])}`}</title>
+                  </circle>
+                </g>
+              );
+            })}
           </>
         );
       }}
@@ -278,7 +421,8 @@ export const GroupedBarChart: React.FC<{
   series: Array<{ key: string; label: string; color: string }>;
   valueFormatter: (value: number) => string;
   yTickFormatter?: (value: number) => string;
-}> = ({ rows, labelKey, series, valueFormatter, yTickFormatter }) => {
+  ariaLabel?: string;
+}> = ({ rows, labelKey, series, valueFormatter, yTickFormatter, ariaLabel }) => {
   const values = rows.flatMap((row) => series.map((item) => Number(row[item.key] ?? 0)));
   const domain = resolveDomain(values, { includeZero: true });
 
@@ -288,11 +432,17 @@ export const GroupedBarChart: React.FC<{
       max={domain.max}
       yTickFormatter={yTickFormatter}
       xLabels={rows.map((row) => String(row[labelKey] ?? ''))}
+      data={{
+        ariaLabel,
+        itemsAt: index => series.map(item => ({ label: item.label, value: valueFormatter(Number(rows[index]?.[item.key] ?? 0)), color: item.color })),
+      }}
     >
       {(plot) => {
         const columnWidth = rows.length > 0 ? plot.innerWidth / rows.length : plot.innerWidth;
-        const groupWidth = Math.min(56, columnWidth * 0.72);
-        const barWidth = Math.max(10, (groupWidth - (series.length - 1) * 8) / Math.max(series.length, 1));
+        // Slim bars with a small gap read better than wide blocks on a phone.
+        const barGap = 3;
+        const groupWidth = Math.min(36, columnWidth * 0.6);
+        const barWidth = Math.max(5, (groupWidth - (series.length - 1) * barGap) / Math.max(series.length, 1));
         const zeroY = scaleY(0, domain.min, domain.max, plot.innerHeight);
 
         return (
@@ -305,9 +455,9 @@ export const GroupedBarChart: React.FC<{
               return series.map((item, seriesIndex) => {
                 const value = Number(row[item.key] ?? 0);
                 const barHeight = Math.abs(scaleY(value, domain.min, domain.max, plot.innerHeight) - zeroY);
-                const x = startX + seriesIndex * (barWidth + 8);
+                const x = startX + seriesIndex * (barWidth + barGap);
                 const y = value >= 0 ? zeroY - barHeight : zeroY;
-                const radius = 10;
+                const radius = Math.min(6, barWidth / 2);
 
                 return (
                   <g key={`${String(row[labelKey])}-${item.key}`}>
@@ -339,7 +489,8 @@ export const StackedSignedBarChart: React.FC<{
   series: Array<{ key: string; label: string; color: string }>;
   valueFormatter: (value: number) => string;
   yTickFormatter?: (value: number) => string;
-}> = ({ rows, labelKey, series, valueFormatter, yTickFormatter }) => {
+  ariaLabel?: string;
+}> = ({ rows, labelKey, series, valueFormatter, yTickFormatter, ariaLabel }) => {
   const numericRows = rows.map((row) => Object.fromEntries(series.map((item) => [item.key, Number(row[item.key] ?? 0)])));
   const domain = buildStackedBarDomain(numericRows, series.map((item) => item.key));
 
@@ -349,6 +500,10 @@ export const StackedSignedBarChart: React.FC<{
       max={domain.max}
       yTickFormatter={yTickFormatter}
       xLabels={rows.map((row) => String(row[labelKey] ?? ''))}
+      data={{
+        ariaLabel,
+        itemsAt: index => series.map(item => ({ label: item.label, value: valueFormatter(numericRows[index]?.[item.key] ?? 0), color: item.color })),
+      }}
     >
       {(plot) => {
         const zeroY = scaleY(0, domain.min, domain.max, plot.innerHeight);
@@ -438,7 +593,9 @@ export const HorizontalBarChart: React.FC<{
 export const DonutChart: React.FC<{
   rows: Array<{ label: string; value: number; color: string }>;
   centerLabel?: React.ReactNode;
-}> = ({ rows, centerLabel }) => {
+  /** Formats slice values (tooltips); defaults to a locale number. */
+  valueFormatter?: (value: number) => string;
+}> = ({ rows, centerLabel, valueFormatter = (value) => formatNumber(value, { maximumFractionDigits: 0 }) }) => {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const cx = 120;
   const cy = 120;
@@ -479,7 +636,7 @@ export const DonutChart: React.FC<{
               stroke="var(--paper-tile, rgb(var(--md-sys-color-surface)))"
               strokeWidth="2"
             >
-              <title>{`${row.label}: ${row.value.toFixed(2)}`}</title>
+              <title>{`${row.label}: ${valueFormatter(row.value)}`}</title>
             </path>
           );
         })}
@@ -502,7 +659,8 @@ export const StackedAreaLineChart: React.FC<{
   lineColor: string;
   valueFormatter: (value: number) => string;
   yTickFormatter?: (value: number) => string;
-}> = ({ rows, labelKey, areaKeys, lineKey, lineLabel, lineColor, valueFormatter, yTickFormatter }) => {
+  ariaLabel?: string;
+}> = ({ rows, labelKey, areaKeys, lineKey, lineLabel, lineColor, valueFormatter, yTickFormatter, ariaLabel }) => {
   const domains: number[] = [];
 
   rows.forEach((row) => {
@@ -530,6 +688,13 @@ export const StackedAreaLineChart: React.FC<{
       max={domain.max}
       yTickFormatter={yTickFormatter}
       xLabels={rows.map((row) => String(row[labelKey] ?? ''))}
+      data={{
+        ariaLabel,
+        itemsAt: index => [
+          ...areaKeys.map(area => ({ label: area.label, value: valueFormatter(Number(rows[index]?.[area.key] ?? 0)), color: area.color })),
+          { label: lineLabel, value: valueFormatter(Number(rows[index]?.[lineKey] ?? 0)), color: lineColor },
+        ],
+      }}
     >
       {(plot) => {
         const polygons = getStackedAreaPolygons({

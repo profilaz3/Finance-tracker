@@ -7,6 +7,7 @@ import {
   buildPerson,
   buildSettlementDraft,
   buildUserProfile,
+  pickSettlementAccountId,
   removeAccountFromCollection,
   removePersonFromCollection,
   updatePersonBalanceInCollection,
@@ -17,6 +18,7 @@ import { calculateBalanceOffset, getEffectivePersonBalances } from '../domain/ba
 import { TRANSLATIONS } from '../constants';
 import { getTranslations } from '../utils/i18n';
 import { isInlineAvatar, uploadInlineAvatar } from '../utils/avatarUpload';
+import { formatCurrency } from '../utils/formatters';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -169,6 +171,7 @@ export function usePeopleHandlers({
   }, [addToast, setState, state.people, state.transactions]);
 
   const deletePerson = useCallback(async (id: string) => {
+    const deleted = state.people.find(person => person.id === id);
     setState(prev => ({ ...prev, people: removePersonFromCollection(prev.people, id) }));
     if (selectedPerson?.id === id) {
       setSelectedPerson(null);
@@ -177,11 +180,12 @@ export function usePeopleHandlers({
     try {
       const syncManager = await getSyncManager();
       await syncManager.deletePerson(id);
+      if (deleted) addToast(getTranslations().personDeletedNamed.replace('{name}', deleted.name), 'info');
     } catch (error) {
       console.error('Failed to delete person from Supabase:', error);
       addToast(getTranslations().personDeletedSyncFailed, 'error');
     }
-  }, [addToast, selectedPerson?.id, setSelectedPerson, setState]);
+  }, [addToast, selectedPerson?.id, setSelectedPerson, setState, state.people]);
 
   const handleAddAccount = useCallback(async (account: Account) => {
     setState(prev => ({ ...prev, accounts: addAccountToCollection(prev.accounts, account) }));
@@ -215,9 +219,16 @@ export function usePeopleHandlers({
     }
   }, [addToast, setState, state.accounts.length, state.language]);
 
-  const handleSettleUp = useCallback(async (personId: string, currency: Currency, settleAmount?: number) => {
+  /**
+   * Record that a person and I settled `currency` (all of it, or `settleAmount`). The money goes
+   * into / comes out of `accountId` when given, else the first wallet in that currency, else the
+   * first wallet.
+   */
+  const handleSettleUp = useCallback(async (personId: string, currency: Currency, settleAmount?: number, accountId?: string) => {
     const person = state.people.find(entry => entry.id === personId);
-    const defaultAccountId = state.accounts[0]?.id;
+    const account = state.accounts.find(entry => entry.id === accountId)
+      ?? state.accounts.find(entry => entry.id === pickSettlementAccountId(state.accounts, currency));
+    const defaultAccountId = account?.id;
     if (!person || !defaultAccountId) {
       return;
     }
@@ -256,7 +267,13 @@ export function usePeopleHandlers({
     // Undo removes exactly the recorded settlement (the balance is derived, so it comes back).
     const t = getTranslations();
     const settlementId = settlement.transaction.id;
-    addToast(settlement.isPartial ? t.partialSettlementRecorded : t.debtSettled, 'success', {
+    // Name the amount, currency and wallet: one tap may settle one of several currencies.
+    const amountLabel = formatCurrency(settlement.transaction.amount, currency, state.language);
+    const message = (settlement.transaction.type === 'income' ? t.settleRecordedReceived : t.settleRecordedPaid)
+      .replace('{name}', person.name)
+      .replace('{amount}', amountLabel)
+      .replace('{wallet}', account?.name ?? '');
+    addToast(message, 'success', {
       label: t.undo,
       onClick: () => {
         setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => entry.id !== settlementId) }));
@@ -266,7 +283,7 @@ export function usePeopleHandlers({
           .catch(error => console.error('Failed to undo settlement:', error));
       },
     });
-  }, [addToast, addTransaction, createId, setState, state.accounts, state.categories, state.people, state.transactions]);
+  }, [addToast, addTransaction, createId, setState, state.accounts, state.categories, state.language, state.people, state.transactions]);
 
   const handleAddCategory = useCallback(async (category: Category) => {
     setState(prev => ({ ...prev, categories: [...prev.categories, category] }));

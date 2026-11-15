@@ -45,6 +45,7 @@ export const AskExplain: React.FC<AskExplainProps> = ({ plan, execution, languag
     ? formatMediumDate(new Date(`${explain.ratesDate.slice(0, 10)}T12:00:00`), language)
     : explain.ratesDate;
 
+  const maxRowValue = Math.max(0, ...table.rows.map(row => row.value));
   const facts: Array<[string, string]> = [
     [t.askHowSource, source],
     [t.askHowPeriod, plan.dataset === 'balances' && plan.range
@@ -88,10 +89,15 @@ export const AskExplain: React.FC<AskExplainProps> = ({ plan, execution, languag
                 <tbody>
                   {table.rows.map((row, index) => (
                     <tr key={`${row.label}-${index}`} className="border-t border-hair first:border-t-0">
-                      <td className="w-full max-w-0 truncate py-1 pr-2">{formatGroupLabel(row.label, table.groupBy, language)}</td>
-                      <td className="whitespace-nowrap py-1 text-right font-semibold tabular-nums">{formatAskValue(row.value, table, language)}</td>
+                      <td className="w-full max-w-0 py-1.5 pr-2">
+                        <span className="block truncate">{formatGroupLabel(row.label, table.groupBy, language)}</span>
+                        {maxRowValue > 0 && row.value > 0 && (
+                          <span className="mt-1 block h-1 rounded-full bg-accent" style={{ width: `${Math.max(4, (row.value / maxRowValue) * 100).toFixed(1)}%`, opacity: index === 0 ? 1 : 0.45 }} aria-hidden="true" />
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap py-1.5 align-top text-right font-semibold tabular-nums">{formatAskValue(row.value, table, language)}</td>
                       {row.compareValue !== undefined && (
-                        <td className="whitespace-nowrap py-1 pl-2 text-right tabular-nums text-muted">{formatAskValue(row.compareValue, table, language)}</td>
+                        <td className="whitespace-nowrap py-1.5 pl-2 align-top text-right tabular-nums text-muted">{formatAskValue(row.compareValue, table, language)}</td>
                       )}
                     </tr>
                   ))}

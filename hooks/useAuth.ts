@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getOfflineQueue, getSupabaseService, getSyncManager } from '../services/runtimeServices';
+import { clearSessionIdentityCache } from './useSessionIdentity';
 import { AppState } from '../types';
 import { clearPersistedState, createInitialState, saveState } from '../services/storageService';
 import { CONFIG } from '../config';
@@ -26,7 +27,7 @@ const bindQueueToUser = async (userId: string | null) => {
  * reachable: pending debounced writes, the user's queue and dead letters, the
  * Supabase session (falls back to a local sign-out) and persisted app state.
  */
-const clearLocalSession = async (): Promise<AppState> => {
+const clearLocalSession = async ({ everywhere = false }: { everywhere?: boolean } = {}): Promise<AppState> => {
   const [supabaseService, syncManager, offlineQueue] = await Promise.all([
     getSupabaseService(),
     getSyncManager(),
@@ -35,7 +36,8 @@ const clearLocalSession = async (): Promise<AppState> => {
 
   syncManager.reset();
   offlineQueue.clearForSignOut();
-  await supabaseService.signOut();
+  clearSessionIdentityCache();
+  await supabaseService.signOut({ everywhere });
 
   clearPersistedState();
   const freshState = createInitialState();
@@ -90,7 +92,8 @@ export function useAuth() {
     setIsAuthenticated(true);
   }, []);
 
-  const handleLogout = useCallback(async (): Promise<AppState> => {
+  /** Signs out of this device; `everywhere` also ends the sessions on the user's other devices. */
+  const handleLogout = useCallback(async ({ everywhere = false }: { everywhere?: boolean } = {}): Promise<AppState> => {
     // Give pending writes a bounded chance to reach the server before they are discarded.
     if (isOnline()) {
       await withTimeout((async () => {
@@ -100,7 +103,7 @@ export function useAuth() {
       })(), CONFIG.LOGOUT_FLUSH_TIMEOUT_MS);
     }
 
-    const freshState = await clearLocalSession();
+    const freshState = await clearLocalSession({ everywhere });
     setIsAuthenticated(false);
     return freshState;
   }, []);

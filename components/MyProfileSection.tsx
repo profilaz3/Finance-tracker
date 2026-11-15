@@ -42,16 +42,21 @@ export const MyProfileSection: React.FC<MyProfileSectionProps> = ({
 
     return (
         <section className="paper-tile flex items-center gap-4 p-4" aria-label={t.myProfile}>
-            <Avatar name={userProfile.name} color={userProfile.color} image={image} size={64} />
+            <span className="shrink-0 rounded-full p-1" style={{ background: `color-mix(in oklab, ${userProfile.color || 'rgb(var(--accent-rgb))'} 24%, transparent)` }}>
+                <span className="block rounded-full shadow-[0_0_0_3px_var(--paper-tile)]">
+                    <Avatar name={userProfile.name} color={userProfile.color} image={image} size={64} />
+                </span>
+            </span>
             <div className="min-w-0 flex-1">
                 <h3 className="truncate text-[20px] font-bold tracking-[-0.3px]">{userProfile.name}</h3>
-                <p className="text-[13px] text-muted">{t.myProfile} · {userProfile.defaultCurrency}</p>
+                {/* "My profile · EUR" read like a setting; this says what the profile is for. */}
+                <p className="text-[13px] leading-snug text-muted">{t.myProfileHint}</p>
             </div>
             <button
                 type="button"
                 onClick={onEditProfile}
-                aria-label={t.edit}
-                title={t.edit}
+                aria-label={t.editProfile}
+                title={t.editProfile}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chip text-muted transition-colors hover:text-[var(--paper-text)]"
             >
                 <Pencil size={18} aria-hidden="true" />

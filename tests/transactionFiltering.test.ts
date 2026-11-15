@@ -5,11 +5,10 @@ import { UNCATEGORIZED_FILTER } from '../utils/qolSuggestions';
 process.env.TZ = 'Europe/Belgrade';
 
 let filterTransactions: typeof import('../utils/transactionFilters').filterTransactions;
-let getDateGroupLabel: typeof import('../utils/transactionFilters').getDateGroupLabel;
-let groupTransactionsByDate: typeof import('../utils/transactionFilters').groupTransactionsByDate;
+let groupTransactionsByDay: typeof import('../utils/transactionFilters').groupTransactionsByDay;
 
 beforeAll(async () => {
-  ({ filterTransactions, getDateGroupLabel, groupTransactionsByDate } = await import('../utils/transactionFilters'));
+  ({ filterTransactions, groupTransactionsByDay } = await import('../utils/transactionFilters'));
 });
 
 const categories: Category[] = [
@@ -164,30 +163,116 @@ describe('transaction filtering', () => {
     expect(filtered.map(transaction => transaction.id)).toEqual(['missing', 'unknown']);
   });
 
-  it('groups transactions under localized relative labels', () => {
-    const grouped = groupTransactionsByDate(
+  it('groups entries by local day under Today, Yesterday and weekday labels', () => {
+    const now = new Date('2026-11-15T12:00:00.000Z');
+    const grouped = groupTransactionsByDay(
       [
-        { ...transactions[0], date: '2026-04-05T08:00:00.000Z' },
-        { ...transactions[1], id: 'tx-3', date: '2026-04-05T07:00:00.000Z' },
+        { ...transactions[0], id: 'today-a', date: '2026-11-15T08:00:00.000Z' },
+        { ...transactions[0], id: 'friday', date: '2026-11-13' },
+        { ...transactions[1], id: 'today-b', date: '2026-11-15T07:00:00.000Z' },
+        { ...transactions[0], id: 'yesterday', date: '2026-11-14T22:30:00.000Z' },
+        { ...transactions[0], id: 'last-year', date: '2025-12-31' },
       ],
       'en',
-      new Date('2026-04-05T12:00:00.000Z')
+      now
     );
 
-    expect(grouped).toHaveLength(1);
-    expect(grouped[0].label).toBe('Today');
-    expect(grouped[0].transactions.map(tx => tx.id)).toEqual(['tx-1', 'tx-3']);
+    expect(grouped.map(group => group.key)).toEqual(['2026-11-15', '2026-11-14', '2026-11-13', '2025-12-31']);
+    expect(grouped.map(group => group.label)).toEqual(['Today', 'Yesterday', 'Friday', 'Wednesday']);
+    expect(grouped[0].transactions.map(tx => tx.id)).toEqual(['today-a', 'today-b']);
+    expect(grouped[1].detail).toBe('Sat 14 Nov');
+    expect(grouped[2].detail).toBe('13 Nov');
+    expect(grouped[3].detail).toBe('31 Dec 2025');
   });
 
-  it('groups by local calendar-day distance across DST', () => {
-    expect(getDateGroupLabel(
-      new Date('2026-03-29T10:00:00.000Z'),
+  it('puts a late-evening UTC timestamp on the local day', () => {
+    // 23:30 UTC on 14 Nov is 00:30 on 15 Nov in Belgrade.
+    const grouped = groupTransactionsByDay(
+      [{ ...transactions[0], id: 'late', date: '2026-11-14T23:30:00.000Z' }],
       'en',
-      new Date('2026-04-05T10:00:00.000Z')
-    )).toBe('Last Week');
+      new Date('2026-11-15T12:00:00.000Z')
+    );
+    expect(grouped[0].key).toBe('2026-11-15');
+    expect(grouped[0].label).toBe('Today');
   });
 
-  it('builds month labels for older transactions', () => {
-    expect(getDateGroupLabel(new Date('2025-11-02T12:00:00.000Z'), 'en', new Date('2026-04-05T12:00:00.000Z'))).toBe('November 2025');
+  it('counts days by calendar across DST and capitalizes Serbian weekdays', () => {
+    const grouped = groupTransactionsByDay(
+      [
+        { ...transactions[0], id: 'before-dst', date: '2026-03-28T10:00:00.000Z' },
+        { ...transactions[0], id: 'after-dst', date: '2026-03-29T10:00:00.000Z' },
+      ],
+      'sr',
+      new Date('2026-03-30T10:00:00.000Z')
+    );
+    expect(grouped.map(group => group.key)).toEqual(['2026-03-29', '2026-03-28']);
+    expect(grouped[0].label).toBe('Juče');
+    expect(grouped[1].label).toBe('Subota');
+  });
+
+  it('keeps entries with an unreadable date in one group at the end', () => {
+    const grouped = groupTransactionsByDay(
+      [
+        { ...transactions[0], id: 'broken', date: 'not a date' },
+        { ...transactions[0], id: 'fine', date: '2026-11-15' },
+      ],
+      'en',
+      new Date('2026-11-15T12:00:00.000Z')
+    );
+    expect(grouped.map(group => group.key)).toEqual(['2026-11-15', 'unknown']);
+    expect(grouped[1].label).toBe('');
+  });
+});
+
+describe('transaction search', () => {
+  const people = [
+    { id: 'p-ana', name: 'Ana Đorđević', color: '#000000', defaultCurrency: 'RSD' as const, balances: { EUR: 0, USD: 0, RSD: 0 } },
+  ];
+  const searchCategories: Category[] = [
+    ...categories,
+    { id: 'internal-transfer', name: 'Internal Transfer', type: 'income', subcategories: [], color: '#000000' },
+  ];
+  const pool: Transaction[] = [
+    { ...transactions[0], id: 's-1', amount: 1450, note: 'Čevapi u Čačku' },
+    { ...transactions[0], id: 's-2', amount: 32.4, note: 'Lunch', personId: 'p-ana' },
+    {
+      ...transactions[0], id: 's-3', amount: 990, note: '',
+      receiptData: { merchant: 'Maxi Delhaize', items: [], total: 990 } as unknown as Transaction['receiptData'],
+    },
+    { ...transactions[1], id: 's-4', amount: 50, categoryId: 'internal-transfer', note: 'Transfer from Cash' },
+  ];
+  const search = (searchQuery: string) => filterTransactions({
+    transactions: pool,
+    categories: searchCategories,
+    accounts,
+    filterType: 'all',
+    filterAccount: 'all',
+    filterDateFrom: '',
+    filterDateTo: '',
+    searchQuery,
+    people,
+  }).map(tx => tx.id);
+
+  it('ignores case, spaces around the query and diacritics', () => {
+    expect(search('  cevapi ')).toEqual(['s-1']);
+    expect(search('ČAČKU')).toEqual(['s-1']);
+    expect(search('cevapi cacku')).toEqual(['s-1']);
+  });
+
+  it('finds an amount as it is shown, in either number format', () => {
+    expect(search('1450')).toEqual(['s-1']);
+    expect(search('1,450')).toEqual(['s-1']);
+    expect(search('1.450')).toEqual(['s-1']);
+    expect(search('1.450,00')).toEqual(['s-1']);
+    expect(search('32,40')).toEqual(['s-2']);
+    expect(search('32.4')).toEqual(['s-2']);
+  });
+
+  it('finds entries by person, by receipt merchant and by translated system text', () => {
+    expect(search('dorde')).toEqual(['s-2']);
+    expect(search('djordjevic')).toEqual(['s-2']);
+    expect(search('maxi')).toEqual(['s-3']);
+    expect(search('prenos izmedu')).toEqual(['s-4']);
+    expect(search('transfer between wallets')).toEqual(['s-4']);
   });
 });

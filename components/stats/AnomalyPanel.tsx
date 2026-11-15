@@ -8,6 +8,10 @@ import { AlertTriangle, Receipt, Sparkles, TrendingUp } from 'lucide-react';
 import { anomalySignature, buildAnomalyContexts } from '../../domain/anomalyContext';
 import { canExplainAnomalies, explainAnomalies, getCachedExplanations, getLetterSnapshot, subscribeLetters } from '../../services/letterService';
 import { ShimmerLine } from '../insights/Shimmer';
+import { IconTile } from '../ui/IconTile';
+import { CategoryGlyph } from '../ui/CategoryGlyph';
+import { DeltaPill } from '../ui/primitives';
+import { Illustration } from '../ui/Illustration';
 
 /** What the panel needs to ask the AI why each anomaly happened. Without it, no explanations. */
 export interface AnomalyExplainContext {
@@ -33,6 +37,8 @@ export interface AnomalyPanelProps {
     highFeesDetail: (amount: string, percentage: string | null) => string;
   };
   explain?: AnomalyExplainContext;
+  /** Lets rows show the category's own glyph with a small kind badge. */
+  categories?: Category[];
 }
 
 const formatPercentage = (percentage: number | undefined): string | null => (
@@ -63,6 +69,14 @@ const ANOMALY_ICONS: Record<AnalyticsAnomaly['kind'], typeof TrendingUp> = {
   'category-spike': TrendingUp,
   'large-transaction': Receipt,
   'high-fees': AlertTriangle,
+};
+
+const NEG = 'var(--paper-neg)';
+const WARN = 'rgb(var(--md-sys-color-warning))';
+const ANOMALY_COLORS: Record<AnalyticsAnomaly['kind'], string> = {
+  'category-spike': NEG,
+  'large-transaction': 'rgb(var(--accent-rgb))',
+  'high-fees': WARN,
 };
 
 type Explanations = { status: 'idle' | 'loading' | 'done'; byId: Record<string, string> };
@@ -112,31 +126,45 @@ const useExplanations = (anomalies: AnalyticsAnomaly[], baseCurrency: Currency, 
   return result.signature === signature ? result : { status: signature ? 'loading' : 'idle', byId: {} };
 };
 
-export const AnomalyPanel: React.FC<AnomalyPanelProps> = ({ anomalies, baseCurrency, language, labels, explain }) => {
+export const AnomalyPanel: React.FC<AnomalyPanelProps> = ({ anomalies, baseCurrency, language, labels, explain, categories }) => {
   const explanations = useExplanations(anomalies, baseCurrency, language, explain);
+  const categoryById = useMemo(() => new Map((categories ?? explain?.categories ?? []).map(category => [category.id, category] as const)), [categories, explain?.categories]);
 
   return (
     <section className="paper-tile min-w-0 p-4 sm:p-5">
       <h3 className="mb-3 text-[17px] font-bold tracking-[-0.3px]">{labels.observations}</h3>
       {anomalies.length === 0 ? (
-        <p className="py-4 text-center text-[14px] text-muted">{labels.noObservations}</p>
+        <div className="flex items-center gap-3 py-1">
+          <span className="h-[64px] w-[80px] flex-none" aria-hidden="true">
+            <Illustration name="settled" />
+          </span>
+          <p className="min-w-0 flex-1 text-[14px] text-muted">{labels.noObservations}</p>
+        </div>
       ) : (
         <ul className="flex flex-col divide-y divide-hair">
           {anomalies.map(anomaly => {
             const Icon = ANOMALY_ICONS[anomaly.kind] ?? AlertTriangle;
             const why = explanations.byId[anomaly.id];
+            const color = ANOMALY_COLORS[anomaly.kind] ?? NEG;
+            const category = anomaly.categoryId ? categoryById.get(anomaly.categoryId) : undefined;
+            const kindBadge = <IconTile icon={Icon} color={color} size={18} shape="circle" tone="solid" />;
             return (
               <li key={anomaly.id} className="flex min-w-0 items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-[12px] bg-accent-soft text-accent">
-                  <Icon size={18} aria-hidden="true" />
+                <span className="mt-0.5 flex-none">
+                  {category
+                    ? <CategoryGlyph category={category} size={40} badge={kindBadge} />
+                    : <IconTile icon={Icon} color={color} size={40} />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3 min-w-0">
                     <p className="min-w-0 flex-1 text-[15px] font-semibold break-words">
                       {labels.anomalyTitles[anomaly.kind]}
                     </p>
-                    <span className="flex-none text-right text-[14px] font-semibold tabular-nums">
-                      {money(anomaly.amount, baseCurrency, language)}
+                    <span className="flex flex-none flex-col items-end gap-1 text-right">
+                      <span className="text-[14px] font-semibold tabular-nums">{money(anomaly.amount, baseCurrency, language)}</span>
+                      {anomaly.kind === 'category-spike' && anomaly.percentage !== undefined && (
+                        <DeltaPill direction="up" tone="neg">{formatPercent(anomaly.percentage, 0)}</DeltaPill>
+                      )}
                     </span>
                   </div>
                   <p className="mt-0.5 text-[13px] leading-snug text-muted break-words">

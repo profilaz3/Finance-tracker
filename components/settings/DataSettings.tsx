@@ -2,7 +2,7 @@ import React from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, Repeat, Play, Pause, Calendar, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { AppState, Person, TransactionType, Currency, Category, RecurringTransaction, RecurrenceFrequency } from '../../types';
+import { AppState, Person, TransactionType, Currency, Category, RecurringTransaction } from '../../types';
 import { getFrequencyLabel } from '../../utils/recurringUtils';
 import { TRANSLATIONS } from '../../constants';
 import { formatMoney, formatShortDate } from '../../utils/locale';
@@ -10,7 +10,9 @@ import { PeopleView } from '../PeopleView';
 import { CategorySettings } from '../CategorySettings';
 import { countDueRecurringTransactions, getRecurringStatus } from '../../utils/recurringSelectors';
 import { useRecurringSettingsState } from './useRecurringSettingsState';
-import { Segmented } from '../ui/Segmented';
+import { RecurringForm } from './RecurringForm';
+import { localizeCategoryName } from '../../utils/systemText';
+import { MOTION } from '../../config';
 import { CategoryGlyph } from '../ui/CategoryGlyph';
 import { CleanupCard } from '../cleanup/CleanupCard';
 
@@ -52,35 +54,41 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
     onToast
 }) => {
     const t = TRANSLATIONS[state.language];
-    const {
-        isAddingRecurring,
-        setIsAddingRecurring,
-        newRecurringName,
-        setNewRecurringName,
-        newRecurringAmount,
-        setNewRecurringAmount,
-        newRecurringFrequency,
-        setNewRecurringFrequency,
-        newRecurringType,
-        setNewRecurringType,
-        newRecurringCategoryId,
-        setNewRecurringCategoryId,
-        newRecurringAccountId,
-        setNewRecurringAccountId,
-        newRecurringStartDate,
-        setNewRecurringStartDate,
-        handleCreateRecurring,
-        resetRecurringForm,
-    } = useRecurringSettingsState({
+    const language = state.language;
+    const recurringItems = state.recurringTransactions || [];
+    const form = useRecurringSettingsState({
         baseCurrency: state.baseCurrency,
         categories: state.categories,
         accounts: state.accounts,
+        recurringTransactions: recurringItems,
+        language,
         onAddRecurring,
+        onUpdateRecurring,
+        onUpdated: () => onToast?.(t.recurringUpdated, 'success'),
     });
 
     if (activeTab === 'recurring') {
-        const dueCount = countDueRecurringTransactions(state.recurringTransactions || []);
-        const recurringItems = state.recurringTransactions || [];
+        const dueCount = countDueRecurringTransactions(recurringItems);
+        const renderForm = (mode: 'new' | 'edit') => (
+            <RecurringForm
+                mode={mode}
+                draft={form.draft}
+                errors={form.errors}
+                categories={state.categories}
+                accounts={state.accounts}
+                language={language}
+                onName={form.setName}
+                onAmountText={form.setAmountText}
+                onType={form.setType}
+                onFrequency={form.setFrequency}
+                onCategory={form.setCategoryId}
+                onAccount={form.setAccountId}
+                onCurrency={form.setCurrency}
+                onStartDate={form.setStartDate}
+                onSubmit={form.submit}
+                onCancel={form.close}
+            />
+        );
 
         return (
             <section className="flex flex-col gap-3" aria-label={t.recurringTransactions}>
@@ -97,117 +105,32 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                                 {t.processDueRecurring.replace('{count}', String(dueCount))}
                             </button>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => setIsAddingRecurring(true)}
-                            aria-label={t.addRecurringTransaction}
-                            title={t.addRecurringTransaction}
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-on-accent"
-                        >
-                            <Plus size={20} aria-hidden="true" />
-                        </button>
+                        {onAddRecurring && (
+                            <button
+                                type="button"
+                                onClick={form.openAdd}
+                                aria-label={t.addRecurringTransaction}
+                                title={t.addRecurringTransaction}
+                                aria-expanded={form.target === 'new'}
+                                className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-on-accent"
+                            >
+                                <Plus size={20} aria-hidden="true" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                <AnimatePresence>
-                    {isAddingRecurring && (
+                <AnimatePresence initial={false}>
+                    {form.target === 'new' && (
                         <m.div
+                            key="new-recurring"
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
+                            transition={MOTION.view.transition}
                             className="overflow-hidden"
                         >
-                            <div className="paper-tile flex flex-col gap-3 p-4">
-                                <Segmented<TransactionType>
-                                    ariaLabel={t.transactionType}
-                                    value={newRecurringType}
-                                    onChange={setNewRecurringType}
-                                    options={[
-                                        { value: 'expense', label: t.expense },
-                                        { value: 'income', label: t.income },
-                                    ]}
-                                />
-                                <input
-                                    type="text"
-                                    value={newRecurringName}
-                                    onChange={(e) => setNewRecurringName(e.target.value)}
-                                    placeholder={t.recurringNamePlaceholder}
-                                    className="h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] placeholder:text-faint"
-                                />
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        value={newRecurringAmount}
-                                        onChange={(e) => setNewRecurringAmount(e.target.value)}
-                                        placeholder={t.amount}
-                                        className="h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] placeholder:text-faint"
-                                    />
-                                    <select
-                                        value={newRecurringFrequency}
-                                        onChange={(e) => setNewRecurringFrequency(e.target.value as RecurrenceFrequency)}
-                                        aria-label={t.repeat}
-                                        className="h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] placeholder:text-faint"
-                                    >
-                                        <option value="daily">{t.daily}</option>
-                                        <option value="weekly">{t.weekly}</option>
-                                        <option value="biweekly">{t.biweekly}</option>
-                                        <option value="monthly">{t.monthly}</option>
-                                        <option value="yearly">{t.yearly}</option>
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <select
-                                        value={newRecurringCategoryId}
-                                        onChange={(e) => setNewRecurringCategoryId(e.target.value)}
-                                        aria-label={t.category}
-                                        className="h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] placeholder:text-faint"
-                                    >
-                                        <option value="">{t.category}</option>
-                                        {state.categories.filter(c => c.type === newRecurringType).map(cat => (
-                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        value={newRecurringAccountId}
-                                        onChange={(e) => setNewRecurringAccountId(e.target.value)}
-                                        aria-label={t.account}
-                                        className="h-12 w-full rounded-[14px] border-none bg-chip px-4 text-[16px] placeholder:text-faint"
-                                    >
-                                        <option value="">{t.account}</option>
-                                        {state.accounts.map(acc => (
-                                            <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <label className="flex items-center gap-3 rounded-[14px] bg-chip pl-4">
-                                    <Calendar size={18} className="shrink-0 text-muted" aria-hidden="true" />
-                                    <span className="shrink-0 text-[14px] text-muted">{t.startsOn}</span>
-                                    <input
-                                        type="date"
-                                        value={newRecurringStartDate}
-                                        onChange={(e) => setNewRecurringStartDate(e.target.value)}
-                                        className="h-12 min-w-0 flex-1 border-none bg-transparent px-2 text-[16px]"
-                                    />
-                                </label>
-                                <div className="flex justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={resetRecurringForm}
-                                        className="h-10 rounded-full px-4 text-[14px] font-semibold text-muted hover:bg-chip"
-                                    >
-                                        {t.cancel}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleCreateRecurring}
-                                        disabled={!newRecurringName.trim() || !newRecurringAmount}
-                                        className="h-10 rounded-full bg-accent px-5 text-[14px] font-semibold text-on-accent disabled:opacity-40"
-                                    >
-                                        {t.add}
-                                    </button>
-                                </div>
-                            </div>
+                            <div className="paper-tile p-4">{renderForm('new')}</div>
                         </m.div>
                     )}
                 </AnimatePresence>
@@ -224,67 +147,85 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                     <div className="paper-tile px-4 py-1">
                         {recurringItems.map((recurring, index) => {
                             const category = state.categories.find(c => c.id === recurring.categoryId);
-                            const recurringStatus = getRecurringStatus(recurring, state.language);
+                            const recurringStatus = getRecurringStatus(recurring, language);
                             const overdue = recurringStatus.isOverdue && recurring.isActive;
                             const dueToday = recurringStatus.isDueToday && recurring.isActive;
+                            const divider = index < recurringItems.length - 1 && "border-b border-hair";
+
+                            if (form.target === recurring.id) {
+                                return (
+                                    <div key={recurring.id} data-recurring-row data-editing="true" className={clsx("py-4", divider)}>
+                                        {renderForm('edit')}
+                                    </div>
+                                );
+                            }
 
                             return (
                                 <div
                                     key={recurring.id}
                                     data-recurring-row
                                     data-paused={recurring.isActive ? undefined : 'true'}
-                                    className={clsx(
-                                        "flex min-h-[72px] items-center gap-3 py-2.5",
-                                        index < recurringItems.length - 1 && "border-b border-hair",
-                                    )}
+                                    className={clsx("flex min-h-[72px] items-center gap-2", divider)}
                                 >
-                                    <span className={clsx(!recurring.isActive && "opacity-45")}>
-                                        <CategoryGlyph category={category ?? { name: recurring.name, color: '#64748B' }} />
-                                    </span>
-                                    <div className={clsx("min-w-0 flex-1", !recurring.isActive && "opacity-55")}>
-                                        <p data-recurring-title className="truncate text-[15px] font-semibold">{recurring.name}</p>
-                                        <p className="truncate text-[13px] text-muted">
-                                            {getFrequencyLabel(recurring.frequency, state.language)} · {category?.name || t.unknown}
-                                        </p>
-                                        <p className={clsx(
-                                            "mt-0.5 flex items-center gap-1 text-[12px]",
-                                            overdue ? "font-semibold text-neg" : dueToday ? "font-semibold text-accent" : "text-faint"
+                                    <button
+                                        type="button"
+                                        onClick={() => onUpdateRecurring && form.openEdit(recurring)}
+                                        disabled={!onUpdateRecurring}
+                                        className="-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-[14px] py-2.5 pl-2 text-left transition-colors hover:bg-chip/60 disabled:cursor-default"
+                                    >
+                                        <span className={clsx(!recurring.isActive && "opacity-45")}>
+                                            <CategoryGlyph category={category ?? { name: recurring.name, color: '#64748B' }} />
+                                        </span>
+                                        <span className={clsx("min-w-0 flex-1", !recurring.isActive && "opacity-55")}>
+                                            {onUpdateRecurring && <span className="sr-only">{t.edit}: </span>}
+                                            <span id={`recurring-title-${recurring.id}`} data-recurring-title className="block truncate text-[15px] font-semibold">{recurring.name}</span>
+                                            <span className="block truncate text-[13px] text-muted">
+                                                {getFrequencyLabel(recurring.frequency, language)} · {category ? localizeCategoryName(category, language) : t.unknown}
+                                            </span>
+                                            <span className={clsx(
+                                                "mt-0.5 flex items-center gap-1 text-[12px]",
+                                                overdue ? "font-semibold text-neg" : dueToday ? "font-semibold text-accent" : "text-faint"
+                                            )}>
+                                                {overdue ? <AlertCircle size={11} aria-hidden="true" /> : <Calendar size={11} aria-hidden="true" />}
+                                                {formatShortDate(recurringStatus.nextDueDate, language)} · {recurringStatus.countdownText}
+                                            </span>
+                                        </span>
+                                        <span className={clsx(
+                                            "shrink-0 text-[15px] font-semibold tabular-nums",
+                                            recurring.type === 'income' && "text-pos",
+                                            !recurring.isActive && "opacity-55",
                                         )}>
-                                            {overdue ? <AlertCircle size={11} aria-hidden="true" /> : <Calendar size={11} aria-hidden="true" />}
-                                            {formatShortDate(recurringStatus.nextDueDate, state.language)} · {recurringStatus.countdownText}
-                                        </p>
-                                    </div>
-                                    <p className={clsx(
-                                        "shrink-0 text-[15px] font-semibold",
-                                        recurring.type === 'income' && "text-pos",
-                                        !recurring.isActive && "opacity-55",
-                                    )}>
-                                        {recurring.type === 'income' ? '+' : '-'}{formatMoney(recurring.amount, recurring.currency, state.language)}
-                                    </p>
-                                    <div className="-mr-1.5 flex shrink-0 items-center">
+                                            {recurring.type === 'income' ? '+' : '\u2212'}{formatMoney(Math.abs(recurring.amount), recurring.currency, language)}
+                                        </span>
+                                    </button>
+                                    <div className="-mr-2 flex shrink-0 items-center">
                                         {onToggleRecurring && (
                                             <button
                                                 type="button"
                                                 onClick={() => onToggleRecurring(recurring.id)}
+                                                data-recurring-action="toggle"
                                                 aria-label={recurring.isActive ? t.pauseRecurring : t.resumeRecurring}
+                                                aria-describedby={`recurring-title-${recurring.id}`}
                                                 title={recurring.isActive ? t.pauseRecurring : t.resumeRecurring}
                                                 className={clsx(
-                                                    "flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-chip",
+                                                    "flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-chip",
                                                     recurring.isActive ? "text-muted" : "text-accent"
                                                 )}
                                             >
-                                                {recurring.isActive ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+                                                {recurring.isActive ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
                                             </button>
                                         )}
                                         {onDeleteRecurring && (
                                             <button
                                                 type="button"
                                                 onClick={() => onDeleteRecurring(recurring.id)}
+                                                data-recurring-action="delete"
                                                 aria-label={t.deleteRecurring}
+                                                aria-describedby={`recurring-title-${recurring.id}`}
                                                 title={t.deleteRecurring}
-                                                className="flex h-9 w-9 items-center justify-center rounded-full text-faint transition-colors hover:bg-chip hover:text-neg"
+                                                className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-chip hover:text-neg"
                                             >
-                                                <Trash2 size={16} aria-hidden="true" />
+                                                <Trash2 size={17} aria-hidden="true" />
                                             </button>
                                         )}
                                     </div>
@@ -309,6 +250,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                 rates={state.rates}
                 language={state.language}
                 embedded
+                selfId={state.userProfile?.id}
             />
         );
     }
@@ -319,6 +261,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                 <CleanupCard state={state} setState={setState} onToast={onToast} />
                 <CategorySettings
                     categories={state.categories}
+                    transactions={state.transactions}
                     onAddCategory={onAddCategory}
                     onUpdateCategory={onUpdateCategory}
                     onDeleteCategory={onDeleteCategory}

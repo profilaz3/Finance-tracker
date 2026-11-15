@@ -70,13 +70,16 @@ const GlassSheetPanel: React.FC<GlassSheetProps> = ({
           </h2>
           {hideTitle && <div className="flex-1" />}
           {headerAction}
+          {/* 36px chip, 44px hit area (the negative margin keeps the header height). */}
           <button
             type="button"
             onClick={onClose}
             aria-label={closeLabel}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+            className="-m-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted"
           >
-            <X size={18} aria-hidden="true" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-chip">
+              <X size={18} aria-hidden="true" />
+            </span>
           </button>
         </div>
         </div>
