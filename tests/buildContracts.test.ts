@@ -378,9 +378,10 @@ describe('build contracts', () => {
     expect(script).toContain('DASHBOARD_SUMMARY_REGRESSION_EMAIL');
     expect(script).toContain('DASHBOARD_SUMMARY_REGRESSION_PASSWORD');
     expect(script).toContain('dashboard-summary-regression-success.png');
-    // Home (the old Dashboard): Net worth tile, Wallets tile in two or more currencies,
-    // People tile net balance, then each person's open balance in People.
-    expect(script).toContain('const netWorthLabel = /^net worth|^neto vrednost/i;');
+    // Home (the old Dashboard), found by its Wallets block (a new account's default layout has no
+    // Net worth block): Wallets in two or more currencies, People tile net balance, then each
+    // person's open balance in People.
+    expect(script).toContain('const walletsHeadingName = /^wallets$|^novčanici$/i;');
     expect(script).toContain("getByRole('heading', { name: /^wallets$|^novčanici$/i, level: 3 })");
     expect(script).toContain('const debtLabel = /owes you|you owe|duguje ti|duguješ/i;');
     expect(script).toContain('Expected people debt cards to show open balances');

@@ -17,8 +17,9 @@ if (!DASHBOARD_SUMMARY_REGRESSION_EMAIL || !DASHBOARD_SUMMARY_REGRESSION_PASSWOR
 const screenshotDir = 'output/playwright';
 const successScreenshotPath = `${screenshotDir}/dashboard-summary-regression-success.png`;
 const failureScreenshotPath = `${screenshotDir}/dashboard-summary-regression-failure.png`;
-// Home (the old Dashboard) tiles and the People view use these labels.
-const netWorthLabel = /^net worth|^neto vrednost/i;
+// Home (the old Dashboard) tiles and the People view use these labels. Home is recognised by its
+// Wallets block, which a new account's default layout has (it has no Net worth block).
+const walletsHeadingName = /^wallets$|^novčanici$/i;
 const debtLabel = /owes you|you owe|duguje ti|duguješ/i;
 const settledLabel = /all settled up|sve izmireno/i;
 // "+€42.50", "-RSD 1,200.00": a balance with its sign in front of the currency.
@@ -40,20 +41,20 @@ const signInIfNeeded = async page => {
 };
 
 const openDashboard = async page => {
-  const netWorthTile = page.getByRole('main').getByRole('button', { name: netWorthLabel });
-  if (!(await isVisible(netWorthTile))) {
+  const walletsHeading = page.getByRole('main').getByRole('heading', { name: walletsHeadingName, level: 3 });
+  if (!(await isVisible(walletsHeading))) {
     await page
       .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
       .getByRole('button', { name: /^home$|^početna$/i })
       .click();
-    await netWorthTile.waitFor({ timeout: 15000 });
+    await walletsHeading.waitFor({ timeout: 15000 });
   }
 };
 
 const waitForDashboardHydration = async page => {
   await page.waitForFunction(() => {
     const text = document.body.innerText;
-    const hasDashboard = /Net worth|Neto vrednost/i.test(text);
+    const hasDashboard = /Wallets|Novčanici/i.test(text);
     const hasWalletAmounts = /\b(?:USD|EUR|RSD)\s*-?\d/.test(text);
 
     return hasDashboard && hasWalletAmounts;
