@@ -120,3 +120,25 @@ export const convertWithRate = (amount: number, rsdPerUnit: number, direction: '
   const value = direction === 'toRsd' ? amount * rsdPerUnit : amount / rsdPerUnit;
   return Math.round(value * 100) / 100;
 };
+
+/** What wallets in one currency hold together, for "Your euros" on the Exchange rates sheet. */
+export interface Holding {
+  /** Sum of the wallets' balances, in the currency. */
+  total: number;
+  wallets: number;
+}
+
+export const holdingIn = (wallets: ReadonlyArray<{ currency: Currency; balance: number }>, currency: Currency): Holding | null => {
+  const matching = wallets.filter(wallet => wallet.currency === currency);
+  const total = Math.round(matching.reduce((sum, wallet) => sum + wallet.balance, 0) * 100) / 100;
+  return matching.length > 0 && total !== 0 ? { total, wallets: matching.length } : null;
+};
+
+/**
+ * A holding valued in dinars at `rsdNow`, and how much that value moved since the list in force at
+ * the range start (`rsdThen`): same amount, different rate. Whole dinars, like the rest of the app.
+ */
+export const holdingWorth = (total: number, rsdNow: number, rsdThen: number | null): { worth: number; change: number | null } => ({
+  worth: Math.round(total * rsdNow),
+  change: rsdThen && rsdThen > 0 ? Math.round(total * rsdNow) - Math.round(total * rsdThen) : null,
+});

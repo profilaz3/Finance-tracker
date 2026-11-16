@@ -21,6 +21,8 @@ import {
 import {
   convertWithRate,
   downsample,
+  holdingIn,
+  holdingWorth,
   mergePoints,
   pointsSince,
   rangeStart,
@@ -220,5 +222,24 @@ describe('range maths', () => {
   it('merges stored and fresh points, fresh winning', () => {
     expect(mergePoints([['2026-11-02', 1], ['2026-11-03', 2]], [['2026-11-03', 3], ['2026-11-04', 4]]))
       .toEqual([['2026-11-02', 1], ['2026-11-03', 3], ['2026-11-04', 4]]);
+  });
+});
+
+describe('holdings', () => {
+  it('sums wallets in the currency and skips an empty total', () => {
+    const wallets = [
+      { currency: 'EUR' as const, balance: 450.25 },
+      { currency: 'RSD' as const, balance: 120000 },
+      { currency: 'EUR' as const, balance: 62.15 },
+    ];
+    expect(holdingIn(wallets, 'EUR')).toEqual({ total: 512.4, wallets: 2 });
+    expect(holdingIn(wallets, 'USD')).toBeNull();
+    expect(holdingIn([{ currency: 'EUR', balance: 10 }, { currency: 'EUR', balance: -10 }], 'EUR')).toBeNull();
+  });
+
+  it('values a holding in whole dinars and the move since the range start', () => {
+    expect(holdingWorth(512.4, 117.1834, 117.0512)).toEqual({ worth: 60045, change: 68 });
+    expect(holdingWorth(100, 117.2, 117.4)).toEqual({ worth: 11720, change: -20 });
+    expect(holdingWorth(100, 117.2, null)).toEqual({ worth: 11720, change: null });
   });
 });

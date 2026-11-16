@@ -48,7 +48,7 @@ export const calculateTotalIncome = (state: AppState): number => {
   );
 };
 
-export const calculateAccountBalance = (state: AppState, account: Account): number => {
+export const calculateAccountBalance = (state: Pick<AppState, 'transactions' | 'rates'>, account: Account): number => {
   const transactionSum = Array.isArray(state.transactions)
     ? state.transactions
         .filter(transaction => transaction.accountId === account.id)
