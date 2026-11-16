@@ -17,22 +17,7 @@ if (!SHARE_REGRESSION_EMAIL || !SHARE_REGRESSION_PASSWORD) {
   process.exit(1);
 }
 
-const formatInviteName = (email) => {
-  const [localPart] = email.split('@');
-  const cleaned = localPart.replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-  if (!cleaned) {
-    return 'Guest';
-  }
-
-  return cleaned
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-};
-
 const screenshotDir = 'output/playwright';
-const expectedTooltip = `Invited guest: ${formatInviteName(SHARE_REGRESSION_INVITE)}`;
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const shareDialogName = /^share event$|^podeli događaj$/i;
@@ -89,22 +74,25 @@ const openShareDialog = async (page) => {
   return dialog;
 };
 
+const stopSharingButton = dialog => dialog.getByRole('button', {
+  name: new RegExp(`^(?:stop sharing with|prestani da deliš sa) ${escapeRegExp(SHARE_REGRESSION_INVITE)}$`, 'i'),
+});
+
 const shareEvent = async (page) => {
   const dialog = await openShareDialog(page);
   await dialog.getByRole('textbox', { name: /email address|imejl adresa/i }).fill(SHARE_REGRESSION_INVITE);
   await dialog.getByRole('button', { name: /^share$|^podeli$/i }).click();
   // Success is confirmed inside the sheet ("Shared with <email>. They'll see ...").
   await dialog.getByRole('status').filter({ hasText: SHARE_REGRESSION_INVITE }).waitFor({ timeout: 15000 });
-  await page.getByTitle(expectedTooltip).waitFor({ timeout: 15000 });
+  // The guest is listed in the sheet (the event screen no longer shows guest avatars).
+  await stopSharingButton(dialog).waitFor({ timeout: 15000 });
   return dialog;
 };
 
 // Cleanup: stop sharing with the throwaway invite so runs do not pile guests onto the event.
 const unshareInvite = async (page, dialog) => {
-  await dialog
-    .getByRole('button', { name: new RegExp(`^(?:stop sharing with|prestani da deliš sa) ${escapeRegExp(SHARE_REGRESSION_INVITE)}$`, 'i') })
-    .click();
-  await page.getByTitle(expectedTooltip).waitFor({ state: 'detached', timeout: 15000 });
+  await stopSharingButton(dialog).click();
+  await stopSharingButton(dialog).waitFor({ state: 'detached', timeout: 15000 });
   await dialog.getByRole('button', { name: /^close$|^zatvori$/i }).click();
   await dialog.waitFor({ state: 'detached', timeout: 10000 });
 };

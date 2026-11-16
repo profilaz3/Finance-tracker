@@ -38,12 +38,12 @@ const deleteLabel = /^delete$|^obrisi$|^obriši$/i;
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const openTransactions = async (page) => {
-  const heading = page.getByRole('heading', { name: /^transactions$|^transakcije$/i }).first();
+  const heading = page.getByRole('heading', { name: /^(activity|aktivnost|transactions|transakcije)$/i }).first();
   if (await isVisible(heading)) {
     return;
   }
 
-  // Transactions are the List tab of Activity.
+  // Entries are listed on the Activity screen.
   await page
     .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
     .getByRole('button', { name: /^activity$|^aktivnost$/i })
@@ -74,7 +74,8 @@ const openAddTransactionModal = async (page) => {
 };
 
 const saveTransaction = async (page) => {
-  await page.getByRole('button', { name: /^save$|^sacuvaj$|^sačuvaj$/i }).click();
+  // "Save expense" on a new entry, "Save changes" on an edit.
+  await page.getByRole('button', { name: /^save (expense|changes)$|^sa[cč]uvaj (trošak|izmene)$/i }).click();
   await page.waitForLoadState('networkidle');
 };
 
@@ -88,7 +89,7 @@ const fillTransactionForm = async (page, { amount, note }) => {
 };
 
 const searchTransactions = async (page, value) => {
-  const searchInput = page.getByPlaceholder(/search transactions|pretrazi transakcije/i);
+  const searchInput = page.getByPlaceholder(/^(search|pretraga)$|search transactions|pretra[zž]i transakcije/i).first();
   await searchInput.fill(value);
 };
 
@@ -107,18 +108,21 @@ const createTransaction = async (page) => {
   await page.getByText(transactionLabel, { exact: false }).first().waitFor({ timeout: 15000 });
 };
 
+// Entry details: a pop-up card, or on wide windows the Activity side pane (a region named by the entry).
+const getDetails = (page, name) => page.getByRole('dialog', { name }).or(page.getByRole('region', { name }));
+
 const editTransaction = async (page) => {
   await page.waitForTimeout(1000);
   // Tapping a row opens the entry's details; its Edit button opens the form on top.
   await getTransactionRowButton(page, transactionLabel).first().click();
-  const details = page.getByRole('dialog', { name: transactionLabel });
+  const details = getDetails(page, transactionLabel);
   await details.waitFor({ timeout: 15000 });
   await details.getByRole('button', { name: /^edit$|^izmeni$/i }).click();
   await page.getByRole('heading', { name: /^edit expense$|^izmeni trošak$/i }).first().waitFor({ timeout: 15000 });
   await fillTransactionForm(page, { amount: 222, note: updatedTransactionLabel });
   await saveTransaction(page);
-  // The details sheet stays open and shows the saved entry.
-  const updatedDetails = page.getByRole('dialog', { name: updatedTransactionLabel });
+  // The details card (or pane) stays open and shows the saved entry.
+  const updatedDetails = getDetails(page, updatedTransactionLabel);
   await updatedDetails.waitFor({ timeout: 15000 });
   // Escape goes to the form until its exit animation has finished.
   await page.getByRole('heading', { name: /^edit expense$|^izmeni trošak$/i }).waitFor({ state: 'detached', timeout: 15000 });
@@ -142,15 +146,35 @@ const deleteTransaction = async (page) => {
   }
 };
 
+// A failed run deletes what it created (either name) so test entries do not pile up in the account.
+const removeLeftovers = async (page) => {
+  for (const label of [updatedTransactionLabel, transactionLabel]) {
+    try {
+      await page.keyboard.press('Escape').catch(() => {});
+      await searchTransactions(page, label);
+      const row = getTransactionRow(page, label).first();
+      if (!(await row.isVisible({ timeout: 3000 }).catch(() => false))) continue;
+      await row.getByRole('button', { name: /^more actions$|^više opcija$/i }).click({ timeout: 5000 });
+      await page.getByRole('menu', { name: /^more actions$|^više opcija$/i }).getByRole('menuitem', { name: deleteLabel }).click({ timeout: 5000 });
+      await page.waitForTimeout(800);
+      console.error(`Removed the test entry "${label}" left by the failed run.`);
+    } catch (cleanupError) {
+      console.error(`Could not remove the test entry "${label}": ${cleanupError.message.split('\n')[0]}`);
+    }
+  }
+};
+
 const browser = await chromium.launch({ headless: !TRANSACTION_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
 await guardBackend(context);
 const page = await context.newPage();
 
 // Name the URL behind HTTP errors so console failures are traceable.
-page.on('response', (response) => {
+page.on('response', async (response) => {
   if (response.status() >= 400 && !isEdgeFunctionResponse(response)) {
-    console.error(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
+    // The body says why (an expired or not-yet-valid token reads differently from a missing grant).
+    const body = (await response.text().catch(() => '')).slice(0, 200);
+    console.error(`HTTP ${response.status()} ${response.request().method()} ${response.url()} ${body}`);
   }
 });
 
@@ -171,6 +195,7 @@ try {
   console.log('Transaction CRUD regression passed.');
 } catch (error) {
   await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
+  await removeLeftovers(page);
   throw error;
 } finally {
   await context.close();

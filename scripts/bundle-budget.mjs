@@ -21,8 +21,9 @@ const budgets = [
   { label: 'pdf-export', prefix: 'pdfExport-', maxBytes: 8 * 1024, aggregate: false },
   // Raised from 16 KB: teams and avatar storage calls.
   { label: 'supabase-service', prefix: 'supabaseService-', maxBytes: 18 * 1024, aggregate: false },
-  // Raised from 48 KB for the screen headers redesign (filters, calendar and menu icons).
-  { label: 'icons', prefix: 'icons-', maxBytes: 49 * 1024, aggregate: false },
+  // Raised from 48 KB for the screen headers redesign (filters, calendar and menu icons), and from
+  // 49 KB for the desktop layouts (it sat at 48.92 KB, so any new icon failed the build).
+  { label: 'icons', prefix: 'icons-', maxBytes: 50 * 1024, aggregate: false },
   { label: 'motion', prefix: 'motion-', maxBytes: 128 * 1024, aggregate: false },
   { label: 'motion-max-features', prefix: 'motionMaxFeatures-', maxBytes: 56 * 1024, aggregate: false },
   { label: 'virtuoso', prefix: 'virtuoso-', maxBytes: 64 * 1024, aggregate: false },

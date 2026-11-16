@@ -34,21 +34,21 @@ const signInIfNeeded = async (page) => {
 };
 
 const openAnalytics = async (page) => {
-  const analyticsHeading = page.getByRole('heading', { name: /^analytics$|^analitika$/i, level: 1 });
+  // Insights opens on its Numbers side; the Ask AI side has the same heading.
+  const numbersTab = page.getByRole('radio', { name: /^numbers$|^brojke$/i });
 
-  if (!(await isVisible(analyticsHeading))) {
-    // Analytics is the default tab of Insights.
+  if (!(await isVisible(numbersTab))) {
     await page
       .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
       .getByRole('button', { name: /^insights$|^uvidi$/i })
       .click();
-    const analyticsTab = page.getByRole('radio', { name: /^analytics$|^analitika$/i });
-    await analyticsTab.waitFor({ timeout: 15000 });
-    if ((await analyticsTab.getAttribute('aria-checked')) !== 'true') {
-      await analyticsTab.click();
-    }
-    await analyticsHeading.waitFor({ timeout: 15000 });
+    await numbersTab.waitFor({ timeout: 15000 });
   }
+  if ((await numbersTab.getAttribute('aria-checked')) !== 'true') {
+    await numbersTab.click();
+  }
+  await page.getByRole('heading', { name: /^insights$|^uvidi$/i, level: 1 }).waitFor({ timeout: 15000 });
+  await page.getByText(/^spent in |^spent this |^potrošeno /i).first().waitFor({ timeout: 15000 });
 
   await page.waitForTimeout(400);
 };

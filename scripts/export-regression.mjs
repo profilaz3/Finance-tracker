@@ -36,10 +36,9 @@ const signInIfNeeded = async (page) => {
 };
 
 const openTransactions = async (page) => {
-  const transactionsHeading = page.getByRole('heading', { name: /^transactions$|^transakcije$/i }).first();
+  const transactionsHeading = page.getByRole('heading', { name: /^activity$|^aktivnost$/i }).first();
 
   if (!(await isVisible(transactionsHeading))) {
-    // Transactions are the List tab of Activity.
     await page
       .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
       .getByRole('button', { name: /^activity$|^aktivnost$/i })
@@ -48,8 +47,14 @@ const openTransactions = async (page) => {
   }
 };
 
+// Export and the printable report sit in the Activity header's ⋯ menu (rows have their own ⋯ too).
+const openHeaderMenuItem = async (page, name) => {
+  await page.locator('section.screen-hero').getByRole('button', { name: /^more actions$|^više opcija$/i }).first().click();
+  await page.getByRole('menuitem', { name }).click();
+};
+
 const openExportModal = async (page) => {
-  await page.getByRole('button', { name: /open export options|otvori opcije izvoza/i }).click();
+  await openHeaderMenuItem(page, /^export$|^izvezi$/i);
   await page.getByRole('heading', { name: /export data|izvoz podataka/i }).waitFor({ timeout: 10000 });
 };
 
@@ -138,7 +143,7 @@ const verifyPrintableReport = async (page) => {
     };
   });
 
-  await page.getByRole('button', { name: /open printable report|otvori stampani izvestaj/i }).click();
+  await openHeaderMenuItem(page, /^printable report$|^izveštaj za štampu$/i);
   await page.waitForFunction(() => window.__exportRegression?.printCalled === true, null, { timeout: 15000 });
 
   const printState = await page.evaluate(() => window.__exportRegression);

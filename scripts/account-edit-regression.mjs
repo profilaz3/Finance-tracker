@@ -22,12 +22,15 @@ const isVisible = async (locator) => locator.isVisible().catch(() => false);
 
 const parseDisplayedBalance = (text) => {
   const normalized = text.replace(/\s/g, '');
-  const match = normalized.match(/-?\d[\d,.]*/);
+  const match = normalized.match(/\d[\d,.]*/);
   if (!match) {
     throw new Error(`Could not parse displayed balance from "${text}".`);
   }
 
-  return Number.parseFloat(match[0].replace(/,/g, ''));
+  // The sign can sit before the currency ("-RSD 100,849.45"), so look for it anywhere before the digits.
+  const negative = /[-\u2212]/.test(normalized.slice(0, match.index));
+  const value = Number.parseFloat(match[0].replace(/,/g, ''));
+  return negative ? -value : value;
 };
 
 const signInIfNeeded = async (page) => {
@@ -133,6 +136,33 @@ const page = await context.newPage();
 
 const consoleIssues = trackConsoleIssues(page);
 
+// What the wallet was before the run: a failed run puts it back so the account is not left edited.
+let restore = null;
+const restoreWallet = async (page) => {
+  if (!restore) return;
+  try {
+    await page.reload({ waitUntil: 'networkidle' });
+    await openSettingsWallets(page);
+    const row = getAccountRowById(page, restore.accountId);
+    await row.waitFor({ timeout: 15000 });
+    const nameInput = getRowNameInput(row);
+    if ((await nameInput.inputValue()) !== restore.name) {
+      await nameInput.fill(restore.name);
+      await nameInput.press('Tab');
+      await waitForSyncWindow();
+    }
+    await waitForBalanceToSettle(row);
+    const shown = parseDisplayedBalance((await getRowBalanceDisplay(row).textContent()) ?? '');
+    if (shown !== Number(restore.balance.toFixed(2))) {
+      await setDisplayedBalance(row, restore.balance);
+      await waitForSyncWindow();
+    }
+    console.error(`Put the wallet back to "${restore.name}" with ${restore.balance.toFixed(2)} after the failed run.`);
+  } catch (restoreError) {
+    console.error(`Could not put the wallet back: ${restoreError.message.split('\n')[0]}`);
+  }
+};
+
 try {
   await mkdir(screenshotDir, { recursive: true });
   await page.goto(ACCOUNT_EDIT_REGRESSION_URL, { waitUntil: 'networkidle' });
@@ -151,6 +181,7 @@ try {
   const originalName = await rowNameInput.inputValue();
   const originalBalanceText = await waitForBalanceToSettle(row);
   const originalBalance = parseDisplayedBalance(originalBalanceText);
+  restore = { accountId, name: originalName, balance: originalBalance };
 
   const tempName = `${originalName} QA`;
   const tempBalance = originalBalance + 7.25;
@@ -192,6 +223,7 @@ try {
   if (refreshedBalance !== Number(originalBalance.toFixed(2))) {
     throw new Error(`Account balance did not revert cleanly. Expected ${originalBalance.toFixed(2)}, got ${refreshedBalance}.`);
   }
+  restore = null;
 
   assertNoConsoleIssues(consoleIssues);
 
@@ -199,6 +231,7 @@ try {
   console.log('Account edit regression passed.');
 } catch (error) {
   await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
+  await restoreWallet(page);
   throw error;
 } finally {
   await context.close();
