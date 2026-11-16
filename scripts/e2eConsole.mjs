@@ -4,9 +4,20 @@
  * Edge functions are not served by the local Supabase stack, so calls to
  * `/functions/v1/*` (AI, NBS rates and similar) come back 503 or fail to load,
  * and Chromium logs a "Failed to load resource" error for each. Those, and only
- * those, are expected. Every other console error or warning and every uncaught
+ * those, are expected. A REST request refused with 401 that the app then retries
+ * successfully (supabaseService.fetchAllRows, right after sign-in) is dropped once
+ * the retry succeeds. Every other console error or warning and every uncaught
  * page error is collected as an issue.
  */
+
+const REST_PATH = '/rest/v1/';
+const isRestUrl = (url) => {
+  try {
+    return new URL(url).pathname.startsWith(REST_PATH);
+  } catch {
+    return false;
+  }
+};
 
 const EDGE_FUNCTION_PATH = '/functions/v1/';
 const EXPECTED_EDGE_FAILURE =
@@ -32,13 +43,25 @@ export const isExpectedEdgeFunctionFailure = (message) =>
  */
 export function trackConsoleIssues(page) {
   const issues = [];
+  // REST URLs refused with 401, and the issue each one logged, until a retry of the same URL succeeds.
+  const refused = new Map();
 
   page.on('console', (message) => {
     const type = message.type();
     if (type !== 'error' && type !== 'warning') return;
     if (isExpectedEdgeFunctionFailure(message)) return;
     const source = message.location()?.url;
-    issues.push(`${type}: ${message.text()}${source ? ` (${source})` : ''}`);
+    const issue = `${type}: ${message.text()}${source ? ` (${source})` : ''}`;
+    if (type === 'error' && source && isRestUrl(source) && /status of 401\b/.test(message.text())) refused.set(source, issue);
+    issues.push(issue);
+  });
+
+  page.on('response', (response) => {
+    const issue = refused.get(response.url());
+    if (!issue || response.status() >= 400) return;
+    refused.delete(response.url());
+    const index = issues.indexOf(issue);
+    if (index >= 0) issues.splice(index, 1);
   });
 
   page.on('pageerror', (error) => {

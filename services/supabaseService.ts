@@ -260,24 +260,31 @@ export class SupabaseService {
         const rows: T[] = [];
         let total: number | null = null;
 
-        for (let from = 0; ; from += pageSize) {
+        const page = (from: number) => {
             let query = this.client
                 .from(table)
                 .select('*', from === 0 ? { count: 'exact' } : undefined);
             if (eq) query = query.eq(eq.column, eq.value);
+            return query.order('id', { ascending: true }).range(from, from + pageSize - 1);
+        };
 
-            const { data, error, status, count } = await query
-                .order('id', { ascending: true })
-                .range(from, from + pageSize - 1);
+        for (let from = 0; ; from += pageSize) {
+            let { data, error, status, count } = await page(from);
+            // Right after sign-in a request can go out before the session is stored and come back
+            // 401 while its siblings succeed: wait for the session and ask once more.
+            if (error && status === 401) {
+                await this.client.auth.getSession();
+                ({ data, error, status, count } = await page(from));
+            }
 
             if (error) return { data: null, error: toSyncError(error, status) };
             if (from === 0 && typeof count === 'number') total = count;
 
-            const page = (data ?? []) as T[];
-            rows.push(...page);
+            const received = (data ?? []) as T[];
+            rows.push(...received);
 
-            if (page.length === 0) break;
-            if (total !== null ? rows.length >= total : page.length < pageSize) break;
+            if (received.length === 0) break;
+            if (total !== null ? rows.length >= total : received.length < pageSize) break;
         }
 
         return { data: rows, error: null };
