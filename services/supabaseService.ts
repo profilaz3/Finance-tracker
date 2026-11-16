@@ -383,8 +383,10 @@ export class SupabaseService {
             currency: transaction.currency,
             category_id: transaction.categoryId,
             account_id: transaction.accountId,
-            person_id: transaction.personId,
-            subcategory: transaction.subcategory,
+            // null, not undefined: an undefined key is left out, so a cleared person or subcategory
+            // (a bulk category change, an entry turned into a transfer) would stay on the server.
+            person_id: transaction.personId ?? null,
+            subcategory: transaction.subcategory ?? null,
             note: transaction.note,
             type: transaction.type,
             receipt_data: transaction.receiptData,
