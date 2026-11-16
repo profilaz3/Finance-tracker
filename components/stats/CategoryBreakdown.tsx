@@ -20,6 +20,7 @@ import {
 import { DonutChart, HorizontalBarChart } from './lightCharts';
 import { formatPercent } from '../../utils/locale';
 import { CategoryGlyph } from '../ui/CategoryGlyph';
+import { localizeCategoryName } from '../../utils/systemText';
 import { money } from '../home/parts';
 
 interface CategoryBreakdownProps {
@@ -50,6 +51,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
   onCategoryTimeFrameChange,
 }) => {
   const t = TRANSLATIONS[language];
+  const categoryLabel = (category?: Category) => (category ? localizeCategoryName(category, language) : t.unknown);
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
 
   const categoryData = useMemo(() => {
@@ -66,12 +68,12 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
     return Object.entries(totals)
       .map(([id, value]) => ({
         id,
-        name: categories.find((category) => category.id === id)?.name || t.unknown,
+        name: categoryLabel(categories.find((category) => category.id === id)),
         value,
         color: categories.find((category) => category.id === id)?.color || 'rgb(var(--md-sys-color-on-surface-variant) / 0.6)',
       }))
       .sort((left, right) => right.value - left.value);
-  }, [transactions, categoryTimeFrame, baseCurrency, rates, categories, now]);
+  }, [transactions, categoryTimeFrame, baseCurrency, rates, categories, now, language]);
 
   const categoryTotal = useMemo(() => categoryData.reduce((sum, item) => sum + item.value, 0), [categoryData]);
 
@@ -120,14 +122,14 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
 
         return {
           id,
-          name: category?.name || t.unknown,
+          name: categoryLabel(category),
           value: stdDev,
           color: category?.color || chartColors.axisSoft,
         };
       })
       .filter((item): item is VolatilityDataItem => item !== null)
       .sort((left, right) => right.value - left.value);
-  }, [transactions, categories, baseCurrency, rates, chartColors.axisSoft]);
+  }, [transactions, categories, baseCurrency, rates, chartColors.axisSoft, language]);
 
   return (
     <>
@@ -148,10 +150,14 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
           <DonutChart
             rows={categoryData.map((item) => ({ label: item.name, value: item.value, color: item.color }))}
+            valueFormatter={(value) => money(value, baseCurrency, language)}
             centerLabel={
               categoryData.length > 0 ? (
-                <div className="text-center">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t.total}</p>
+                <div className="flex flex-col items-center text-center">
+                  {categoryData.length === 1 && (
+                    <CategoryGlyph category={categoryById.get(categoryData[0].id) ?? { name: categoryData[0].name, color: categoryData[0].color }} size={32} className="mb-1" />
+                  )}
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{categoryData.length === 1 ? categoryData[0].name : t.total}</p>
                   <p className="text-[18px] font-bold tabular-nums tracking-[-0.3px] sm:text-xl">
                     {money(categoryTotal, baseCurrency, language)}
                   </p>
@@ -198,7 +204,7 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
         transition={{ delay: 0.3 }}
         className={CHART_CARD}
       >
-        <ChartHead title={t.categoryVolatility} />
+        <ChartHead title={t.categoryVolatility} subtitle={t.categoryVolatilityHint} />
         {volatilityData.length > 0 ? (
           <HorizontalBarChart
             rows={volatilityData.map((item) => ({
@@ -239,6 +245,7 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
   onCategoryTimeFrameChange,
 }) => {
   const t = TRANSLATIONS[language];
+  const categoryLabel = (category?: Category) => (category ? localizeCategoryName(category, language) : t.unknown);
 
   const paidForOthersData = useMemo(() => {
     const cutoff = getCutoffDate(categoryTimeFrame, now);
@@ -265,14 +272,14 @@ export const PaidForOthers: React.FC<PaidForOthersProps> = ({
     const data = Object.entries(totals)
       .map(([id, value]) => ({
         id,
-        name: categories.find((category) => category.id === id)?.name || t.unknown,
+        name: categoryLabel(categories.find((category) => category.id === id)),
         value,
         color: categories.find((category) => category.id === id)?.color || 'rgb(var(--md-sys-color-on-surface-variant) / 0.6)',
       }))
       .sort((left, right) => right.value - left.value);
 
     return { data, total: totalAdvanced };
-  }, [transactions, categoryTimeFrame, baseCurrency, rates, categories, now]);
+  }, [transactions, categoryTimeFrame, baseCurrency, rates, categories, now, language]);
 
   if (paidForOthersData.data.length === 0) {
     return null;

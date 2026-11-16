@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, Minus, Plus, User } from 'lucide-react';
-import type { Account, AppState, Event, HomeBlock, HomeBlockType } from '../../types';
+import { CalendarCheck, ChevronLeft, ChevronRight, Minus, Plus, User } from 'lucide-react';
+import type { Account, AppState, Event, HomeBlock, HomeBlockType, HomeHeader } from '../../types';
 import { isSameMonth, monthKeyOf, shiftMonth, type MonthKey } from '../../domain/home';
 import { addBlock, moveBlock, removeBlock, resolveHomeLayout, updateBlock } from '../../domain/homeLayout';
+import { blocksShownInHeader, resolveHomeHeader, shownStats } from '../../domain/homeHeader';
 import { getIntlLocale } from '../../utils/locale';
 import { vibrate, HAPTIC_PATTERNS } from '../../utils/haptics';
-import { lgStyle } from '../ui/LiquidGlassDefs';
+import { useBackLayer } from '../../hooks/useBackLayer';
 import { BlockContent, HAS_INNER_ACTIONS, tileAction } from './blocks';
 import { BlockGallerySheet } from './BlockGallerySheet';
 import { BlockSettingsSheet } from './BlockSettingsSheet';
+import { HeaderSettingsSheet } from './HeaderSettingsSheet';
+import { HomeHero, activeFace, headerContext } from './HomeHero';
+import { HEADER_STRINGS } from './headerStrings';
 import { fill, initials } from './parts';
 import { useHomeData, type HomeActions } from './useHomeData';
 
@@ -22,9 +26,12 @@ interface HomeViewProps {
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   onLayoutChange: (layout: HomeBlock[]) => void;
+  onHeaderChange: (header: HomeHeader) => void;
   onOpenProfile: () => void;
   /** The team workspace on screen; absent for personal. */
   activeTeam?: { name: string; color?: string };
+  /** Toast with an action (used for "Block removed · Undo"). */
+  onToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info', action?: { label: string; onClick: () => void }) => void;
 }
 
 const LONG_PRESS_MS = 350;
@@ -132,17 +139,35 @@ export const HomeView: React.FC<HomeViewProps> = ({
   editing,
   onEditingChange,
   onLayoutChange,
+  onHeaderChange,
   onOpenProfile,
   activeTeam,
+  onToast,
 }) => {
   const [month, setMonth] = useState<MonthKey>(() => monthKeyOf(new Date()));
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [headerSheetOpen, setHeaderSheetOpen] = useState(false);
+  const header = resolveHomeHeader(state.homeHeader);
   const layout = resolveHomeLayout(state.homeLayout);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  // Style and size of removed blocks, so adding one back (or Undo) keeps how it looked.
+  const removedLooksRef = useRef(new Map<HomeBlockType, Pick<HomeBlock, 'style' | 'size'>>());
   const data = useHomeData({ state, month, netWorth, getAccountBalance, activeEvent });
   const { t, language } = data;
   const isCurrentMonth = isSameMonth(month, monthKeyOf(new Date()));
   const drag = useBlockDrag(layout, onLayoutChange, editing);
+  // What the header shows is not repeated below it. While customizing, those blocks stay (dimmed
+  // and tagged) so they can still be moved or removed.
+  const context = headerContext(data);
+  const inHeader = new Set(blocksShownInHeader(activeFace(header, data), shownStats(header.stats, context), context.walletIds));
+  const shownLayout = editing ? layout : layout.filter(block => !inHeader.has(block.type));
+  // An odd number of small blocks leaves one beside an empty cell (the wide blocks after it need
+  // two columns), so outside customizing the last small block takes the full pair.
+  const smallBlocks = shownLayout.filter(block => block.size === 's');
+  const widenedId = !editing && smallBlocks.length % 2 === 1 ? smallBlocks[smallBlocks.length - 1].id : null;
+  const h = HEADER_STRINGS[language];
 
   const monthName = new Intl.DateTimeFormat(getIntlLocale(language), {
     month: 'long',
@@ -152,8 +177,37 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const settingsIndex = layout.findIndex(block => block.id === settingsId);
   const settingsBlock = settingsIndex >= 0 ? layout[settingsIndex] : null;
 
+  // Both sheets sit above Customize home in the back history, and close when editing ends.
+  useBackLayer('home-block-gallery', galleryOpen, () => setGalleryOpen(false));
+  useBackLayer('home-block-settings', settingsBlock !== null, () => setSettingsId(null));
+  useBackLayer('home-header-settings', headerSheetOpen, () => setHeaderSheetOpen(false));
+  useEffect(() => {
+    if (editing) return;
+    setGalleryOpen(false);
+    setSettingsId(null);
+    setHeaderSheetOpen(false);
+  }, [editing]);
+
+  const handleRemove = (block: HomeBlock) => {
+    const index = layout.findIndex(entry => entry.id === block.id);
+    removedLooksRef.current.set(block.type, { style: block.style, size: block.size });
+    onLayoutChange(removeBlock(layout, block.id));
+    onToast?.(fill(t.blockRemoved, { name: t[`block_${block.type}` as const] }), 'info', {
+      label: t.undo,
+      onClick: () => {
+        const current = layoutRef.current;
+        if (current.some(entry => entry.id === block.id)) return;
+        const next = current.slice();
+        next.splice(Math.min(Math.max(index, 0), next.length), 0, block);
+        onLayoutChange(next);
+      },
+    });
+  };
+
   const handleAdd = (type: HomeBlockType) => {
-    const result = addBlock(layout, type);
+    const added = addBlock(layout, type);
+    const look = removedLooksRef.current.get(type);
+    const result = look ? { block: { ...added.block, ...look }, layout: updateBlock(added.layout, added.block.id, look) } : added;
     onLayoutChange(result.layout);
     setGalleryOpen(false);
     onEditingChange(true);
@@ -164,105 +218,115 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const profile = state.userProfile;
 
-  return (
-    <div className="mx-auto max-w-[920px] pb-6">
-      <header className="flex h-[60px] items-center gap-2 px-2">
-        {editing ? (
-          <>
+  // Drawn on the header colour: translucent white controls, white text.
+  const onColour = 'bg-white/[0.14] ring-1 ring-inset ring-white/[0.18] backdrop-blur-md';
+  const topBar = (
+    <div className="flex h-[60px] items-center gap-2 px-3 md:px-4">
+      {editing ? (
+        <>
+          <span className="min-w-0 truncate pl-1 text-[17px] font-bold tracking-[-0.2px]">{t.customizeHome}</span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => onEditingChange(false)}
+            className="flex h-11 shrink-0 items-center rounded-full bg-white px-5 text-[15px] font-semibold text-[#14171A]"
+          >
+            {t.done}
+          </button>
+        </>
+      ) : (
+        <>
+          <div className={clsx(onColour, 'flex h-11 shrink-0 items-center rounded-full')}>
             <button
               type="button"
-              onClick={() => setGalleryOpen(true)}
-              style={lgStyle('lg-pill')}
-              className="glass flex h-11 items-center gap-1.5 rounded-full pl-3.5 pr-4 text-[15px] font-semibold"
+              onClick={() => setMonth(prev => shiftMonth(prev, -1))}
+              aria-label={t.prevMonth}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white/75"
             >
-              <Plus size={18} aria-hidden="true" />
-              {t.addBlock}
+              <ChevronLeft size={18} aria-hidden="true" />
             </button>
-            <div className="flex-1" />
+            <span aria-live="polite" className="min-w-[64px] whitespace-nowrap text-center text-[15px] font-semibold capitalize">
+              {monthName}
+            </span>
+            {/* Home has nothing to show for months that have not started. */}
             <button
               type="button"
-              onClick={() => onEditingChange(false)}
-              className="glass-accent flex h-11 items-center rounded-full px-5 text-[15px] font-semibold"
+              onClick={() => setMonth(prev => shiftMonth(prev, 1))}
+              disabled={isCurrentMonth}
+              aria-label={t.nextMonth}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white/75 disabled:opacity-30"
             >
-              {t.done}
+              <ChevronRight size={18} aria-hidden="true" />
             </button>
-          </>
-        ) : (
-          <>
-            <div style={lgStyle('lg-pill')} className="glass flex h-11 items-center rounded-full px-1">
-              <button
-                type="button"
-                onClick={() => setMonth(prev => shiftMonth(prev, -1))}
-                aria-label={t.prevMonth}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-muted"
-              >
-                <ChevronLeft size={18} aria-hidden="true" />
-              </button>
-              <span aria-live="polite" className="min-w-[64px] px-0.5 text-center text-[15px] font-semibold capitalize">
-                {monthName}
-              </span>
-              <button
-                type="button"
-                onClick={() => setMonth(prev => shiftMonth(prev, 1))}
-                aria-label={t.nextMonth}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-muted"
-              >
-                <ChevronRight size={18} aria-hidden="true" />
-              </button>
-            </div>
-            {!isCurrentMonth && (
-              <button
-                type="button"
-                onClick={() => setMonth(monthKeyOf(new Date()))}
-                className="h-9 rounded-full bg-accent-soft px-3 text-[13px] font-semibold text-accent"
-              >
-                {t.backToThisMonth}
-              </button>
-            )}
-            <div className="flex-1" />
-            {activeTeam && (
-              <button
-                type="button"
-                onClick={onOpenProfile}
-                aria-label={`${t.workspace}: ${activeTeam.name}`}
-                title={t.workspaceSwitch}
-                className="glass flex h-11 min-w-0 max-w-[40vw] items-center gap-2 rounded-full pl-1.5 pr-3.5"
-              >
-                <span
-                  aria-hidden="true"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white"
-                  style={{ background: activeTeam.color || '#0891B2' }}
-                >
-                  {activeTeam.name.trim().charAt(0).toUpperCase()}
-                </span>
-                <span className="truncate text-[14px] font-semibold">{activeTeam.name}</span>
-              </button>
-            )}
+          </div>
+          {!isCurrentMonth && (
+            <button
+              type="button"
+              onClick={() => setMonth(monthKeyOf(new Date()))}
+              aria-label={t.backToThisMonth}
+              title={t.backToThisMonth}
+              className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 text-[13px] font-semibold text-[#14171A]"
+            >
+              <CalendarCheck size={17} aria-hidden="true" />
+              <span className="hidden min-[480px]:inline">{t.backToThisMonth}</span>
+            </button>
+          )}
+          <div className="flex-1" />
+          {activeTeam && (
             <button
               type="button"
               onClick={onOpenProfile}
-              aria-label={t.profileMenu}
-              aria-haspopup="dialog"
-              style={lgStyle('lg-round')}
-              className="glass flex h-11 w-11 items-center justify-center rounded-full p-[3px]"
+              aria-label={`${t.workspace}: ${activeTeam.name}`}
+              title={t.workspaceSwitch}
+              className={clsx(onColour, 'flex h-11 min-w-0 max-w-[40vw] items-center gap-2 rounded-full pl-1.5 pr-3.5')}
             >
-              {profile ? (
-                <span
-                  className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-[14px] font-bold text-white"
-                  style={{ background: profile.color }}
-                >
-                  {/^(data:|http)/.test(profile.avatar ?? '')
-                    ? <img src={profile.avatar} alt="" className="h-full w-full object-cover" />
-                    : profile.avatar || initials(profile.name)}
-                </span>
-              ) : (
-                <User size={20} aria-hidden="true" />
-              )}
+              <span
+                aria-hidden="true"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white ring-1 ring-white/40"
+                style={{ background: activeTeam.color || '#0891B2' }}
+              >
+                {activeTeam.name.trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="truncate text-[14px] font-semibold">{activeTeam.name}</span>
             </button>
-          </>
-        )}
-      </header>
+          )}
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            aria-label={t.profileMenu}
+            aria-haspopup="dialog"
+            className={clsx(onColour, 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full p-[3px]')}
+          >
+            {profile ? (
+              <span
+                className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-[14px] font-bold text-white"
+                style={{ background: profile.color }}
+              >
+                {/^(data:|http)/.test(profile.avatar ?? '')
+                  ? <img src={profile.avatar} alt="" className="h-full w-full object-cover" />
+                  : profile.avatar || initials(profile.name)}
+              </span>
+            ) : (
+              <User size={20} aria-hidden="true" />
+            )}
+          </button>
+        </>
+      )}
+    </div>
+  );
 
+  return (
+    <div className="mx-auto max-w-[920px] pb-6">
+      <HomeHero
+        data={data}
+        header={header}
+        actions={actions}
+        editing={editing}
+        topBar={topBar}
+        onChangeHeader={() => setHeaderSheetOpen(true)}
+      />
+
+      <div className="screen-sheet">
       {editing && (
         <p className="mx-auto mb-3 mt-1 w-fit rounded-full bg-chip px-3.5 py-1.5 text-center text-[13px] font-medium text-muted">
           {t.editHint}
@@ -288,10 +352,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {...drag.gridHandlers}
           {...(editing ? { 'data-no-swipe': '' } : {})}
           onContextMenu={editing ? event => event.preventDefault() : undefined}
-          className="grid grid-flow-row-dense grid-cols-2 gap-3 px-1 md:grid-cols-4"
+          className="grid grid-flow-row-dense grid-cols-2 gap-3 px-1 lg:grid-cols-4"
         >
-          {layout.map(block => {
+          {shownLayout.map(block => {
             const name = t[`block_${block.type}` as const];
+            const hidden = inHeader.has(block.type);
             const dragging = drag.draggingId === block.id;
             const action = tileAction(block, data, actions);
             const content = <BlockContent block={block} data={data} actions={actions} />;
@@ -301,34 +366,37 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 data-block-id={block.id}
                 className={clsx(
                   'relative flex',
-                  block.size === 's' ? 'col-span-1 min-h-[172px]' : 'col-span-2',
+                  block.size === 's' && block.id !== widenedId ? 'col-span-1 min-h-[172px]' : 'col-span-2',
                   editing && !dragging && 'home-wiggle',
                   dragging && 'z-10 scale-[1.04] opacity-90 drop-shadow-2xl transition-transform',
                 )}
               >
                 {editing ? (
                   <>
+                    {/* The block's own buttons stay inert under a full-size overlay button (no nested buttons). */}
+                    <div aria-hidden="true" inert className={clsx('pointer-events-none flex w-full', hidden && 'opacity-45 saturate-50')}>
+                      {content}
+                    </div>
                     <button
                       type="button"
-                      aria-label={fill(t.editBlockNamed, { name })}
+                      aria-label={hidden ? `${fill(t.editBlockNamed, { name })}. ${h.inHeaderHint}` : fill(t.editBlockNamed, { name })}
                       onPointerDown={drag.onPointerDown(block.id)}
                       onClick={() => {
                         if (drag.consumeDrag()) return;
                         setSettingsId(block.id);
                       }}
-                      className="flex w-full touch-manipulation select-none rounded-[26px] text-left [-webkit-touch-callout:none]"
-                    >
-                      <span aria-hidden="true" inert className="pointer-events-none flex w-full">
-                        {content}
-                      </span>
-                    </button>
+                      className="absolute inset-0 touch-manipulation select-none rounded-[26px] [-webkit-touch-callout:none]"
+                    />
+                    {/* 26px badge, 44px hit area centred on it. */}
                     <button
                       type="button"
                       aria-label={fill(t.removeBlockNamed, { name })}
-                      onClick={() => onLayoutChange(removeBlock(layout, block.id))}
-                      className="absolute -left-1.5 -top-1.5 z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#8E8E93] text-white shadow-md"
+                      onClick={() => handleRemove(block)}
+                      className="absolute -left-[15px] -top-[15px] z-10 flex h-11 w-11 items-center justify-center rounded-full"
                     >
-                      <Minus size={16} strokeWidth={3} aria-hidden="true" />
+                      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#8E8E93] text-white shadow-md">
+                        <Minus size={16} strokeWidth={3} aria-hidden="true" />
+                      </span>
                     </button>
                     <span
                       aria-hidden="true"
@@ -336,6 +404,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     >
                       {SIZE_TAG[block.size]}
                     </span>
+                    {hidden && (
+                      <span
+                        aria-hidden="true"
+                        title={h.inHeaderHint}
+                        className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2.5 py-0.5 text-[11px] font-bold text-white backdrop-blur-md"
+                      >
+                        {h.inHeader}
+                      </span>
+                    )}
                   </>
                 ) : action && !HAS_INNER_ACTIONS(block) ? (
                   <button type="button" onClick={action} className="flex w-full rounded-[26px] text-left">
@@ -350,17 +427,44 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       )}
 
-      {!editing && layout.length > 0 && (
+      {editing && (
+        <button
+          type="button"
+          onClick={() => setGalleryOpen(true)}
+          className="mx-1 mt-3 flex h-14 w-[calc(100%-0.5rem)] items-center justify-center gap-2 rounded-[22px] border-[1.5px] border-dashed border-accent/50 text-[15px] font-semibold text-accent"
+        >
+          <Plus size={18} aria-hidden="true" />
+          {t.addBlock}
+        </button>
+      )}
+
+      {!editing && (
         <div className="mt-5 flex justify-center">
           <button
             type="button"
-            onClick={() => onEditingChange(true)}
+            onClick={() => {
+              onEditingChange(true);
+              // The header is the first slot: start editing from the top.
+              document.getElementById('main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             className="h-10 rounded-full bg-chip px-4 text-sm font-semibold text-muted"
           >
             {t.customizeHome}
           </button>
         </div>
       )}
+      </div>
+
+      <HeaderSettingsSheet
+        isOpen={headerSheetOpen}
+        header={header}
+        data={data}
+        onClose={() => setHeaderSheetOpen(false)}
+        onSave={next => {
+          onHeaderChange(next);
+          setHeaderSheetOpen(false);
+        }}
+      />
 
       <BlockGallerySheet isOpen={galleryOpen} onClose={() => setGalleryOpen(false)} onAdd={handleAdd} data={data} />
       <BlockSettingsSheet
@@ -375,7 +479,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         }}
         onMove={delta => onLayoutChange(moveBlock(layout, settingsIndex, settingsIndex + delta))}
         onRemove={() => {
-          if (settingsBlock) onLayoutChange(removeBlock(layout, settingsBlock.id));
+          if (settingsBlock) handleRemove(settingsBlock);
           setSettingsId(null);
         }}
         onOpenBudgets={() => {

@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, isEdgeFunctionResponse, trackConsoleIssues } from './e2eConsole.mjs';
 
 const TRANSACTION_REGRESSION_URL = process.env.TRANSACTION_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const TRANSACTION_REGRESSION_EMAIL = process.env.TRANSACTION_REGRESSION_EMAIL;
@@ -18,7 +19,6 @@ const successScreenshotPath = `${screenshotDir}/transaction-crud-regression-succ
 const failureScreenshotPath = `${screenshotDir}/transaction-crud-regression-failure.png`;
 const transactionLabel = `CRUD Regression ${Date.now()}`;
 const updatedTransactionLabel = `${transactionLabel} Updated`;
-const consoleIssues = [];
 
 const isVisible = async (locator) => locator.isVisible().catch(() => false);
 
@@ -34,13 +34,20 @@ const signInIfNeeded = async (page) => {
   await page.waitForLoadState('networkidle');
 };
 
+const deleteLabel = /^delete$|^obrisi$|^obriši$/i;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const openTransactions = async (page) => {
-  const heading = page.getByRole('heading', { name: /transactions|transakcije/i }).first();
+  const heading = page.getByRole('heading', { name: /^(activity|aktivnost|transactions|transakcije)$/i }).first();
   if (await isVisible(heading)) {
     return;
   }
 
-  await page.getByText(/transactions|transakcije/i).first().click();
+  // Entries are listed on the Activity screen.
+  await page
+    .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+    .getByRole('button', { name: /^activity$|^aktivnost$/i })
+    .click();
   await heading.waitFor({ timeout: 15000 });
 };
 
@@ -50,22 +57,25 @@ const openAddTransactionModal = async (page) => {
     return;
   }
 
-  await page.getByRole('button', { name: /open transaction actions|otvori akcije transakcija/i }).click();
-  const addTransactionAction = page.locator('button[aria-label="Add a transaction"], button[aria-label="Add transaction"], button[aria-label="Dodaj transakciju"]').first();
-  await addTransactionAction.click();
+  // "Add entry" opens the New entry sheet; its Expense tile opens the transaction form.
+  await page.getByRole('button', { name: /^add entry$|^dodaj unos$/i }).first().click();
+  const newEntrySheet = page.getByRole('dialog', { name: /^new entry$|^novi unos$/i });
+  await newEntrySheet.waitFor({ timeout: 15000 });
+  await newEntrySheet.getByRole('button', { name: /^expense\b|^trošak\b/i }).click();
   await amountInput.waitFor({ timeout: 15000 });
 
-  const addHeading = page.getByRole('heading', { name: /new transaction|add transaction|add a transaction|nova transakcija|dodaj transakciju/i }).first();
-  await addHeading.waitFor({ timeout: 15000 });
+  const addDialog = page.getByRole('dialog', { name: /^new expense$|^novi trošak$/i });
+  await addDialog.getByRole('heading', { name: /^new expense$|^novi trošak$/i }).waitFor({ timeout: 15000 });
 
-  const deleteButton = page.getByRole('menuitem', { name: /^delete$|^obrisi$|^obriši$/i }).first();
-  if (await isVisible(deleteButton)) {
+  const deleteActions = addDialog.getByRole('button', { name: deleteLabel }).or(addDialog.getByRole('menuitem', { name: deleteLabel }));
+  if (await isVisible(deleteActions.first())) {
     throw new Error('New transaction modal exposed delete action.');
   }
 };
 
 const saveTransaction = async (page) => {
-  await page.getByRole('button', { name: /^save$|^sacuvaj$|^sačuvaj$/i }).click();
+  // "Save expense" on a new entry, "Save changes" on an edit.
+  await page.getByRole('button', { name: /^save (expense|changes)$|^sa[cč]uvaj (trošak|izmene)$/i }).click();
   await page.waitForLoadState('networkidle');
 };
 
@@ -74,37 +84,21 @@ const fillTransactionForm = async (page, { amount, note }) => {
   await page.locator('#edit-tx-amount').click();
   await page.locator('#edit-tx-amount').fill(String(amount));
 
-  const moreOptionsButton = page.getByRole('button', { name: /more options/i });
-  if (await isVisible(moreOptionsButton)) {
-    await moreOptionsButton.click();
-  }
-
+  // The note sits right under the amount (not under More options).
   await page.locator('#edit-tx-note').fill(note);
 };
 
 const searchTransactions = async (page, value) => {
-  const searchInput = page.getByPlaceholder(/search transactions|pretrazi transakcije/i);
+  const searchInput = page.getByPlaceholder(/^(search|pretraga)$|search transactions|pretra[zž]i transakcije/i).first();
   await searchInput.fill(value);
 };
 
+// The row's main button is named after the note first ("<note> <category> · <wallet> <amount> <date>").
+const getTransactionRowButton = (page, label) =>
+  page.getByRole('button', { name: new RegExp(`^${escapeRegExp(label)}\\b`) });
+
 const getTransactionRow = (page, label) =>
-  page
-    .getByText(label, { exact: false })
-    .first()
-    .locator('xpath=ancestor::div[contains(@class,"group relative")][1]');
-
-const longPress = async (page, locator) => {
-  await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  if (!box) {
-    throw new Error('Could not resolve target bounding box for long press.');
-  }
-
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.waitForTimeout(850);
-  await page.mouse.up();
-};
+  page.locator('[data-transaction-row]').filter({ has: getTransactionRowButton(page, label) });
 
 const createTransaction = async (page) => {
   await openAddTransactionModal(page);
@@ -114,23 +108,35 @@ const createTransaction = async (page) => {
   await page.getByText(transactionLabel, { exact: false }).first().waitFor({ timeout: 15000 });
 };
 
+// Entry details: a pop-up card, or on wide windows the Activity side pane (a region named by the entry).
+const getDetails = (page, name) => page.getByRole('dialog', { name }).or(page.getByRole('region', { name }));
+
 const editTransaction = async (page) => {
-  const row = getTransactionRow(page, transactionLabel);
   await page.waitForTimeout(1000);
-  await longPress(page, row);
-  await page.getByRole('menuitem', { name: /^edit$|^izmeni$/i }).click();
-  await page.getByRole('heading', { name: /edit transaction|izmeni transakciju/i }).first().waitFor({ timeout: 15000 });
+  // Tapping a row opens the entry's details; its Edit button opens the form on top.
+  await getTransactionRowButton(page, transactionLabel).first().click();
+  const details = getDetails(page, transactionLabel);
+  await details.waitFor({ timeout: 15000 });
+  await details.getByRole('button', { name: /^edit$|^izmeni$/i }).click();
+  await page.getByRole('heading', { name: /^edit expense$|^izmeni trošak$/i }).first().waitFor({ timeout: 15000 });
   await fillTransactionForm(page, { amount: 222, note: updatedTransactionLabel });
   await saveTransaction(page);
+  // The details card (or pane) stays open and shows the saved entry.
+  const updatedDetails = getDetails(page, updatedTransactionLabel);
+  await updatedDetails.waitFor({ timeout: 15000 });
+  // Escape goes to the form until its exit animation has finished.
+  await page.getByRole('heading', { name: /^edit expense$|^izmeni trošak$/i }).waitFor({ state: 'detached', timeout: 15000 });
+  await page.keyboard.press('Escape');
+  await updatedDetails.waitFor({ state: 'detached', timeout: 15000 });
   await searchTransactions(page, updatedTransactionLabel);
   await page.getByText(updatedTransactionLabel, { exact: false }).first().waitFor({ timeout: 15000 });
 };
 
 const deleteTransaction = async (page) => {
-  const row = getTransactionRow(page, updatedTransactionLabel);
+  const row = getTransactionRow(page, updatedTransactionLabel).first();
   await page.waitForTimeout(1000);
-  await longPress(page, row);
-  await page.getByRole('menuitem', { name: /^delete$|^obrisi$|^obriši$/i }).click();
+  await row.getByRole('button', { name: /^more actions$|^više opcija$/i }).click();
+  await page.getByRole('menu', { name: /^more actions$|^više opcija$/i }).getByRole('menuitem', { name: deleteLabel }).click();
   await page.getByText(/transaction deleted|transakcija obrisano|transakcija obrisana/i).waitFor({ timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -140,23 +146,39 @@ const deleteTransaction = async (page) => {
   }
 };
 
+// A failed run deletes what it created (either name) so test entries do not pile up in the account.
+const removeLeftovers = async (page) => {
+  for (const label of [updatedTransactionLabel, transactionLabel]) {
+    try {
+      await page.keyboard.press('Escape').catch(() => {});
+      await searchTransactions(page, label);
+      const row = getTransactionRow(page, label).first();
+      if (!(await row.isVisible({ timeout: 3000 }).catch(() => false))) continue;
+      await row.getByRole('button', { name: /^more actions$|^više opcija$/i }).click({ timeout: 5000 });
+      await page.getByRole('menu', { name: /^more actions$|^više opcija$/i }).getByRole('menuitem', { name: deleteLabel }).click({ timeout: 5000 });
+      await page.waitForTimeout(800);
+      console.error(`Removed the test entry "${label}" left by the failed run.`);
+    } catch (cleanupError) {
+      console.error(`Could not remove the test entry "${label}": ${cleanupError.message.split('\n')[0]}`);
+    }
+  }
+};
+
 const browser = await chromium.launch({ headless: !TRANSACTION_REGRESSION_HEADED });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
 await guardBackend(context);
 const page = await context.newPage();
 
 // Name the URL behind HTTP errors so console failures are traceable.
-page.on('response', (response) => {
-  if (response.status() >= 400) {
-    console.error(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
+page.on('response', async (response) => {
+  if (response.status() >= 400 && !isEdgeFunctionResponse(response)) {
+    // The body says why (an expired or not-yet-valid token reads differently from a missing grant).
+    const body = (await response.text().catch(() => '')).slice(0, 200);
+    console.error(`HTTP ${response.status()} ${response.request().method()} ${response.url()} ${body}`);
   }
 });
 
-page.on('console', (message) => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
@@ -167,14 +189,13 @@ try {
   await editTransaction(page);
   await deleteTransaction(page);
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 
   await page.screenshot({ path: successScreenshotPath, fullPage: true });
   console.log('Transaction CRUD regression passed.');
 } catch (error) {
   await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
+  await removeLeftovers(page);
   throw error;
 } finally {
   await context.close();

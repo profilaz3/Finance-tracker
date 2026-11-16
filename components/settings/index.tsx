@@ -1,7 +1,7 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { m } from 'motion/react';
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ChevronRight, Landmark, LayoutGrid, PiggyBank, Users, type LucideIcon } from 'lucide-react';
 import { SettingsViewProps, containerVariants } from './types';
 import { GeneralSettings } from './GeneralSettings';
 import { AppearanceSettings } from './AppearanceSettings';
@@ -10,29 +10,51 @@ import { AccountSettings } from './AccountSettings';
 import { TeamSettings } from './TeamSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { PaymentSettings } from './PaymentSettings';
+import { SettingsHero } from './SettingsHero';
 import { useSettingsViewState } from './useSettingsViewState';
-import type { SettingsTab, SettingsTabId } from './useSettingsViewState';
+import type { SettingsGroupId, SettingsTab, SettingsTabId } from './useSettingsViewState';
 import { resolveAppearance } from '../../utils/appearance';
-import { Avatar } from '../home/parts';
+import { convertCurrency } from '../../utils/currencyUtils';
+import { getIntlLocale } from '../../utils/locale';
+import { computeBudgetProgress, computeMonthSummary, monthKeyOf } from '../../domain/home';
+import { resolveHomeHeader } from '../../domain/homeHeader';
+import { resolveHomeLayout } from '../../domain/homeLayout';
+import { detectSubscriptions } from '../../domain/subscriptions';
+import { readDismissedSubscriptions } from '../../services/subscriptionStore';
+import { useNotificationPrefs } from '../../hooks/useNotifications';
+import { useSessionIdentity } from '../../hooks/useSessionIdentity';
+import { openRates } from '../rates/ratesBus';
+import { fill } from '../home/parts';
+import { plainAmount } from '../stats/analyticsStrings';
+import { IconTile } from '../ui/IconTile';
+import { HeroIconButton, ScreenHero } from '../ui/ScreenHero';
 import { playPageEnter } from '../../hooks/useSwipePager';
 
 export type { SettingsViewProps } from './types';
 
 const MODE_KEYS = { light: 'modeLight', dark: 'modeDark', system: 'modeSystem' } as const;
+const NOTIFICATION_KEYS = ['bills', 'budget', 'events', 'letter', 'priceIncrease'] as const;
+/** Sections that show the rows of the workspace on screen. */
+const TEAM_SCOPED_TABS: SettingsTabId[] = ['wallets', 'categories', 'recurring', 'people'];
 
-/** Solid rounded tile with a white icon, like a system settings list. */
-const TabGlyph: React.FC<{ tab: SettingsTab; size?: number }> = ({ tab, size = 32 }) => {
-    const Icon = tab.icon;
-    return (
-        <span
-            aria-hidden="true"
-            className="flex shrink-0 items-center justify-center rounded-[10px] text-white"
-            style={{ width: size, height: size, background: tab.tint }}
-        >
-            <Icon size={Math.round(size * 0.56)} strokeWidth={2.2} />
-        </span>
-    );
-};
+interface SettingsRow {
+    id: string;
+    label: string;
+    icon: LucideIcon;
+    tint: string;
+    group: SettingsGroupId;
+    value?: string;
+    /** An accent pill instead of a plain value ("Not set"). */
+    badge?: string;
+    /** A second line under the label (the signed-in email), shortened when long. */
+    subtitle?: string;
+    keywords: string;
+    tab?: SettingsTabId;
+    onSelect?: () => void;
+}
+
+/** Lower case without diacritics, so "placanja" finds "plaćanja". */
+const normalize = (text: string) => text.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/đ/g, 'dj');
 
 export const SettingsView: React.FC<SettingsViewProps> = (props) => {
     const {
@@ -46,6 +68,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         handleOpenAddTransaction,
         getAccountBalance,
         onLogout,
+        onLogoutEverywhere,
         onDeleteAccount,
         onAddCategory,
         onUpdateCategory,
@@ -61,13 +84,21 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         onToast,
         workspaceId,
         onWorkspaceChange,
+        netWorth,
+        onBack,
+        onOpenBudgets,
+        onOpenSubscriptions,
+        onCustomizeHome,
     } = props;
-    const { t, activeTab, setActiveTab, tabs, currentTab } = useSettingsViewState(state.language);
+    const { language, baseCurrency } = state;
+    const { t, s, activeTab, setActiveTab, tabs, currentTab } = useSettingsViewState(language);
+    const locale = getIntlLocale(language);
+    const tone = resolveHomeHeader(state.homeHeader).tone;
+    const [query, setQuery] = useState('');
     const topRef = useRef<HTMLDivElement>(null);
-    const navRef = useRef<HTMLElement>(null);
-    const sectionRef = useRef<HTMLElement>(null);
     const shownTab: SettingsTabId = activeTab ?? 'profile';
-    const isPhone = () => typeof window !== 'undefined' && !window.matchMedia?.('(min-width: 768px)').matches;
+    // Below lg the list and a section take turns, like on a phone.
+    const isPhone = () => typeof window !== 'undefined' && !window.matchMedia?.('(min-width: 1024px)').matches;
 
     useEffect(() => {
         if (activeTab) topRef.current?.scrollIntoView({ block: 'start' });
@@ -80,22 +111,86 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         const closed = !!previousTab.current && !activeTab;
         previousTab.current = activeTab;
         if (!isPhone()) return;
-        if (opened) playPageEnter(sectionRef.current, 1);
-        if (closed) playPageEnter(navRef.current, -1);
+        if (opened) playPageEnter(topRef.current, 1);
+        if (closed) playPageEnter(topRef.current, -1);
     }, [activeTab]);
 
-
+    const identity = useSessionIdentity();
+    const notificationPrefs = useNotificationPrefs();
     const appearance = resolveAppearance(state.appearance);
     const activeRecurring = (state.recurringTransactions ?? []).filter(recurring => recurring.isActive).length;
-    const hints: Partial<Record<SettingsTabId, string>> = {
-        appearance: t[MODE_KEYS[appearance.mode]],
-        wallets: String(state.accounts.length),
-        categories: String(state.categories.length),
-        recurring: String(activeRecurring),
-        people: String(state.people.length),
-        team: state.teams?.length ? String(state.teams.length) : undefined,
-        payments: state.paymentDetails ? `···${state.paymentDetails.account.slice(-6, -2)}` : t.payNotSet,
-    };
+    const summary = useMemo(
+        () => computeMonthSummary(state, monthKeyOf(new Date())),
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the summary reads only these
+        [state.transactions, state.categories, state.baseCurrency, state.rates],
+    );
+    const budget = state.budget ?? null;
+    const budgetLeft = budget && budget.monthly > 0 ? computeBudgetProgress(budget, summary, state.categories).left : null;
+    const subscriptionCount = useMemo(() => {
+        const dismissed = new Set(readDismissedSubscriptions());
+        return detectSubscriptions(state.transactions, state.recurringTransactions ?? [])
+            .filter(item => item.status === 'active' && !dismissed.has(item.id)).length;
+    }, [state.transactions, state.recurringTransactions]);
+    const eurRsd = convertCurrency(1, 'EUR', 'RSD', state.rates.rates);
+    const rateText = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(eurRsd);
+    const notificationsOn = NOTIFICATION_KEYS.filter(key => notificationPrefs[key]).length;
+    const money = (amount: number) => `${plainAmount(amount, baseCurrency, locale)} ${baseCurrency}`;
+
+    const tabRow = (tab: SettingsTab, value?: string, extra: Partial<SettingsRow> = {}): SettingsRow => ({
+        id: tab.id,
+        label: tab.label,
+        icon: tab.icon,
+        tint: tab.tint,
+        group: tab.group,
+        value,
+        keywords: s.kw[tab.id as keyof typeof s.kw] ?? '',
+        tab: tab.id,
+        ...extra,
+    });
+    const tabById = Object.fromEntries(tabs.map(tab => [tab.id, tab])) as Record<SettingsTabId, SettingsTab>;
+    const allRows: SettingsRow[] = [
+        tabRow(tabById.wallets, netWorth === undefined ? String(state.accounts.length) : `${state.accounts.length} · ${money(netWorth)}`),
+        tabRow(tabById.categories, String(state.categories.length)),
+        {
+            id: 'budgets', label: t.budgets, icon: PiggyBank, tint: '#16A34A', group: 'money', keywords: s.kw.budgets, onSelect: onOpenBudgets,
+            value: budgetLeft === null ? s.notSet : fill(budgetLeft >= 0 ? s.budgetLeft : s.budgetOver, { amount: plainAmount(Math.abs(budgetLeft), baseCurrency, locale) }),
+        },
+        tabRow(tabById.recurring, String(activeRecurring)),
+        {
+            id: 'subscriptions', label: t.subscriptions, icon: CalendarClock, tint: '#9333EA', group: 'money', keywords: s.kw.subscriptions,
+            value: String(subscriptionCount), onSelect: onOpenSubscriptions,
+        },
+        tabRow(tabById.payments, state.paymentDetails ? `···${state.paymentDetails.account.slice(-6, -2)}` : undefined, state.paymentDetails ? {} : { badge: s.notSet }),
+        {
+            id: 'rates', label: s.exchangeRates, icon: Landmark, tint: '#CA8A04', group: 'money', keywords: s.kw.rates, onSelect: openRates,
+            value: state.rates.provider === 'nbs' ? fill(s.ratesValue, { rate: rateText }) : `€1 = ${rateText}`,
+        },
+        tabRow(tabById.appearance, `${t[`theme_${appearance.theme ?? 'paper'}` as const]} · ${t[MODE_KEYS[appearance.mode]]}`),
+        tabRow(tabById.notifications, notificationsOn > 0 ? fill(s.notificationsOn, { count: notificationsOn }) : s.notificationsOff),
+        tabRow(tabById.general, `${language.toUpperCase()} · ${baseCurrency}`),
+        {
+            id: 'home', label: s.homeScreen, icon: LayoutGrid, tint: '#B45309', group: 'app', keywords: s.kw.home, onSelect: onCustomizeHome,
+            value: fill(s.homeBlocks, { count: resolveHomeLayout(state.homeLayout).length }),
+        },
+        tabRow(tabById.people, String(state.people.length)),
+        tabRow(tabById.team, state.teams?.length ? String(state.teams.length) : undefined),
+        tabRow(tabById.profile, undefined, { subtitle: identity?.email ?? undefined }),
+    ];
+    const rows = allRows.filter(row => row.tab || row.onSelect);
+
+    const groups: Array<{ id: SettingsGroupId; label: string }> = [
+        { id: 'money', label: t.settingsGroupMoney },
+        { id: 'app', label: t.settingsGroupApp },
+        { id: 'together', label: t.settingsGroupTogether },
+        { id: 'account', label: s.groupAccount },
+    ];
+    const needle = normalize(query.trim());
+    const results = needle
+        ? rows.filter(row => {
+            const group = groups.find(entry => entry.id === row.group)?.label ?? '';
+            return normalize([row.label, row.value ?? '', row.subtitle ?? '', row.badge ?? '', row.keywords, group].join(' ')).includes(needle);
+        })
+        : null;
 
     const accountProps = {
         state,
@@ -105,6 +200,7 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         handleDeleteAccount,
         getAccountBalance,
         onLogout,
+        onLogoutEverywhere,
         onDeleteAccount,
         onCreateUserProfile,
         onEditUserProfile,
@@ -127,12 +223,46 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
         onToast,
     };
 
-    const groups: Array<{ id: SettingsTab['group']; label: string }> = [
-        { id: 'app', label: t.settingsGroupApp },
-        { id: 'money', label: t.settingsGroupMoney },
-        { id: 'together', label: t.settingsGroupTogether },
-    ];
-    const profile = state.userProfile;
+    // Wallets, categories, recurring and people show the active workspace's rows; say which.
+    const activeTeam = workspaceId ? state.teams?.find(team => team.id === workspaceId) : undefined;
+    const teamScoped = activeTeam && TEAM_SCOPED_TABS.includes(shownTab);
+
+    const rowButton = (row: SettingsRow, index: number, list: SettingsRow[]) => (
+        <li key={row.id}>
+            <button
+                type="button"
+                onClick={() => (row.tab ? setActiveTab(row.tab) : row.onSelect?.())}
+                aria-current={row.tab && shownTab === row.tab ? 'page' : undefined}
+                className={clsx(
+                    'flex min-h-[56px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-chip',
+                    row.tab && shownTab === row.tab && 'lg:bg-chip',
+                )}
+            >
+                <IconTile icon={row.icon} color={row.tint} size={34} shape="circle" tone="solid" />
+                <span className={clsx('flex min-h-[56px] min-w-0 flex-1 items-center gap-2 py-2', index < list.length - 1 && 'border-b border-hair')}>
+                    {/* When the value does not fit beside the label it moves under it, right aligned. */}
+                    <span className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-2 gap-y-0.5">
+                        <span className="min-w-0 flex-[1_1_auto]">
+                            <span className="block text-[16px] font-semibold leading-snug">{row.label}</span>
+                            {row.subtitle && <span className="block truncate text-[13.5px] text-muted">{row.subtitle}</span>}
+                        </span>
+                        {row.badge && (
+                            <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-[12.5px] font-semibold text-accent">{row.badge}</span>
+                        )}
+                        {row.value && <span className="shrink-0 whitespace-nowrap text-[14.5px] tabular-nums text-muted">{row.value}</span>}
+                    </span>
+                    <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden="true" />
+                </span>
+            </button>
+        </li>
+    );
+
+    const group = (id: string, label: string, list: SettingsRow[]) => (
+        <section key={id} className="flex flex-col gap-1.5" aria-labelledby={`settings-group-${id}`}>
+            <h2 id={`settings-group-${id}`} className="px-4 text-[12px] font-semibold uppercase tracking-[0.06em] text-faint">{label}</h2>
+            <ul className="paper-tile overflow-hidden py-0.5">{list.map(rowButton)}</ul>
+        </section>
+    );
 
     return (
         <m.div
@@ -141,106 +271,101 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="mx-auto max-w-[1040px] scroll-mt-4 px-1 pb-10"
+            data-swipe-back-page={activeTab ? '' : undefined}
+            className="mx-auto max-w-[920px] scroll-mt-4 pb-28 md:pb-10"
         >
-            <header className={clsx('mb-4 min-h-[60px] flex-col justify-center', activeTab ? 'hidden md:flex' : 'flex')}>
-                <h1 className="text-[28px] font-bold leading-tight tracking-[-0.6px]">{t.settings}</h1>
-                <p className="truncate text-[13px] text-muted">{t.settingsSubtitle}</p>
-            </header>
+            <div className={clsx(activeTab && 'hidden lg:block')}>
+                <SettingsHero
+                    tone={tone}
+                    title={t.settings}
+                    backLabel={t.back}
+                    onBack={onBack ?? (() => window.history.back())}
+                    profile={state.userProfile}
+                    onEditProfile={state.userProfile ? onEditUserProfile : onCreateUserProfile}
+                    onOpenPayments={() => setActiveTab('payments')}
+                    teams={state.teams ?? []}
+                    workspaceId={workspaceId ?? null}
+                    onWorkspaceChange={onWorkspaceChange}
+                    onNewTeam={() => setActiveTab('team')}
+                    query={query}
+                    onQuery={setQuery}
+                    s={s}
+                />
+            </div>
 
-            <div className="md:grid md:grid-cols-[300px_minmax(0,1fr)] md:items-start md:gap-6">
-                <nav ref={navRef} aria-label={t.settings} className={clsx('flex-col gap-5 md:sticky md:top-4', activeTab ? 'hidden md:flex' : 'flex')}>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab('profile')}
-                        aria-current={shownTab === 'profile' ? 'page' : undefined}
-                        className={clsx(
-                            'paper-tile flex items-center gap-3.5 p-4 text-left transition-shadow',
-                            shownTab === 'profile' && 'md:ring-2 md:ring-accent',
+            {/* Phone: an open section has its own small header with Back. */}
+            {activeTab && (
+                <ScreenHero tone={tone} label={currentTab.label} className="lg:hidden">
+                    <div className="flex h-[60px] items-center gap-2 px-3">
+                        <HeroIconButton icon={ArrowLeft} label={t.back} onClick={() => setActiveTab(null)} data-swipe-back />
+                        <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold tracking-[-0.01em]">{currentTab.label}</h1>
+                        <span className="w-11 shrink-0" aria-hidden="true" />
+                    </div>
+                    <div className="px-4 pb-[42px] md:pb-4">
+                        {teamScoped && (
+                            <p className="flex min-w-0 items-center justify-center gap-1.5 text-[13px] text-white/75">
+                                <Users size={13} aria-hidden="true" className="flex-none" />
+                                <span className="truncate">{fill(t.settingsTeamWorkspace, { team: activeTeam.name })}</span>
+                            </p>
                         )}
-                    >
-                        {profile ? (
-                            <Avatar name={profile.name} color={profile.color} image={/^(data:|http)/.test(profile.avatar ?? '') ? profile.avatar : undefined} size={52} />
-                        ) : (
-                            <TabGlyph tab={tabs[0]} size={52} />
-                        )}
-                        <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate text-[17px] font-bold">{profile?.name ?? t.settingsSetUpProfile}</span>
-                            <span className="truncate text-[13px] text-muted">{t.settingsProfileHint}</span>
-                        </span>
-                        <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden="true" />
-                    </button>
+                    </div>
+                </ScreenHero>
+            )}
 
-                    {groups.map(group => (
-                        <section key={group.id} className="flex flex-col gap-1.5">
-                            <h2 className="px-4 text-[12px] font-semibold uppercase tracking-wide text-faint">{group.label}</h2>
-                            <ul className="paper-tile overflow-hidden py-1">
-                                {tabs.filter(tab => tab.group === group.id && tab.id !== 'profile').map((tab, index, list) => (
-                                    <li key={tab.id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab(tab.id)}
-                                            aria-current={shownTab === tab.id ? 'page' : undefined}
-                                            className={clsx(
-                                                'flex min-h-[52px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-chip',
-                                                shownTab === tab.id && 'md:bg-chip',
-                                            )}
-                                        >
-                                            <TabGlyph tab={tab} />
-                                            <span
-                                                className={clsx(
-                                                    'flex min-h-[52px] min-w-0 flex-1 items-center gap-2',
-                                                    index < list.length - 1 && 'border-b border-hair',
-                                                )}
-                                            >
-                                                <span className="min-w-0 flex-1 truncate text-[16px] font-medium">{tab.label}</span>
-                                                {hints[tab.id] && <span className="shrink-0 text-[14px] text-muted">{hints[tab.id]}</span>}
-                                                <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden="true" />
-                                            </span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
-                    ))}
+            <div className="screen-sheet lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-6">
+                <nav aria-label={t.settings} className={clsx('flex-col gap-5 lg:sticky lg:top-4', activeTab ? 'hidden lg:flex' : 'flex')}>
+                    {results ? (
+                        results.length > 0
+                            ? group('results', s.results, results)
+                            : (
+                                <p className="paper-tile px-4 py-5 text-center text-[15px] text-muted" role="status">
+                                    {fill(s.noResults, { query: query.trim() })}
+                                </p>
+                            )
+                    ) : (
+                        groups.map(entry => {
+                            const list = rows.filter(row => row.group === entry.id);
+                            return list.length > 0 ? group(entry.id, entry.label, list) : null;
+                        })
+                    )}
                 </nav>
 
                 <section
-                    ref={sectionRef}
                     aria-labelledby="settings-section-title"
-                    data-swipe-back-page
-                    className={clsx('min-w-0 flex-col gap-4', activeTab ? 'flex' : 'hidden md:flex')}
+                    className={clsx('min-w-0 flex-col gap-4', activeTab ? 'flex' : 'hidden lg:flex')}
                 >
-                    <div className="flex min-h-[52px] items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab(null)}
-                            data-swipe-back
-                            aria-label={t.back}
-                            title={t.back}
-                            className="glass flex h-11 w-11 shrink-0 items-center justify-center rounded-full md:hidden"
-                        >
-                            <ChevronLeft size={22} aria-hidden="true" />
-                        </button>
-                        <TabGlyph tab={currentTab} size={36} />
-                        <h2 id="settings-section-title" className="min-w-0 flex-1 truncate text-[24px] font-bold tracking-[-0.4px]">
-                            {currentTab.label}
-                        </h2>
+                    <div className="hidden min-h-[52px] items-center gap-3 lg:flex">
+                        <IconTile icon={currentTab.icon} color={currentTab.tint} size={36} shape="circle" tone="solid" />
+                        <div className="min-w-0 flex-1">
+                            <h2 id="settings-section-title" className="truncate text-[24px] font-bold tracking-[-0.4px]">
+                                {currentTab.label}
+                            </h2>
+                            {teamScoped && (
+                                <p className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
+                                    <Users size={13} aria-hidden="true" className="flex-none" />
+                                    <span className="truncate">{fill(t.settingsTeamWorkspace, { team: activeTeam.name })}</span>
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     {shownTab === 'profile' && (
                         <div className="flex flex-col gap-4">
                             <AccountSettings {...accountProps} activeTab="profile" />
-                            <GeneralSettings state={state} setState={setState} />
                             <AccountSettings {...accountProps} activeTab="account" />
+                        </div>
+                    )}
+                    {shownTab === 'general' && (
+                        <div className="flex flex-col gap-4">
+                            <GeneralSettings state={state} setState={setState} />
                         </div>
                     )}
                     {shownTab === 'appearance' && (
                         <div className="paper-tile p-4">
-                            <AppearanceSettings state={state} setState={setState} />
+                            <AppearanceSettings state={state} setState={setState} hideLanguage />
                         </div>
                     )}
-                    {shownTab === 'notifications' && <NotificationSettings language={state.language} />}
+                    {shownTab === 'notifications' && <NotificationSettings language={language} />}
                     {shownTab === 'wallets' && <AccountSettings {...accountProps} activeTab="wallets" />}
                     {shownTab === 'categories' && <DataSettings {...dataProps} activeTab="categories" />}
                     {shownTab === 'recurring' && <DataSettings {...dataProps} activeTab="recurring" />}

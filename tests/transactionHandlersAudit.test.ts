@@ -43,7 +43,6 @@ const mkState = (): AppState => ({
   recurringTransactions: [],
   rates,
   baseCurrency: 'EUR',
-  theme: 'graphite',
   language: 'en',
 });
 
@@ -62,7 +61,6 @@ function harness(initial: AppState) {
       createId: () => 'new-id',
       setSelectedTransaction: () => {},
       closeEditModal: () => {},
-      closeReceiptModal: () => {},
     });
   };
   return {

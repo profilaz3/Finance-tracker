@@ -2,7 +2,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { adminClient, requireUser } from '../_shared/auth.ts';
 import { jsonResponse, serveJson } from '../_shared/http.ts';
 
-const USER_BUCKETS = ['event-photos', 'avatars'] as const;
+const USER_BUCKETS = ['event-photos', 'avatars', 'receipts'] as const;
 const PAGE = 100;
 
 /** Removes every object under `<userId>/` in a bucket, page by page. */

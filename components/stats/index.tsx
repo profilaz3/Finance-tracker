@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { lazyWithReload } from '../../utils/lazyWithReload';
-import { TRANSLATIONS } from '../../constants';
+import { resolveHomeHeader } from '../../domain/homeHeader';
 import {
   StatsProps,
   CategoryTimeFrame,
@@ -131,9 +131,10 @@ export const Stats: React.FC<StatsProps> = ({
   rates,
   language,
   totalExpense,
-  events
+  events,
+  homeHeader,
+  onNavigate,
 }) => {
-  const t = TRANSLATIONS[language];
   const now = useMemo(() => new Date(), []);
 
   // Shared category timeframe state (used by CategoryBreakdown sections 5 & 8)
@@ -147,12 +148,7 @@ export const Stats: React.FC<StatsProps> = ({
   const axisProps = buildAxisProps(chartColors);
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-1 pb-20 sm:gap-4">
-      <header className="min-w-0">
-        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.6px]">{t.analytics}</h1>
-        <p className="text-[13px] text-muted">{t.analyticsStudioDesc}</p>
-      </header>
-
+    <div className="mx-auto max-w-[920px] pb-28">
       <Suspense fallback={<StatsPanelFallback />}>
         <AnalyticsStudioOverviewSection
           transactions={transactions}
@@ -162,73 +158,75 @@ export const Stats: React.FC<StatsProps> = ({
           baseCurrency={baseCurrency}
           language={language}
           events={events}
-        />
+          tone={resolveHomeHeader(homeHeader).tone}
+          onNavigate={onNavigate}
+        >
+          {/* Total Fees Summary Card */}
+          <StatsSummary
+            transactions={transactions}
+            baseCurrency={baseCurrency}
+            rates={rates}
+            language={language}
+            totalExpense={totalExpense}
+          />
+
+          {/* Spending Trend (section 1) + Income vs Expense / Savings Rate / Cashflow by Account (sections 2-4) */}
+          <DeferredStatsSection fallbackClassName="min-h-[22rem]">
+            <ExpenseChartSection
+              transactions={transactions}
+              accounts={accounts}
+              baseCurrency={baseCurrency}
+              rates={rates}
+              language={language}
+              chartColors={chartColors}
+              tooltipStyle={tooltipStyle}
+              tooltipItemStyle={tooltipItemStyle}
+              tooltipLabelStyle={tooltipLabelStyle}
+              axisProps={axisProps}
+              now={now}
+            />
+          </DeferredStatsSection>
+
+          {/* Sections 5-8: Category Breakdown, Volatility, Net Worth, Paid for Others */}
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
+            {/* Category Breakdown (section 5) + Category Volatility (section 6) */}
+            <DeferredStatsSection fallbackClassName="min-h-[34rem]">
+              <CategoryBreakdownSection
+                transactions={transactions}
+                categories={categories}
+                baseCurrency={baseCurrency}
+                rates={rates}
+                language={language}
+                chartColors={chartColors}
+                tooltipStyle={tooltipStyle}
+                tooltipItemStyle={tooltipItemStyle}
+                tooltipLabelStyle={tooltipLabelStyle}
+                axisProps={axisProps}
+                now={now}
+                categoryTimeFrame={categoryTimeFrame}
+                onCategoryTimeFrameChange={setCategoryTimeFrame}
+              />
+            </DeferredStatsSection>
+
+            {/* Net Worth Trend (section 7) */}
+            <DeferredStatsSection fallbackClassName="min-h-[22rem]">
+              <IncomeChartSection
+                transactions={transactions}
+                accounts={accounts}
+                baseCurrency={baseCurrency}
+                rates={rates}
+                language={language}
+                chartColors={chartColors}
+                tooltipStyle={tooltipStyle}
+                tooltipItemStyle={tooltipItemStyle}
+                tooltipLabelStyle={tooltipLabelStyle}
+                axisProps={axisProps}
+                now={now}
+              />
+            </DeferredStatsSection>
+          </div>
+        </AnalyticsStudioOverviewSection>
       </Suspense>
-
-      {/* Total Fees Summary Card */}
-      <StatsSummary
-        transactions={transactions}
-        baseCurrency={baseCurrency}
-        rates={rates}
-        language={language}
-        totalExpense={totalExpense}
-      />
-
-      {/* Spending Trend (section 1) + Income vs Expense / Savings Rate / Cashflow by Account (sections 2-4) */}
-      <DeferredStatsSection fallbackClassName="min-h-[22rem]">
-        <ExpenseChartSection
-          transactions={transactions}
-          accounts={accounts}
-          baseCurrency={baseCurrency}
-          rates={rates}
-          language={language}
-          chartColors={chartColors}
-          tooltipStyle={tooltipStyle}
-          tooltipItemStyle={tooltipItemStyle}
-          tooltipLabelStyle={tooltipLabelStyle}
-          axisProps={axisProps}
-          now={now}
-        />
-      </DeferredStatsSection>
-
-      {/* Sections 5-8: Category Breakdown, Volatility, Net Worth, Paid for Others */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
-        {/* Category Breakdown (section 5) + Category Volatility (section 6) */}
-        <DeferredStatsSection fallbackClassName="min-h-[34rem]">
-          <CategoryBreakdownSection
-            transactions={transactions}
-            categories={categories}
-            baseCurrency={baseCurrency}
-            rates={rates}
-            language={language}
-            chartColors={chartColors}
-            tooltipStyle={tooltipStyle}
-            tooltipItemStyle={tooltipItemStyle}
-            tooltipLabelStyle={tooltipLabelStyle}
-            axisProps={axisProps}
-            now={now}
-            categoryTimeFrame={categoryTimeFrame}
-            onCategoryTimeFrameChange={setCategoryTimeFrame}
-          />
-        </DeferredStatsSection>
-
-        {/* Net Worth Trend (section 7) */}
-        <DeferredStatsSection fallbackClassName="min-h-[22rem]">
-          <IncomeChartSection
-            transactions={transactions}
-            accounts={accounts}
-            baseCurrency={baseCurrency}
-            rates={rates}
-            language={language}
-            chartColors={chartColors}
-            tooltipStyle={tooltipStyle}
-            tooltipItemStyle={tooltipItemStyle}
-            tooltipLabelStyle={tooltipLabelStyle}
-            axisProps={axisProps}
-            now={now}
-          />
-        </DeferredStatsSection>
-      </div>
     </div>
   );
 };

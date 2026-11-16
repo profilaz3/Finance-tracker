@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Account, AppState, Currency, Event, Person, Transaction, TransactionTemplate } from '../../types';
+import type { Account, AppState, Category, Currency, Event, Person, Transaction, TransactionTemplate } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { convertAmount } from '../../services/currencyService';
 import { spendingExpenses } from '../../domain/settle';
@@ -19,6 +19,9 @@ import {
 } from '../../domain/home';
 import { calculateDashboardDebtSummary, getActiveDashboardPeople, getDashboardWalletSummaries } from '../../utils/dashboardSummarySelectors';
 import { selectDashboardTemplates } from '../../utils/qolSuggestions';
+import { localizeCategoryName } from '../../utils/systemText';
+import { netWorthAtMonthEnd } from '../../domain/netWorthHistory';
+import { weekSpending } from '../../domain/homeHeader';
 
 export type HomeStrings = (typeof TRANSLATIONS)['en'];
 
@@ -49,6 +52,7 @@ export interface HomeData {
   month: MonthKey;
   isCurrentMonth: boolean;
   summary: MonthSummary;
+  /** Today's net worth for the current month; the month-end figure for a past month. */
   netWorth: number;
   budget: AppState['budget'];
   budgetProgress: BudgetProgress | null;
@@ -64,9 +68,12 @@ export interface HomeData {
   ratesListDate: string | null;
   /** RSD per 1 EUR / 1 USD from the app's rate table. */
   rsdPerUnit: { EUR: number; USD: number };
+  /** Counted spending Monday to Sunday of this week; null for a past month. */
+  week: number[] | null;
   templates: TransactionTemplate[];
   categoryName: (id: string) => string;
   categoryColor: (id: string) => string;
+  category: (id: string) => Category | undefined;
   accountName: (id: string) => string;
 }
 
@@ -97,9 +104,21 @@ interface UseHomeDataOptions {
 export function useHomeData({ state, month, netWorth, getAccountBalance, activeEvent }: UseHomeDataOptions): HomeData {
   const { transactions, categories, baseCurrency, rates, accounts, people, budget, recurringTransactions, templates, sharedExpenses, language } = state;
 
-  const summary = useMemo(
-    () => computeMonthSummary({ transactions, categories, baseCurrency, rates }, month),
-    [transactions, categories, baseCurrency, rates, month],
+  const isCurrentMonth = isSameMonth(month, monthKeyOf(new Date()));
+
+  const summary = useMemo(() => {
+    const raw = computeMonthSummary({ transactions, categories, baseCurrency, rates }, month);
+    // System categories ("Outgoing", "Incoming") are stored in English: show them translated.
+    return {
+      ...raw,
+      byCategory: raw.byCategory.map(entry => ({ ...entry, name: localizeCategoryName({ id: entry.categoryId, name: entry.name }, language) })),
+    };
+  }, [transactions, categories, baseCurrency, rates, month, language]);
+
+  // A past month shows what it ended at, not today's total under that month's name.
+  const shownNetWorth = useMemo(
+    () => (isCurrentMonth ? netWorth : netWorthAtMonthEnd({ transactions, accounts, baseCurrency, rates }, month)),
+    [isCurrentMonth, netWorth, transactions, accounts, baseCurrency, rates, month],
   );
 
   const budgetProgress = useMemo(
@@ -145,26 +164,34 @@ export function useHomeData({ state, month, netWorth, getAccountBalance, activeE
   const recent = useMemo(() => getRecentTransactions(transactions, 5), [transactions]);
   const ratePairs = useMemo(() => getRatePairs(baseCurrency, rates.rates), [baseCurrency, rates]);
   const rsdPerUnit = useMemo(() => ({ EUR: rsdPer(rates, 'EUR'), USD: rsdPer(rates, 'USD') }), [rates]);
+  const week = useMemo(
+    () => (isCurrentMonth ? weekSpending({ transactions, baseCurrency, rates }) : null),
+    [isCurrentMonth, transactions, baseCurrency, rates],
+  );
   const quickTemplates = useMemo(() => selectDashboardTemplates(templates, 6), [templates]);
 
   const lookups = useMemo(() => {
     const categoriesById = new Map(categories.map(category => [category.id, category] as const));
     const accountsById = new Map(accounts.map(account => [account.id, account] as const));
     return {
-      categoryName: (id: string) => categoriesById.get(id)?.name ?? '',
+      categoryName: (id: string) => {
+        const category = categoriesById.get(id);
+        return category ? localizeCategoryName(category, language) : '';
+      },
       categoryColor: (id: string) => categoriesById.get(id)?.color ?? '#8A8984',
+      category: (id: string) => categoriesById.get(id),
       accountName: (id: string) => accountsById.get(id)?.name ?? '',
     };
-  }, [categories, accounts]);
+  }, [categories, accounts, language]);
 
   return {
     t: TRANSLATIONS[language],
     language,
     currency: baseCurrency,
     month,
-    isCurrentMonth: isSameMonth(month, monthKeyOf(new Date())),
+    isCurrentMonth,
     summary,
-    netWorth,
+    netWorth: shownNetWorth,
     budget,
     budgetProgress,
     wallets,
@@ -177,6 +204,7 @@ export function useHomeData({ state, month, netWorth, getAccountBalance, activeE
     rates: ratePairs,
     ratesListDate: rates.provider === 'nbs' && rates.listDate ? rates.listDate : null,
     rsdPerUnit,
+    week,
     templates: quickTemplates,
     ...lookups,
   };

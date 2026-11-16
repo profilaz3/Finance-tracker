@@ -34,7 +34,7 @@ describe('calculateEventSettlement', () => {
       people: [person('me', 'Me')],
       baseCurrency: 'EUR',
     }));
-    expect(html).toContain('Who Owes Who');
+    expect(html).toContain('pays Me');
     expect((html.match(/data-debt=/g) || []).length).toBe(2);
     expect(html).toContain('Unknown');
   });
@@ -71,8 +71,9 @@ describe('resolveEventParticipants in a collaborator view', () => {
       id: 'e', name: 'Trip', personIds: ['alice-auth-id', 'bob-local-person'], sharedEmails: ['carol@x.com'],
       status: 'active', userId: 'alice-auth-id',
     };
+    // The collaborator view is decided by the sign-in id, not the profile (a person id).
     const participants = resolveEventParticipants({
-      event, people: [], userProfile: person('carol-auth-id', 'Carol'), fallbackCurrency: 'EUR',
+      event, people: [], userProfile: person('carol-person', 'Carol'), fallbackCurrency: 'EUR', viewerUserId: 'carol-auth-id',
     });
 
     expect(participants.find(p => p.id === 'alice-auth-id')!.name).toBe('Organizer');

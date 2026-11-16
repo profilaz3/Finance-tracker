@@ -13,12 +13,13 @@
 import type { Account, AppState, Category } from '../types';
 import type { QueuedEntityType, QueuedOperation } from './offlineQueue';
 import type { SettingsPrefs, SettingsSyncPayload } from '../utils/settingsSync';
-import { normalizeTheme } from './storageService';
 
 const applyPrefs = (acc: AppState, prefs: SettingsPrefs): Partial<AppState> => ({
     appearance: prefs.appearance ?? acc.appearance,
     homeLayout: prefs.homeLayout ?? acc.homeLayout,
+    homeHeader: prefs.homeHeader ?? acc.homeHeader,
     budget: prefs.budget !== undefined ? prefs.budget : acc.budget,
+    teamBudgets: prefs.teamBudgets !== undefined ? prefs.teamBudgets : acc.teamBudgets,
     paymentDetails: prefs.payment !== undefined ? prefs.payment : acc.paymentDetails,
 });
 
@@ -85,7 +86,6 @@ export function applyPendingOperations(state: AppState, operations: PendingWrite
             return {
                 ...acc,
                 baseCurrency: settings.baseCurrency ?? acc.baseCurrency,
-                theme: normalizeTheme(settings.theme ?? acc.theme),
                 language: settings.language ?? acc.language,
                 userProfile: settings.userProfile ?? acc.userProfile,
                 ...(settings.prefs ? applyPrefs(acc, settings.prefs) : {}),
@@ -126,12 +126,13 @@ export function mergeRemoteState(prev: AppState, remote: RemoteStateResult, pend
 
     if (remote.hasSettingsRow) {
         next.baseCurrency = remoteState.baseCurrency ?? prev.baseCurrency;
-        next.theme = normalizeTheme(remoteState.theme ?? prev.theme);
         next.language = remoteState.language ?? prev.language;
         next.userProfile = remoteState.userProfile ?? prev.userProfile;
         next.appearance = remoteState.appearance ?? prev.appearance;
         next.homeLayout = remoteState.homeLayout ?? prev.homeLayout;
+        next.homeHeader = remoteState.homeHeader ?? prev.homeHeader;
         next.budget = remoteState.budget !== undefined ? remoteState.budget : prev.budget;
+        next.teamBudgets = remoteState.teamBudgets !== undefined ? remoteState.teamBudgets : prev.teamBudgets;
         next.paymentDetails = remoteState.paymentDetails !== undefined ? remoteState.paymentDetails : prev.paymentDetails;
     }
 

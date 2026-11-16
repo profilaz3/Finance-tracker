@@ -1,11 +1,14 @@
 import { useCallback } from 'react';
 import { withAccountTeam } from '../domain/teams';
+import { alignTransferLeg, buildTransferPair, TRANSFER_CATEGORY_ID } from '../domain/transactions';
 import type { Dispatch, SetStateAction } from 'react';
 import { convertAmount } from '../services/currencyService';
 import { getSyncManager } from '../services/runtimeServices';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { AppState, Currency, ExchangeRates, Transaction } from '../types';
 import { getTranslations } from '../utils/i18n';
+import { receiptPhotoOf } from '../domain/receiptPhoto';
+import { cancelReceiptPhotoCleanup, queueReceiptPhotoCleanup } from '../services/receiptPhotoCleanup';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -17,7 +20,6 @@ interface UseTransactionHandlersOptions {
   createId: () => string;
   setSelectedTransaction: Dispatch<SetStateAction<Transaction | null>>;
   closeEditModal: () => void;
-  closeReceiptModal: () => void;
 }
 
 type SyncManagerInstance = Awaited<ReturnType<typeof getSyncManager>>;
@@ -70,7 +72,6 @@ export function useTransactionHandlers({
   createId,
   setSelectedTransaction,
   closeEditModal,
-  closeReceiptModal,
 }: UseTransactionHandlersOptions) {
   const addTransaction = useCallback(async (transaction: Transaction, options?: { silent?: boolean }) => {
     // Computed before setState so the synced row is the stored row (an updater
@@ -102,6 +103,8 @@ export function useTransactionHandlers({
       return;
     }
 
+    // The photos come back with their entries instead of being deleted after the undo window.
+    cancelReceiptPhotoCleanup(restored.map(receiptPhotoOf));
     setState(prev => {
       const existingIds = new Set(prev.transactions.map(transaction => transaction.id));
       const missing = restored.filter(transaction => !existingIds.has(transaction.id));
@@ -132,6 +135,7 @@ export function useTransactionHandlers({
     const deleted = withTransferLegs(state.transactions, [transaction]);
     const deletedIds = new Set(deleted.map(entry => entry.id));
     setState(prev => ({ ...prev, transactions: prev.transactions.filter(entry => !deletedIds.has(entry.id)) }));
+    queueReceiptPhotoCleanup(deleted.map(receiptPhotoOf));
 
     try {
       await withSyncManager(syncManager =>
@@ -165,6 +169,7 @@ export function useTransactionHandlers({
       ...prev,
       transactions: prev.transactions.filter(transaction => !idSet.has(transaction.id)),
     }));
+    queueReceiptPhotoCleanup(deletedTransactions.map(receiptPhotoOf));
 
     try {
       await withSyncManager(syncManager =>
@@ -192,34 +197,62 @@ export function useTransactionHandlers({
     });
   }, [addToast, restoreTransactions, setState, state.language, state.transactions]);
 
-  const updateTransaction = useCallback(async (updated: Transaction, targetAccountId?: string) => {
-    const isNewTransaction = !state.transactions.find(transaction => transaction.id === updated.id);
+  /**
+   * Saves the entry form: a new entry, an edit, or a transfer. A new transfer (category
+   * internal-transfer) needs `targetAccountId` and is booked as two legs; editing one leg of a
+   * transfer keeps the other in step and, with `targetAccountId`, moves the incoming leg there.
+   */
+  /**
+   * Saves an edited (or new) entry. `silent` is for changes made outside the edit form (a receipt
+   * photo from the details card): the form stays as it is and no "updated" toast is shown.
+   */
+  const updateTransaction = useCallback(async (updated: Transaction, targetAccountId?: string, options: { silent?: boolean } = {}) => {
+    const strings = getTranslations();
+    const isNewTransaction = !state.transactions.some(transaction => transaction.id === updated.id);
+    const isTransfer = updated.categoryId === TRANSFER_CATEGORY_ID;
+    const convert = (amount: number, from: Currency, to: Currency) => convertAmount(amount, from, to, state.rates);
+    const accountName = (accountId: string) => state.accounts.find(account => account.id === accountId)?.name || 'Account';
 
-    // Editing one leg of a transfer keeps the other leg in step (date, amount).
-    const partnerLegs = updated.transferId
-      ? state.transactions
-        .filter(transaction => transaction.transferId === updated.transferId && transaction.id !== updated.id)
-        .map(partner => {
-          const rawAmount = convertAmount(updated.amount, updated.currency, partner.currency, state.rates);
-          return {
-            ...partner,
-            date: updated.date,
-            amount: Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : partner.amount,
-          };
-        })
-      : [];
-    const changed = [updated, ...partnerLegs];
+    let changed: Transaction[];
+    if (isNewTransaction && isTransfer) {
+      const toAccount = state.accounts.find(account => account.id === targetAccountId);
+      if (!toAccount || toAccount.id === updated.accountId) {
+        // The form requires two different wallets; never book half a transfer as income.
+        addToast(strings.transferNeedsTwoWallets, 'error');
+        return;
+      }
+      changed = buildTransferPair({
+        outflow: updated,
+        toAccount,
+        fromAccountName: accountName(updated.accountId),
+        transferId: updated.transferId ?? createId(),
+        inflowId: createId(),
+        convert,
+      }).map(leg => withAccountTeam(leg, state.accounts));
+    } else if (isNewTransaction) {
+      changed = [withAccountTeam(updated, state.accounts)];
+    } else {
+      const toAccount = targetAccountId ? state.accounts.find(account => account.id === targetAccountId) : undefined;
+      const partnerLegs = updated.transferId
+        ? state.transactions
+          .filter(transaction => transaction.transferId === updated.transferId && transaction.id !== updated.id)
+          .map(partner => alignTransferLeg(updated, partner, {
+            toAccount: updated.type === 'expense' ? toAccount : undefined,
+            fromAccountName: updated.type === 'expense' ? accountName(updated.accountId) : undefined,
+            convert,
+          }))
+        : [];
+      changed = [updated, ...partnerLegs];
+    }
     const changedById = new Map(changed.map(transaction => [transaction.id, transaction]));
 
     // Person balances follow from the transaction itself (see domain/balances.ts),
     // so editing only replaces the row: no balance bookkeeping, no currency drift.
     setState(prev => {
-      const exists = prev.transactions.some(transaction => transaction.id === updated.id);
+      const existingIds = new Set(prev.transactions.map(transaction => transaction.id));
+      const added = changed.filter(transaction => !existingIds.has(transaction.id));
       const transactions = prev.transactions.map(transaction => changedById.get(transaction.id) ?? transaction);
-      return {
-        ...prev,
-        transactions: exists ? transactions : [...transactions, updated],
-      };
+      return { ...prev, transactions: [...added, ...transactions] };
     });
 
     try {
@@ -228,52 +261,17 @@ export function useTransactionHandlers({
       );
     } catch (error) {
       console.error('Failed to sync transaction update:', error);
-      addToast(getTranslations().transactionUpdatedSyncFailed, 'error');
+      addToast(isNewTransaction ? strings.transactionSavedSyncFailed : strings.transactionUpdatedSyncFailed, 'error');
     }
 
-    if (isNewTransaction && targetAccountId && updated.categoryId === 'internal-transfer') {
-      // Both legs share a transferId so they are edited and deleted together.
-      const transferId = updated.transferId ?? createId();
-      const outflowTx = { ...updated, type: 'expense' as const, transferId };
-
-      setState(prev => ({
-        ...prev,
-        transactions: prev.transactions.map(transaction => transaction.id === updated.id ? outflowTx : transaction),
-      }));
-
-      try {
-        await withSyncManager(syncManager => syncManager.syncTransaction(outflowTx));
-      } catch (error) {
-        console.error('Failed to sync outflow transaction correction:', error);
-      }
-
-      const targetAccount = state.accounts.find(account => account.id === targetAccountId);
-      if (targetAccount) {
-        const rawAmount = convertAmount(updated.amount, updated.currency, targetAccount.currency, state.rates);
-        const convertedAmount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : updated.amount;
-
-        const inflowTx: Transaction = {
-          id: createId(),
-          date: updated.date,
-          amount: convertedAmount,
-          currency: targetAccount.currency,
-          categoryId: 'internal-transfer',
-          accountId: targetAccountId,
-          type: 'income',
-          note: `Transfer from ${state.accounts.find(account => account.id === updated.accountId)?.name || 'Account'}`,
-          subcategory: 'Transfer In',
-          transferId,
-        };
-
-        await addTransaction(inflowTx);
-      }
-    }
-
+    if (options.silent) return;
     closeEditModal();
-    closeReceiptModal();
     setSelectedTransaction(null);
-    addToast(getTranslations().transactionUpdated, 'success');
-  }, [addToast, addTransaction, closeEditModal, closeReceiptModal, createId, setSelectedTransaction, setState, state.accounts, state.rates, state.transactions]);
+    addToast(
+      !isNewTransaction ? strings.transactionUpdated : isTransfer ? strings.transferAdded : strings.transactionAdded,
+      'success',
+    );
+  }, [addToast, closeEditModal, createId, setSelectedTransaction, setState, state.accounts, state.rates, state.transactions]);
 
   return {
     addTransaction,

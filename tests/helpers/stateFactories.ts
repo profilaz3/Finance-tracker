@@ -17,7 +17,6 @@ export const createBaseState = (): AppState => ({
   },
   templates: [],
   recurringTransactions: [],
-  theme: 'lime-dark',
   language: 'en',
   events: [],
   sharedExpenses: [],

@@ -19,6 +19,8 @@ import {
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Avatar } from '../home/parts';
 import { Segmented } from '../ui/Segmented';
+import { pluralText } from '../../utils/plural';
+import { teamErrorText } from './teamErrors';
 
 interface TeamSettingsProps {
     state: AppState;
@@ -76,7 +78,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                 if (!cancelled) setIdentity({ userId: user?.id ?? null, email: user?.email ?? null });
                 await refresh();
             } catch (err) {
-                if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+                if (!cancelled) setError(teamErrorText(err, t));
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -94,7 +96,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
             await refresh();
             after?.();
         } catch (err) {
-            setError(t.teamActionFailed.replace('{error}', err instanceof Error ? err.message : String(err)));
+            setError(teamErrorText(err, t));
         } finally {
             setBusy(false);
         }
@@ -154,10 +156,16 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
     return (
         <div className="flex flex-col gap-4">
             {error && (
-                <p role="alert" className="paper-tile flex items-start gap-2 p-3 text-[14px] text-neg">
-                    <span className="min-w-0 flex-1">{error}</span>
-                    <button type="button" onClick={() => setError(null)} aria-label={t.close} className="shrink-0 text-muted">
-                        <X size={16} aria-hidden="true" />
+                <p role="alert" className="paper-tile flex items-center gap-2 py-1 pl-4 pr-1 text-[14px] text-neg">
+                    <span className="min-w-0 flex-1 py-2">{error}</span>
+                    <button
+                        type="button"
+                        onClick={() => setError(null)}
+                        aria-label={t.close}
+                        title={t.close}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-chip"
+                    >
+                        <X size={18} aria-hidden="true" />
                     </button>
                 </p>
             )}
@@ -229,6 +237,9 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                         const roles = assignableTeamRoles(team, identity);
                         const invite = invites[team.id] ?? { email: '', role: 'member' as MemberRole };
                         const inviteEmail = normalizeInviteEmail(invite.email);
+                        // Say why Invite is off while the address is incomplete ("bob@").
+                        const inviteIncomplete = invite.email.trim().length > 0 && !inviteEmail;
+                        const inviteHintId = `team-invite-hint-${team.id}`;
                         const members = [...team.members].sort((a, b) =>
                             (a.role === 'owner' ? 0 : a.role === 'admin' ? 1 : 2) - (b.role === 'owner' ? 0 : b.role === 'admin' ? 1 : 2)
                             || a.email.localeCompare(b.email));
@@ -265,9 +276,19 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                                                 onClick={() => void run(service => service.renameTeam(team.id, renameValue), () => setRenamingId(null))}
                                                 disabled={busy || !renameValue.trim()}
                                                 aria-label={t.save}
+                                                title={t.save}
                                                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent disabled:opacity-40"
                                             >
                                                 <Check size={18} aria-hidden="true" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRenamingId(null)}
+                                                aria-label={t.cancel}
+                                                title={t.cancel}
+                                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                                            >
+                                                <X size={18} aria-hidden="true" />
                                             </button>
                                         </div>
                                     ) : (
@@ -275,7 +296,12 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                                             <div className="min-w-0 flex-1">
                                                 <h3 className="truncate text-[18px] font-bold tracking-[-0.2px]">{team.name}</h3>
                                                 <p className="text-[13px] text-muted">
-                                                    {role ? t[roleLabelKey(role)] : ''} · {team.members.length} {t.teamMembers.toLowerCase()}
+                                                    {role ? `${t[roleLabelKey(role)]} · ` : ''}
+                                                    {pluralText(team.members.length, state.language, {
+                                                        one: t.teamMemberCountOne,
+                                                        few: t.teamMemberCountFew,
+                                                        other: t.teamMemberCountOther,
+                                                    })}
                                                 </p>
                                             </div>
                                             {manage && (
@@ -305,7 +331,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                                         return (
                                             <div
                                                 key={member.email}
-                                                className={clsx('flex min-h-[60px] items-center gap-3 py-2', index < members.length - 1 && 'border-b border-hair')}
+                                                className={clsx('flex min-h-[60px] flex-wrap items-center gap-x-3 gap-y-2 py-2', index < members.length - 1 && 'border-b border-hair')}
                                             >
                                                 <Avatar name={member.email} color={team.color || TEAM_COLORS[0]} size={36} />
                                                 <div className="min-w-0 flex-1">
@@ -318,28 +344,32 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                                                         {!member.userId && <> · {t.teamPending}</>}
                                                     </p>
                                                 </div>
-                                                {canChangeRole && (
-                                                    <Segmented<MemberRole>
-                                                        size="sm"
-                                                        ariaLabel={`${t.teamRoleLabel}: ${member.email}`}
-                                                        value={member.role as MemberRole}
-                                                        onChange={next => {
-                                                            if (next !== member.role) void run(service => service.updateTeamMemberRole(team.id, member.email, next));
-                                                        }}
-                                                        options={roles.map(r => ({ value: r, label: t[roleLabelKey(r)] }))}
-                                                        className="hidden shrink-0 sm:flex"
-                                                    />
-                                                )}
                                                 {removable && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setPending({ kind: 'remove', team, member })}
                                                         aria-label={`${t.teamRemoveMember}: ${member.email}`}
                                                         title={t.teamRemoveMember}
-                                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-faint hover:bg-chip hover:text-neg"
+                                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-chip hover:text-neg sm:order-last"
                                                     >
                                                         <X size={17} aria-hidden="true" />
                                                     </button>
+                                                )}
+                                                {canChangeRole && (
+                                                    // Phones: on its own line under the email; wider screens: beside it.
+                                                    <div className="flex basis-full items-center gap-2 pl-12 sm:basis-auto sm:pl-0">
+                                                        <span className="text-[13px] text-muted sm:sr-only">{t.teamRoleLabel}</span>
+                                                        <Segmented<MemberRole>
+                                                            size="sm"
+                                                            ariaLabel={`${t.teamRoleLabel}: ${member.email}`}
+                                                            value={member.role as MemberRole}
+                                                            onChange={next => {
+                                                                if (next !== member.role) void run(service => service.updateTeamMemberRole(team.id, member.email, next));
+                                                            }}
+                                                            options={roles.map(r => ({ value: r, label: t[roleLabelKey(r)] }))}
+                                                            className="shrink-0"
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
                                         );
@@ -358,6 +388,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                                                 onKeyDown={e => e.key === 'Enter' && sendInvite()}
                                                 placeholder={t.teamInvitePlaceholder}
                                                 aria-label={t.teamInvitePlaceholder}
+                                                aria-describedby={inviteHintId}
                                                 className={clsx(field, 'bg-[var(--paper-tile)]')}
                                             />
                                             <button
@@ -370,7 +401,9 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                                             </button>
                                         </div>
                                         <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <p className="min-w-0 flex-1 text-[13px] text-muted">{t.teamInviteHint}</p>
+                                            <p id={inviteHintId} aria-live="polite" className={clsx('min-w-0 flex-1 text-[13px] text-muted', inviteIncomplete && 'font-medium')}>
+                                                {inviteIncomplete ? t.teamErrInvalidEmail : t.teamInviteHint}
+                                            </p>
                                             {roles.length > 1 && (
                                                 <Segmented<MemberRole>
                                                     size="sm"
@@ -411,7 +444,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ state, setState, wor
                     {showCreate ? (
                         <section className="paper-tile flex flex-col gap-2 p-3" aria-label={t.newTeam}>
                             {createForm}
-                            <button type="button" onClick={() => setShowCreate(false)} className="self-end px-3 py-1 text-[14px] font-semibold text-muted">
+                            <button type="button" onClick={() => setShowCreate(false)} className="h-10 self-end rounded-full px-4 text-[14px] font-semibold text-muted hover:bg-chip">
                                 {t.cancel}
                             </button>
                         </section>

@@ -1,2 +1,2 @@
-export { SubscriptionsPanel } from './SubscriptionsPanel';
+export { SubscriptionsPage } from './SubscriptionsPage';
 export { ServiceGlyph } from './ServiceGlyph';

@@ -2,6 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import type { Currency } from '../../types';
 import { formatMoney, getIntlLocale } from '../../utils/locale';
+import { stableColor } from '../../utils/stableColor';
 import type { AppLanguage } from '../../utils/locale';
 
 /** Whole units for summaries; cents only when the amount is small. */
@@ -10,9 +11,9 @@ export const money = (amount: number, currency: Currency, language: AppLanguage,
   return formatMoney(amount, currency, language, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 };
 
-/** Short form for tight spots: 247.1K, 1.2M. Falls back to `money` below 100,000. */
-export const compactMoney = (amount: number, currency: Currency, language: AppLanguage): string => {
-  if (Math.abs(amount) < 100_000) return money(amount, currency, language);
+/** Short form for tight spots: 247.1K, 1.2M. Falls back to `money` below 100,000 unless `always`. */
+export const compactMoney = (amount: number, currency: Currency, language: AppLanguage, always = false): string => {
+  if (!always && Math.abs(amount) < 100_000) return money(amount, currency, language);
   try {
     return new Intl.NumberFormat(getIntlLocale(language), {
       style: 'currency',
@@ -24,6 +25,12 @@ export const compactMoney = (amount: number, currency: Currency, language: AppLa
   } catch {
     return money(amount, currency, language);
   }
+};
+
+/** One format for a row of figures: all compact when any of them needs it, otherwise all in full. */
+export const rowMoney = (amounts: number[], currency: Currency, language: AppLanguage): string[] => {
+  const compact = amounts.some(amount => Math.abs(amount) >= 100_000);
+  return amounts.map(amount => (compact ? compactMoney(amount, currency, language, true) : money(amount, currency, language)));
 };
 
 export const signedMoney = (amount: number, currency: Currency, language: AppLanguage, precise = false): string =>
@@ -72,41 +79,13 @@ export const Big: React.FC<{ children: React.ReactNode; size?: number; className
   </span>
 );
 
-export const Ring: React.FC<{ ratio: number; radius: number; stroke: number; color?: string; track?: string; className?: string }> = ({
-  ratio,
-  radius,
-  stroke,
-  color = 'rgb(var(--accent-rgb))',
-  track = 'var(--paper-chip)',
-  className,
-}) => {
-  const size = radius * 2 + stroke;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(1, ratio));
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className={clsx('shrink-0 -rotate-90', className)}>
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={track} strokeWidth={stroke} />
-      {clamped > 0 && (
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${(circumference * clamped).toFixed(1)} ${circumference.toFixed(1)}`}
-        />
-      )}
-    </svg>
-  );
-};
+export { Ring } from '../ui/Ring';
 
-export const Avatar: React.FC<{ name: string; color: string; image?: string; size?: number; ring?: boolean }> = ({ name, color, image, size = 40, ring }) => (
+export const Avatar: React.FC<{ name: string; color?: string; image?: string; size?: number; ring?: boolean }> = ({ name, color, image, size = 40, ring }) => (
   <span
     aria-hidden="true"
     className={clsx('flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white', ring && 'shadow-[0_0_0_2.5px_var(--paper-tile)]')}
-    style={{ width: size, height: size, background: color, fontSize: size < 36 ? 12 : 14 }}
+    style={{ width: size, height: size, background: color || stableColor(name), fontSize: size < 36 ? 12 : 14 }}
   >
     {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : initials(name)}
   </span>

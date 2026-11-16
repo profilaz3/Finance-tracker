@@ -1,0 +1,13 @@
+// Cloudflare hosting: the built app is served as Workers static assets (no Worker code runs, so
+// requests are free and unmetered). Deploy with `npm run build && npx wrangler deploy`, or connect
+// the repository in the Cloudflare dashboard (Workers Builds) with the same two commands.
+// Response headers live in public/_headers.
+{
+  "name": "vratipare",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    // No router library: any path that is not a file gets index.html and the app takes over.
+    "not_found_handling": "single-page-application"
+  }
+}

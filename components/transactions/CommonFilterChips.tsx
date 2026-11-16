@@ -24,7 +24,7 @@ export const CommonFilterChips: React.FC<CommonFilterChipsProps> = ({
           aria-pressed={isActive}
           onClick={() => onApplyFilter(filter)}
           className={clsx(
-            'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
+            'flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
             isActive
               ? 'bg-accent text-on-accent'
               : 'bg-[var(--paper-tile)] text-muted shadow-[var(--paper-tile-shadow)] hover:text-[var(--paper-text)]'

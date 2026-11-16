@@ -9,7 +9,7 @@ const DIALOG_COMPONENTS = [
   'components/ExportModal.tsx',
   'components/ImagePickerSheet.tsx',
   'components/PersonDetail.tsx',
-  'components/ReceiptModal.tsx',
+  'components/transaction-details/TransactionDetailsSheet.tsx',
   'components/ReceiptScanModal.tsx',
   'components/ShareEventModal.tsx',
   'components/SharedExpenseModal.tsx',
@@ -18,12 +18,24 @@ const DIALOG_COMPONENTS = [
   'components/ConfirmDialog.tsx',
 ];
 
+/** Dialogs whose heading is drawn by a child component that gets the title id. */
+const HEADING_IN: Record<string, string> = {
+  'components/split-expense/SplitExpenseModal.tsx': 'components/split-expense/SplitHero.tsx',
+  'components/PersonDetail.tsx': 'components/person/PersonHero.tsx',
+};
+
 describe('dialog semantics', () => {
   it.each(DIALOG_COMPONENTS)('%s uses useDialog and labels the panel by its heading', (path) => {
     const source = read(path);
     expect(source).toContain('useDialog(');
     expect(source).toContain('{...dialogProps}');
-    expect(source).toContain('id={titleId}');
+    const headingFile = HEADING_IN[path];
+    if (headingFile) {
+      expect(source).toContain('titleId={titleId}');
+      expect(read(headingFile)).toContain('id={titleId}');
+    } else {
+      expect(source).toContain('id={titleId}');
+    }
   });
 
   it('useDialog wires role, aria-modal, aria-labelledby, focus trap and Escape', () => {

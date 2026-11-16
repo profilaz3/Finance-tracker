@@ -53,7 +53,11 @@ export type AccountParseResult =
  * `160 0000001234567 29` or the 18 digits. The middle part is zero padded to 13 digits.
  */
 export const parseAccountNumber = (input: string | null | undefined): AccountParseResult => {
-  const raw = (input ?? '').trim();
+  // Pasted numbers often carry typographic dashes (‐ ‑ ‒ – — ― −) or non-breaking spaces.
+  const raw = (input ?? '')
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+    .replace(/[\s\u00a0\u2007\u202f]+/g, ' ')
+    .trim();
   if (!raw) return { ok: false, reason: 'empty' };
   const compact = raw.replace(/\s+/g, '');
   let digits: string | null = null;

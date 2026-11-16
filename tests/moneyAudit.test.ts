@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { INITIAL_CATEGORIES } from '../constants';
 import { calculateBalanceOffset, getEffectivePersonBalances, selectPeopleWithBalances } from '../domain/balances';
 import { buildSettlementDraft } from '../domain/people';
+import { toStoredFee } from '../domain/money';
+import { convertAmount } from '../services/currencyService';
 import { buildAnalyticsStudioSummary } from '../utils/analyticsSelectors';
 import { calculateTotalExpense, calculateTotalIncome } from '../utils/financialSelectors';
 import { calculateIPaidSplitSubmission, recalculateSplitShares } from '../utils/splitExpenseCalculator';
@@ -23,7 +25,6 @@ const stateWith = (transactions: Transaction[], baseCurrency: AppState['baseCurr
   recurringTransactions: [],
   rates,
   baseCurrency,
-  theme: 'graphite',
   language: 'en',
 });
 
@@ -186,5 +187,27 @@ describe('M11 analytics periods use local time', () => {
   it('buckets chart months by local calendar month', () => {
     expect(getMonthKey(new Date(2026, 10, 1, 0, 30))).toBe('2026-11');
     expect(getGroupKey(new Date(2026, 10, 1, 0, 30).toISOString(), 'daily')).toBe('2026-11-01');
+  });
+});
+
+describe('toStoredFee', () => {
+  const feeRates: ExchangeRates = { base: 'EUR', date: '2026-11-01', rates: { EUR: 1, USD: 1.1, RSD: 117 } };
+
+  it('converts a fee read in the entry currency into the stored USD fee', () => {
+    // 117 RSD = 1 EUR = 1.10 USD
+    expect(toStoredFee(117, 'RSD', feeRates)).toBeCloseTo(1.1, 2);
+    expect(toStoredFee(2.5, 'USD', feeRates)).toBe(2.5);
+  });
+
+  it('keeps enough precision for a fee typed in RSD to read back as typed', () => {
+    const stored = toStoredFee(150, 'RSD', feeRates)!;
+    expect(Math.round(convertAmount(stored, 'USD', 'RSD', feeRates) * 100) / 100).toBe(150);
+  });
+
+  it('drops empty, invalid and non-positive fees', () => {
+    expect(toStoredFee(undefined, 'RSD', feeRates)).toBeUndefined();
+    expect(toStoredFee(0, 'RSD', feeRates)).toBeUndefined();
+    expect(toStoredFee(-3, 'EUR', feeRates)).toBeUndefined();
+    expect(toStoredFee(Number.NaN, 'EUR', feeRates)).toBeUndefined();
   });
 });

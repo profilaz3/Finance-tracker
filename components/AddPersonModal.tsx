@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { m, AnimatePresence } from 'motion/react';
-import { X, Check, User, AlertCircle, Camera } from 'lucide-react';
+import { X, Check, User, AlertCircle, Camera, Trash2 } from 'lucide-react';
 import { Currency, Person } from '../types';
 import { TRANSLATIONS, CHART_COLORS, CURRENCIES } from '../constants';
+import { CurrencyFlag } from './ui/CurrencyFlag';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import clsx from 'clsx';
 import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
@@ -12,6 +13,9 @@ import { useDialog } from '../hooks/useFocusTrap';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { Segmented } from './ui/Segmented';
 import { AVATAR_MAX_DIMENSION } from '../utils/imageResize';
+import { getSupabaseService } from '../services/runtimeServices';
+
+const LEGACY_PROFILE_ID = 'user-profile';
 
 interface AddPersonModalProps {
     isOpen: boolean;
@@ -20,9 +24,14 @@ interface AddPersonModalProps {
     onUpdate?: (id: string, updates: Partial<Person>) => void;
     initialData?: Person | null;
     language: 'en' | 'sr';
+    /**
+     * The signed-in user's own profile. Without it, an edited person is recognised as the profile
+     * when its id is the signed-in user's id (the profile id is the auth user id).
+     */
+    isOwnProfile?: boolean;
 }
 
-export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose, onAdd, onUpdate, initialData, language }) => {
+export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose, onAdd, onUpdate, initialData, language, isOwnProfile }) => {
     const [name, setName] = useState('');
     const [currency, setCurrency] = useState<Currency>('RSD');
     const [color, setColor] = useState(CHART_COLORS[0]);
@@ -43,6 +52,30 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
     } = useImagePicker({ quality: 80, maxDimension: AVATAR_MAX_DIMENSION });
 
     const nameError = touched && !name.trim() ? t.fieldRequired : null;
+
+    const [detectedOwnProfile, setDetectedOwnProfile] = useState(false);
+    const initialId = initialData?.id;
+    useEffect(() => {
+        if (!isOpen || isOwnProfile !== undefined || !initialId) {
+            setDetectedOwnProfile(false);
+            return;
+        }
+        if (initialId === LEGACY_PROFILE_ID) {
+            setDetectedOwnProfile(true);
+            return;
+        }
+        let cancelled = false;
+        getSupabaseService()
+            .then(service => service.getUser())
+            .then(user => {
+                if (!cancelled) setDetectedOwnProfile(!!user && user.id === initialId);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, isOwnProfile, initialId]);
+    const ownProfile = isOwnProfile ?? detectedOwnProfile;
 
     useEffect(() => {
         if (isOpen) {
@@ -106,7 +139,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
         handleImageResult(result);
     }, [handleFileInputChange, handleImageResult]);
 
-    const title = initialData ? t.editPerson : t.addPerson;
+    const title = ownProfile ? (initialData ? t.editProfile : t.myProfile) : initialData ? t.editPerson : t.addPerson;
     const initial = name.trim().charAt(0).toUpperCase();
 
     return (
@@ -145,7 +178,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                     type="button"
                                     onClick={onClose}
                                     aria-label={t.close}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
                                 >
                                     <X size={18} aria-hidden="true" />
                                 </button>
@@ -160,10 +193,11 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                         type="button"
                                         onClick={openPicker}
                                         aria-label={t.changePhoto}
-                                        className="group relative h-24 w-24 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
+                                        className="group relative h-[104px] w-[104px] rounded-full p-1 outline-none transition-[background-color] duration-300 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
+                                        style={{ background: `color-mix(in oklab, ${color} 24%, transparent)` }}
                                     >
                                         <span
-                                            className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-[38px] font-bold text-white shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)] transition-[background-color,transform] duration-300 group-active:scale-95"
+                                            className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-[38px] font-bold text-white shadow-[0_0_0_3px_var(--paper-tile),0_10px_28px_-10px_rgba(0,0,0,0.45)] transition-[background-color,transform] duration-300 group-active:scale-95"
                                             style={{ backgroundColor: color }}
                                         >
                                             {avatar ? (
@@ -176,6 +210,15 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                             <Camera size={14} strokeWidth={2.4} />
                                         </span>
                                     </button>
+                                    {avatar && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setAvatar(undefined)}
+                                            className="-mt-1 flex h-10 items-center gap-1.5 rounded-full px-4 text-[14px] font-semibold text-neg"
+                                        >
+                                            <Trash2 size={15} aria-hidden="true" /> {t.removePhoto}
+                                        </button>
+                                    )}
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -217,7 +260,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                 {/* Color */}
                                 <div role="radiogroup" aria-label={t.color}>
                                     <span className="mb-2 block px-1 text-[13px] font-semibold text-muted">{t.color}</span>
-                                    <div className="grid grid-cols-8 justify-items-center gap-1 px-0.5">
+                                    <div className="grid grid-cols-8 justify-items-center px-0.5">
                                         {CHART_COLORS.map((c, index) => {
                                             const selected = color === c;
                                             return (
@@ -228,29 +271,45 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({ isOpen, onClose,
                                                     aria-checked={selected}
                                                     aria-label={`${t.color} ${index + 1}`}
                                                     onClick={() => setColor(c)}
-                                                    className={clsx(
-                                                        'flex h-8 w-8 items-center justify-center rounded-full outline-none transition-transform duration-200 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-                                                        selected ? 'scale-110 ring-2 ring-on-surface ring-offset-2 ring-offset-[var(--paper-tile)]' : 'active:scale-90'
-                                                    )}
-                                                    style={{ backgroundColor: c }}
+                                                    // 40px tap target around the 32px swatch.
+                                                    className="group/swatch flex h-10 w-10 items-center justify-center rounded-full outline-none"
                                                 >
-                                                    {selected && <Check size={15} strokeWidth={3} className="text-white drop-shadow" aria-hidden="true" />}
+                                                    <span
+                                                        className={clsx(
+                                                            'flex h-8 w-8 items-center justify-center rounded-full transition-transform duration-200 group-focus-visible/swatch:ring-2 group-focus-visible/swatch:ring-accent group-focus-visible/swatch:ring-offset-2',
+                                                            selected ? 'scale-110 ring-2 ring-on-surface ring-offset-2 ring-offset-[var(--paper-tile)]' : 'group-active/swatch:scale-90'
+                                                        )}
+                                                        style={{ backgroundColor: c }}
+                                                    >
+                                                        {selected && <Check size={15} strokeWidth={3} className="text-white drop-shadow" aria-hidden="true" />}
+                                                    </span>
                                                 </button>
                                             );
                                         })}
                                     </div>
                                 </div>
 
-                                {/* Currency */}
+                                {/* Currency preselected when splitting a bill with this person; meaningless for yourself. */}
+                                {!ownProfile && (
                                 <div>
-                                    <span className="mb-2 block px-1 text-[13px] font-semibold text-muted">{t.currency}</span>
+                                    <span id="add-person-currency-label" className="block px-1 text-[13px] font-semibold text-muted">{t.personCurrencyLabel}</span>
+                                    <span id="add-person-currency-hint" className="mb-2 block px-1 text-[12px] text-faint">{t.personCurrencyHint}</span>
                                     <Segmented
-                                        ariaLabel={t.currency}
+                                        ariaLabel={t.personCurrencyLabel}
                                         value={currency}
                                         onChange={setCurrency}
-                                        options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                                        options={CURRENCIES.map((c) => ({
+                                            value: c,
+                                            label: (
+                                                <span className="flex items-center justify-center gap-1.5">
+                                                    <CurrencyFlag currency={c} size={18} />
+                                                    {c}
+                                                </span>
+                                            ),
+                                        }))}
                                     />
                                 </div>
+                                )}
                             </div>
 
                             <div className="shrink-0 px-5 pb-5 pt-1">

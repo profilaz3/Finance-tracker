@@ -1,11 +1,17 @@
-import React from 'react';
-import { AnimatePresence, m } from 'motion/react';
-import { Calendar, CheckCircle2, CheckSquare, ChevronDown, Download, FileText, FileSpreadsheet, Loader2, Search, Sparkles, Square, Trash2, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckSquare, FileSpreadsheet, Loader2, Search, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState, TransactionType } from '../../types';
 import { CommonFilterChips } from './CommonFilterChips';
 import { TRANSLATIONS } from '../../constants';
-import type { CommonFilterId, CommonTransactionFilter } from '../../utils/qolSuggestions';
+import { UNCATEGORIZED_FILTER, type CommonFilterId, type CommonTransactionFilter } from '../../utils/qolSuggestions';
+import { formatShortDate, getIntlLocale } from '../../utils/locale';
+import { pluralForm } from '../../utils/plural';
+import { localizeCategoryName } from '../../utils/systemText';
+import { useBackLayer } from '../../hooks/useBackLayer';
+import { GlassSheet } from '../ui/GlassSheet';
+import { fill } from '../home/parts';
+import { ACTIVITY_STRINGS } from './activityStrings';
 
 interface TransactionsToolbarProps {
   state: AppState;
@@ -21,7 +27,6 @@ interface TransactionsToolbarProps {
   inputMode: 'search' | 'add';
   setInputMode: (value: 'search' | 'add') => void;
   isSelectionMode: boolean;
-  setIsSelectionMode: (value: boolean) => void;
   selectedCount: number;
   allSelected: boolean;
   hasSelection: boolean;
@@ -29,9 +34,10 @@ interface TransactionsToolbarProps {
   exitSelectionMode: () => void;
   handleBatchExport: () => void;
   handleBatchDelete: () => void;
-  isExportingPdf: boolean;
-  onOpenExportModal: () => void;
-  onOpenPrintableReport: () => void;
+  /** Opens the category picker for the selected entries. */
+  handleBatchCategory?: () => void;
+  /** List or table (wide windows only); left out, there is no switch. */
+  viewToggle?: React.ReactNode;
   onSmartParse: () => void;
   filterAccount: string;
   setFilterAccount: (value: string) => void;
@@ -44,13 +50,18 @@ interface TransactionsToolbarProps {
   setFilterDateFrom: (value: string) => void;
   filterDateTo: string;
   setFilterDateTo: (value: string) => void;
-  showDateFilter: boolean;
-  setShowDateFilter: (value: boolean) => void;
-  hasSearchOrFilters: boolean;
   activeFilterCount: number;
   clearAllFilters: () => void;
-  isScrolled: boolean;
+  /** Entries the current search and filters show. */
+  resultCount: number;
 }
+
+const chip = (active: boolean) => clsx(
+  'flex h-10 max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[14px] font-semibold transition-colors',
+  active ? 'bg-accent text-on-accent' : 'bg-[var(--paper-tile)] shadow-[var(--paper-tile-shadow)]',
+);
+
+const sectionTitle = 'text-[13px] font-semibold uppercase tracking-[0.06em] text-muted';
 
 export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
   state,
@@ -66,7 +77,6 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
   inputMode,
   setInputMode,
   isSelectionMode,
-  setIsSelectionMode,
   selectedCount,
   allSelected,
   hasSelection,
@@ -74,9 +84,8 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
   exitSelectionMode,
   handleBatchExport,
   handleBatchDelete,
-  isExportingPdf,
-  onOpenExportModal,
-  onOpenPrintableReport,
+  handleBatchCategory,
+  viewToggle,
   onSmartParse,
   filterAccount,
   setFilterAccount,
@@ -89,276 +98,330 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
   setFilterDateFrom,
   filterDateTo,
   setFilterDateTo,
-  showDateFilter,
-  setShowDateFilter,
-  hasSearchOrFilters,
   activeFilterCount,
   clearAllFilters,
-  isScrolled,
+  resultCount,
 }) => {
   const t = TRANSLATIONS[state.language];
+  const s = ACTIVITY_STRINGS[state.language];
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useBackLayer('activity-filters', filtersOpen, () => setFiltersOpen(false));
 
-  const filterAccountName = filterAccount !== 'all'
-    ? state.accounts.find(account => account.id === filterAccount)?.name || t.wallet
-    : null;
+  const quickLabel = (id: CommonFilterId) => commonFilters.find(filter => filter.id === id)?.label ?? '';
+  const categories = state.categories.filter(category => filterType === 'all' || category.type === filterType);
+  const thisMonth = commonFilters.find(filter => filter.id === 'thisMonth');
+  const isThisMonth = !!thisMonth && thisMonth.patch.filterDateFrom === filterDateFrom && thisMonth.patch.filterDateTo === filterDateTo;
+  const day = (value: string) => new Date(`${value}T12:00:00`);
+  const dateText = filterDateFrom && filterDateTo
+    ? new Intl.DateTimeFormat(getIntlLocale(state.language), { day: 'numeric', month: 'short' }).formatRange(day(filterDateFrom), day(filterDateTo))
+    : filterDateFrom
+      ? `${t.dateFrom} ${formatShortDate(day(filterDateFrom), state.language)}`
+      : `${t.dateTo} ${formatShortDate(day(filterDateTo), state.language)}`;
+
+  // What is on, as chips under the search: tap one to drop that filter.
+  const active: Array<{ id: string; label: string; clear: () => void }> = [];
+  if (filterType !== 'all') {
+    active.push({ id: 'type', label: quickLabel(filterType === 'income' ? 'income' : 'expenses'), clear: () => setFilterType('all') });
+  }
+  if (filterAccount !== 'all') {
+    active.push({ id: 'wallet', label: state.accounts.find(account => account.id === filterAccount)?.name ?? t.wallet, clear: () => setFilterAccount('all') });
+  }
+  if (filterCategory !== 'all') {
+    const category = state.categories.find(item => item.id === filterCategory);
+    active.push({
+      id: 'category',
+      label: filterCategory === UNCATEGORIZED_FILTER ? quickLabel('uncategorized') : category ? localizeCategoryName(category, state.language) : s.category,
+      clear: () => setFilterCategory('all'),
+    });
+  }
+  if (filterDateFrom || filterDateTo) {
+    active.push({
+      id: 'dates',
+      label: isThisMonth ? quickLabel('thisMonth') : dateText,
+      clear: () => {
+        setFilterDateFrom('');
+        setFilterDateTo('');
+      },
+    });
+  }
+
+  const showForm = pluralForm(resultCount, state.language);
+  const showLabel = fill(showForm === 'one' ? s.showOne : showForm === 'few' ? s.showFew : s.showMany, { count: resultCount });
 
   return (
-    <div className={clsx('flex-none transition-all duration-200', isScrolled ? 'pb-2' : 'pb-3')}>
-      <AnimatePresence>
-        {isSelectionMode && (
-          <m.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden mb-2"
-          >
-            <div className="paper-tile flex items-center justify-between gap-2 px-4 py-2.5">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={toggleSelectAll}
-                  className="flex items-center gap-2 text-[14px] font-semibold text-accent"
-                >
-                  {allSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-                  {allSelected ? t.deselectAll : t.selectAll}
-                </button>
-                <span className="text-[14px] text-muted">
-                  {selectedCount} {t.selected}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasSelection && (
-                  <>
-                    <button
-                      onClick={handleBatchExport}
-                      aria-label={t.exportSelected}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-chip"
-                      title={t.exportSelected}
-                    >
-                      <FileSpreadsheet size={18} />
-                    </button>
-                    <button
-                      onClick={handleBatchDelete}
-                      aria-label={t.deleteSelected}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-chip text-neg"
-                      title={t.deleteSelected}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </>
-                )}
-                <button onClick={exitSelectionMode} aria-label={t.close} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-chip">
-                  <X size={18} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </m.div>
-        )}
-      </AnimatePresence>
-
-      <div className={clsx('flex justify-between items-center transition-all duration-200', isScrolled ? 'mb-2' : 'mb-3')}>
-        <h2 className={clsx('font-bold leading-tight transition-all duration-200', isScrolled ? 'text-[20px] tracking-[-0.3px]' : 'text-[28px] tracking-[-0.6px]')}>
-          {t.transactions}
-        </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsSelectionMode(!isSelectionMode)}
-            className={clsx(
-              'glass flex h-11 w-11 items-center justify-center rounded-full transition-colors',
-              isSelectionMode && 'bg-accent text-on-accent'
-            )}
-            title={t.selectMultiple}
-            aria-label={t.selectMultiple}
-            aria-pressed={isSelectionMode}
-          >
-            <CheckCircle2 size={19} aria-hidden="true" />
-          </button>
-          <button
-            onClick={onOpenExportModal}
-            className="glass flex h-11 w-11 items-center justify-center rounded-full"
-            title={t.export}
-            aria-label={t.openExport}
-          >
-            <Download size={19} aria-hidden="true" />
-          </button>
-          <button
-            onClick={onOpenPrintableReport}
-            disabled={isExportingPdf}
-            className="glass flex h-11 w-11 items-center justify-center rounded-full"
-            title={t.exportPdf}
-            aria-label={t.printableReport}
-          >
-            {isExportingPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={19} aria-hidden="true" />}
-          </button>
-        </div>
-      </div>
-
-      <div className="relative mb-3">
-        <div className="relative">
-          {inputMode === 'search' ? (
-            <Search size={18} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
-          ) : (
-            <Sparkles size={18} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
-          )}
-          <input
-            type="text"
-            value={inputMode === 'search' ? searchQuery : smartInput}
-            onChange={(event) => {
-              if (inputMode === 'search') {
-                setSearchQuery(event.target.value);
-                return;
-              }
-
-              setSmartInput(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && inputMode === 'add' && smartInput.trim() && !isParsing) {
-                onSmartParse();
-              }
-            }}
-            placeholder={inputMode === 'search' ? t.searchPlaceholder : t.smartAddPlaceholder}
-            className={clsx(
-              'h-12 w-full rounded-full border-none bg-[var(--paper-tile)] pl-11 pr-24 text-[16px] shadow-[var(--paper-tile-shadow)] placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent',
-              inputMode === 'add' && 'ring-2 ring-accent'
-            )}
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            {inputMode === 'add' && (
-              <button
-                onClick={onSmartParse}
-                disabled={!smartInput.trim() || isParsing}
-                className="h-9 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-on-accent disabled:opacity-40"
-              >
-                {isParsing ? <Loader2 size={14} className="animate-spin" /> : t.parse}
-              </button>
-            )}
+    <div className="flex-none pb-1">
+      {isSelectionMode ? (
+        <div className="paper-tile flex min-h-12 items-center justify-between gap-2 px-3 py-1">
+          <div className="flex min-w-0 items-center gap-3">
             <button
-              onClick={() => {
-                setInputMode(inputMode === 'search' ? 'add' : 'search');
-                setSearchQuery('');
-                setSmartInput('');
-              }}
-              className={clsx(
-                'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
-                inputMode === 'add' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-chip'
-              )}
-              title={inputMode === 'search' ? t.smartAdd : t.search}
-              aria-label={inputMode === 'search' ? t.smartAdd : t.search}
+              type="button"
+              onClick={toggleSelectAll}
+              className="flex h-10 items-center gap-2 whitespace-nowrap text-[14px] font-semibold text-accent"
             >
-              {inputMode === 'search' ? <Sparkles size={17} aria-hidden="true" /> : <Search size={17} aria-hidden="true" />}
+              {allSelected ? <CheckSquare size={18} aria-hidden="true" /> : <Square size={18} aria-hidden="true" />}
+              {allSelected ? t.deselectAll : t.selectAll}
+            </button>
+            <span className="truncate text-[14px] text-muted">
+              {selectedCount} {t.selected}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {hasSelection && (
+              <>
+                {handleBatchCategory && (
+                  <button
+                    type="button"
+                    onClick={handleBatchCategory}
+                    aria-label={s.changeCategory}
+                    title={s.changeCategory}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-chip"
+                  >
+                    <Shapes size={18} aria-hidden="true" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleBatchExport}
+                  aria-label={t.exportSelected}
+                  title={t.exportSelected}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-chip"
+                >
+                  <FileSpreadsheet size={18} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  aria-label={t.deleteSelected}
+                  title={t.deleteSelected}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-chip text-neg"
+                >
+                  <Trash2 size={18} aria-hidden="true" />
+                </button>
+              </>
+            )}
+            <button type="button" onClick={exitSelectionMode} aria-label={t.close} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-chip">
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
-        {inputMode === 'add' && parseError && (
-          <p className="mt-2 px-4 text-[13px] text-neg">{parseError}</p>
-        )}
-        {inputMode === 'add' && !aiAvailable && (
-          <p className="mt-2 px-4 text-[13px] text-neg">
-            {t.aiUnavailable}
-          </p>
-        )}
-      </div>
-
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 pt-0.5 scrollbar-hide">
-        <button
-          onClick={() => {
-            setFilterType('all');
-            setFilterCategory('all');
-          }}
-          className={clsx(
-            'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
-            filterType === 'all' && filterCategory === 'all'
-              ? 'bg-accent text-on-accent'
-              : 'bg-[var(--paper-tile)] text-muted shadow-[var(--paper-tile-shadow)] hover:text-[var(--paper-text)]'
-          )}
-        >
-          {t.all}
-        </button>
-        <CommonFilterChips
-          filters={commonFilters}
-          activeIds={activeCommonFilterIds}
-          onApplyFilter={onApplyCommonFilter}
-        />
-        <select
-          value={filterAccount}
-          onChange={(event) => setFilterAccount(event.target.value)}
-          aria-label={t.wallet}
-          className="h-9 shrink-0 appearance-none rounded-full border-none bg-[var(--paper-tile)] px-3.5 text-[13px] font-semibold text-muted shadow-[var(--paper-tile-shadow)]"
-        >
-          <option value="all">{filterAccountName || t.wallet}</option>
-          {state.accounts.map(account => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => setShowDateFilter(!showDateFilter)}
-          className={clsx(
-            'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
-            (filterDateFrom || filterDateTo)
-              ? 'bg-accent text-on-accent'
-              : 'bg-[var(--paper-tile)] text-muted shadow-[var(--paper-tile-shadow)] hover:text-[var(--paper-text)]'
-          )}
-        >
-          <Calendar size={14} aria-hidden="true" />
-          {filterDateFrom || filterDateTo ? t.dateRange : t.dates}
-          <ChevronDown size={12} aria-hidden="true" className={clsx('opacity-60 transition-transform', showDateFilter && 'rotate-180')} />
-        </button>
-        {hasSearchOrFilters && (
+      ) : (
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            {inputMode === 'search' ? (
+              <Search size={18} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
+            ) : (
+              <Sparkles size={18} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-accent" />
+            )}
+            <input
+              type="text"
+              data-shortcut-search=""
+              value={inputMode === 'search' ? searchQuery : smartInput}
+              onChange={(event) => {
+                if (inputMode === 'search') {
+                  setSearchQuery(event.target.value);
+                  return;
+                }
+                setSmartInput(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && inputMode === 'add' && smartInput.trim() && !isParsing) {
+                  onSmartParse();
+                }
+              }}
+              placeholder={inputMode === 'search' ? s.search : t.smartAddPlaceholder}
+              aria-label={inputMode === 'search' ? t.search : t.smartAdd}
+              className={clsx(
+                'h-12 w-full rounded-full border-none bg-[var(--paper-tile)] pl-11 text-[16px] shadow-[var(--paper-tile-shadow)] placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent',
+                inputMode === 'add' ? 'pr-32 ring-2 ring-accent' : searchQuery ? 'pr-[92px]' : 'pr-14',
+              )}
+            />
+            <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+              {inputMode === 'search' && searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={t.clear}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-chip"
+                >
+                  <X size={17} aria-hidden="true" />
+                </button>
+              )}
+              {inputMode === 'add' && (
+                <button
+                  type="button"
+                  onClick={onSmartParse}
+                  disabled={!smartInput.trim() || isParsing}
+                  className="h-10 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-on-accent disabled:opacity-40"
+                >
+                  {isParsing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : t.parse}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode(inputMode === 'search' ? 'add' : 'search');
+                  setSearchQuery('');
+                  setSmartInput('');
+                }}
+                className={clsx(
+                  'flex h-10 w-10 items-center justify-center rounded-full transition-colors',
+                  inputMode === 'add' ? 'bg-accent-soft text-accent' : 'text-accent hover:bg-chip',
+                )}
+                title={inputMode === 'search' ? t.smartAdd : t.search}
+                aria-label={inputMode === 'search' ? t.smartAdd : t.search}
+              >
+                {inputMode === 'search' ? <Sparkles size={17} aria-hidden="true" /> : <Search size={17} aria-hidden="true" />}
+              </button>
+            </div>
+          </div>
           <button
-            onClick={clearAllFilters}
-            className="flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[13px] font-semibold text-neg hover:bg-chip"
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            aria-label={activeFilterCount > 0 ? fill(s.filtersOn, { count: activeFilterCount }) : s.filters}
+            aria-haspopup="dialog"
+            className={clsx(
+              'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-visible rounded-full shadow-[var(--paper-tile-shadow)]',
+              activeFilterCount > 0 ? 'bg-accent text-on-accent' : 'bg-[var(--paper-tile)]',
+            )}
           >
-            <X size={14} aria-hidden="true" />
-            {t.clear}
+            <SlidersHorizontal size={19} aria-hidden="true" />
             {activeFilterCount > 0 && (
-              <span className="rounded-full bg-chip px-1.5 py-0.5 text-[11px] font-bold">
+              <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--paper-text)] px-1 text-[11px] font-bold text-[var(--paper-bg)]">
                 {activeFilterCount}
               </span>
             )}
           </button>
-        )}
-      </div>
+          {viewToggle}
+        </div>
+      )}
 
-      <AnimatePresence>
-        {showDateFilter && (
-          <m.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="overflow-hidden"
-          >
-            <div className="flex gap-2 items-center pt-2">
-              <input
-                type="date"
-                value={filterDateFrom}
-                onChange={(event) => setFilterDateFrom(event.target.value)}
-                className="h-11 min-w-0 flex-1 rounded-[14px] border-none bg-[var(--paper-tile)] px-3 text-[15px] shadow-[var(--paper-tile-shadow)]"
-              />
-              <span className="text-[13px] text-faint" aria-hidden="true">&rarr;</span>
-              <input
-                type="date"
-                value={filterDateTo}
-                onChange={(event) => setFilterDateTo(event.target.value)}
-                className="h-11 min-w-0 flex-1 rounded-[14px] border-none bg-[var(--paper-tile)] px-3 text-[15px] shadow-[var(--paper-tile-shadow)]"
-              />
-              {(filterDateFrom || filterDateTo) && (
-                <button
-                  onClick={() => {
-                    setFilterDateFrom('');
-                    setFilterDateTo('');
-                  }}
-                  className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-chip"
-                  aria-label={t.clear}
-                >
-                  <X size={16} aria-hidden="true" className="text-muted" />
-                </button>
-              )}
+      {inputMode === 'add' && parseError && <p className="mt-2 px-4 text-[13px] text-neg">{parseError}</p>}
+      {inputMode === 'add' && !aiAvailable && <p className="mt-2 px-4 text-[13px] text-neg">{t.aiUnavailable}</p>}
+
+      {!isSelectionMode && active.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {active.map(filter => (
+            <button
+              key={filter.id}
+              type="button"
+              onClick={filter.clear}
+              aria-label={fill(s.removeFilter, { name: filter.label })}
+              className="flex h-10 max-w-full items-center gap-1.5 rounded-full bg-accent-soft pl-3.5 pr-2.5 text-[14px] font-semibold text-accent"
+            >
+              <span className="truncate">{filter.label}</span>
+              <X size={15} aria-hidden="true" className="shrink-0" />
+            </button>
+          ))}
+          {active.length > 1 && (
+            <button type="button" onClick={clearAllFilters} className="flex h-10 items-center rounded-full px-3 text-[14px] font-semibold text-muted">
+              {s.clearAll}
+            </button>
+          )}
+        </div>
+      )}
+
+      <GlassSheet
+        isOpen={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title={s.filters}
+        closeLabel={t.close}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              disabled={activeFilterCount === 0 && !searchQuery}
+              className="h-12 shrink-0 rounded-full px-4 text-[15px] font-semibold text-muted disabled:opacity-40"
+            >
+              {s.clearAll}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(false)}
+              className="h-12 min-w-0 flex-1 rounded-full bg-accent px-4 text-[15px] font-semibold text-on-accent"
+            >
+              {showLabel}
+            </button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-6 pb-1">
+          <section className="flex flex-col gap-2.5">
+            <h3 className={sectionTitle}>{s.quickPicks}</h3>
+            <div className="flex flex-wrap gap-2">
+              <CommonFilterChips filters={commonFilters} activeIds={activeCommonFilterIds} onApplyFilter={onApplyCommonFilter} />
             </div>
-          </m.div>
-        )}
-      </AnimatePresence>
+          </section>
+
+          <section className="flex flex-col gap-2.5">
+            <h3 className={sectionTitle}>{t.wallet}</h3>
+            <div role="radiogroup" aria-label={t.wallet} className="flex flex-wrap gap-2">
+              {[{ id: 'all', name: s.anyWallet }, ...state.accounts].map(account => (
+                <button
+                  key={account.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={filterAccount === account.id}
+                  onClick={() => setFilterAccount(account.id)}
+                  className={chip(filterAccount === account.id)}
+                >
+                  <span className="truncate">{account.name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-2.5">
+            <h3 className={sectionTitle}>{s.category}</h3>
+            <div role="radiogroup" aria-label={s.category} className="flex flex-wrap gap-2">
+              <button type="button" role="radio" aria-checked={filterCategory === 'all'} onClick={() => setFilterCategory('all')} className={chip(filterCategory === 'all')}>
+                {s.anyCategory}
+              </button>
+              {categories.map(category => (
+                <button
+                  key={category.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={filterCategory === category.id}
+                  onClick={() => setFilterCategory(category.id)}
+                  className={chip(filterCategory === category.id)}
+                >
+                  <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: category.color }} />
+                  <span className="truncate">{localizeCategoryName(category, state.language)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-2.5">
+            <h3 className={sectionTitle}>{s.dates}</h3>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <label htmlFor="transactions-date-from" className="mb-1 block px-1 text-[12px] font-semibold text-muted">{t.dateFrom}</label>
+                <input
+                  id="transactions-date-from"
+                  type="date"
+                  value={filterDateFrom}
+                  max={filterDateTo || undefined}
+                  onChange={(event) => setFilterDateFrom(event.target.value)}
+                  className="h-11 w-full min-w-0 rounded-[14px] border-none bg-[var(--paper-tile)] px-3 text-[15px] shadow-[var(--paper-tile-shadow)]"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <label htmlFor="transactions-date-to" className="mb-1 block px-1 text-[12px] font-semibold text-muted">{t.dateTo}</label>
+                <input
+                  id="transactions-date-to"
+                  type="date"
+                  value={filterDateTo}
+                  min={filterDateFrom || undefined}
+                  onChange={(event) => setFilterDateTo(event.target.value)}
+                  className="h-11 w-full min-w-0 rounded-[14px] border-none bg-[var(--paper-tile)] px-3 text-[15px] shadow-[var(--paper-tile-shadow)]"
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      </GlassSheet>
     </div>
   );
 };

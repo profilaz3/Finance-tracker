@@ -69,7 +69,6 @@ const baseState: AppState = {
     rates: { EUR: 1, USD: 2, RSD: 100 },
   },
   baseCurrency: 'EUR',
-  theme: 'graphite',
   language: 'en',
 };
 

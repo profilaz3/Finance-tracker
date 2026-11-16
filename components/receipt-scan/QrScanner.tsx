@@ -4,7 +4,7 @@ import { m } from 'motion/react';
 import { Flashlight, FlashlightOff, ImageIcon, QrCode, X } from 'lucide-react';
 import { useDialog } from '../../hooks/useFocusTrap';
 import { vibrate, HAPTIC_PATTERNS } from '../../utils/haptics';
-import { classifyScannedQr, decodeQrPixels, loadJsQr, type ScannedQr } from './qr';
+import { classifyScannedQr, decodeQrPixels, detectQrTexts, getNativeQrDetector, loadJsQr, pickQrText, type NativeQrDetector, type ScannedQr } from './qr';
 
 export interface QrScannerLabels {
   title: string;
@@ -27,14 +27,26 @@ interface QrScannerProps {
 }
 
 const SCAN_INTERVAL_MS = 140;
-// jsQR misses dense codes (fiscal QRs are ~97 modules) at some scales, so each frame is
-// sampled at the next size in turn; a still camera then still gets a readable frame.
-const SAMPLE_SIZES = [640, 720, 560] as const;
+// jsQR fallback: a fiscal QR has about 105 modules and jsQR needs about 4 px each, so every
+// other frame is read at the camera's own resolution (capped for speed); the frames between
+// are read smaller, which is fast and sometimes catches a code the full size misses.
+const NATIVE_SAMPLE_CAP = 1000;
+const SMALL_SAMPLE_SIZES = [640, 760] as const;
+
+type FocusCapabilities = MediaTrackCapabilities & { focusMode?: string[]; torch?: boolean };
+
+/** Keeps a close-up receipt sharp where the camera allows it (Chrome on Android). */
+const enableContinuousFocus = (track: MediaStreamTrack | undefined) => {
+  if (!track || typeof track.getCapabilities !== 'function') return;
+  const { focusMode } = track.getCapabilities() as FocusCapabilities;
+  if (!focusMode?.includes('continuous')) return;
+  void track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => undefined);
+};
 
 /** Torch is a non-standard capability (Chrome on Android); absent from the DOM types. */
 const hasTorch = (track: MediaStreamTrack | undefined): boolean => {
   if (!track || typeof track.getCapabilities !== 'function') return false;
-  return Boolean((track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean }).torch);
+  return Boolean((track.getCapabilities() as FocusCapabilities).torch);
 };
 
 /**
@@ -65,6 +77,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose, onResult,
     let lastRejected = '';
     let sampleIndex = 0;
     let noticeTimer = 0;
+    let native: NativeQrDetector | null = null;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
@@ -73,25 +86,34 @@ export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose, onResult,
     setTorchOn(false);
     setTorchSupported(false);
 
-    const tick = (now: number) => {
-      if (cancelled) return;
-      frame = requestAnimationFrame(tick);
-      const video = videoRef.current;
-      if (busy || !ctx || !video || video.readyState < 2 || now - lastScan < SCAN_INTERVAL_MS) return;
-      lastScan = now;
+    /** The QR text in this frame, if any: the platform reader on the whole frame, else jsQR on the viewfinder square. */
+    const readFrame = async (video: HTMLVideoElement): Promise<string | null> => {
+      if (native) return pickQrText(await detectQrTexts(native, video));
+      if (!ctx) return null;
       // Sample the square in the middle of the frame, where the viewfinder is.
       const side = Math.min(video.videoWidth, video.videoHeight) * 0.8;
-      if (!side) return;
+      if (!side) return null;
       const sx = (video.videoWidth - side) / 2;
       const sy = (video.videoHeight - side) / 2;
-      // Upscaling a small frame is fine: the decoder cost is bounded by these sizes.
-      const size = SAMPLE_SIZES[sampleIndex++ % SAMPLE_SIZES.length];
+      const turn = sampleIndex++;
+      const size = turn % 2 === 0
+        ? Math.round(Math.min(side, NATIVE_SAMPLE_CAP))
+        : SMALL_SAMPLE_SIZES[(turn >> 1) % SMALL_SAMPLE_SIZES.length];
       canvas.width = size;
       canvas.height = size;
       ctx.drawImage(video, sx, sy, side, side, 0, 0, size, size);
       const { data } = ctx.getImageData(0, 0, size, size);
+      return decodeQrPixels(data, size, size);
+    };
+
+    const tick = (now: number) => {
+      if (cancelled) return;
+      frame = requestAnimationFrame(tick);
+      const video = videoRef.current;
+      if (busy || !video || video.readyState < 2 || now - lastScan < SCAN_INTERVAL_MS) return;
+      lastScan = now;
       busy = true;
-      void decodeQrPixels(data, size, size)
+      void readFrame(video)
         .then((text) => {
           if (cancelled || !text) return;
           const scanned = classifyScannedQr(text);
@@ -124,12 +146,17 @@ export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose, onResult,
         return;
       }
       try {
-        // Warm up the decoder while the camera starts.
-        void loadJsQr().catch(() => undefined);
+        // Find a decoder while the camera starts: the platform reader, else warm up jsQR.
+        const detectorReady = getNativeQrDetector().then((detector) => {
+          native = detector;
+          if (!detector) void loadJsQr().catch(() => undefined);
+        });
+        // Full HD where available: a dense fiscal QR needs the pixels.
         stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         });
+        await detectorReady;
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
@@ -140,6 +167,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose, onResult,
         await video.play().catch(() => undefined);
         const track = stream.getVideoTracks()[0] as MediaStreamTrack | undefined;
         trackRef.current = track ?? null;
+        enableContinuousFocus(track);
         setTorchSupported(hasTorch(track));
         setStatus('scanning');
         frame = requestAnimationFrame(tick);

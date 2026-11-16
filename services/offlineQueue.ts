@@ -45,6 +45,13 @@ export interface ProcessResult {
 }
 
 type NewOperation = Omit<QueuedOperation, 'id' | 'timestamp' | 'retries' | 'lastError' | 'nextAttemptAt'>;
+
+/**
+ * Told when the server permanently refuses an operation. `awaited` is true when a caller was
+ * waiting on that attempt (it gets the rejection itself and should report it); false for writes
+ * replayed later (queued offline, or behind a retry), which nobody would hear about otherwise.
+ */
+export type RejectionListener = (operation: DeadLetterOperation, awaited: boolean) => void;
 type Waiter = { resolve: () => void; reject: (error: Error) => void };
 
 const QUEUE_KEY = CONFIG.OFFLINE_QUEUE_KEY;
@@ -102,6 +109,7 @@ class OfflineQueue {
     private waiters = new Map<string, Waiter[]>();
     private listeners: Set<(queue: QueuedOperation[]) => void> = new Set();
     private deadLetterListeners: Set<(deadLetters: DeadLetterOperation[]) => void> = new Set();
+    private rejectionListeners: Set<RejectionListener> = new Set();
 
     constructor() {
         this.setupEventListeners();
@@ -363,10 +371,13 @@ class OfflineQueue {
                 if (isPermanentSyncError(error)) {
                     console.error('Sync operation rejected permanently, moved to dead letters:', operation, error);
                     this.removeOperation(operation.id);
-                    this.deadLetters.push({ ...operation, lastError: message, failedAt: Date.now(), reason: message });
+                    const deadLetter: DeadLetterOperation = { ...operation, lastError: message, failedAt: Date.now(), reason: message };
+                    this.deadLetters.push(deadLetter);
                     this.saveDeadLetters();
                     this.notifyDeadLetterListeners();
+                    const awaited = (this.waiters.get(operation.id)?.length ?? 0) > 0;
                     this.settle(operation.id, toError(error));
+                    this.notifyRejectionListeners(deadLetter, awaited);
                     failed++;
                     continue;
                 }
@@ -496,6 +507,22 @@ class OfflineQueue {
     private notifyDeadLetterListeners(): void {
         const deadLetters = this.getDeadLetters();
         this.deadLetterListeners.forEach(listener => listener(deadLetters));
+    }
+
+    /** Permanent refusals as they happen (see RejectionListener). */
+    subscribeRejections(listener: RejectionListener): () => void {
+        this.rejectionListeners.add(listener);
+        return () => this.rejectionListeners.delete(listener);
+    }
+
+    private notifyRejectionListeners(operation: DeadLetterOperation, awaited: boolean): void {
+        this.rejectionListeners.forEach(listener => {
+            try {
+                listener(operation, awaited);
+            } catch (error) {
+                console.error('Rejection listener failed:', error);
+            }
+        });
     }
 
     /** Put a dead-lettered operation back on the queue (e.g. after the user fixed the data or server). */

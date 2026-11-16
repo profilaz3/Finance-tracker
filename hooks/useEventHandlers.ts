@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { AppState, Event, SharedExpense } from '../types';
-import { getSupabaseService, getSyncManager } from '../services/runtimeServices';
+import { getOfflineQueue, getSupabaseService, getSyncManager } from '../services/runtimeServices';
+import { isPermanentSyncError } from '../services/syncErrors';
 import {
   addEventToCollection,
   deleteEventFromCollection,
@@ -46,8 +47,9 @@ export function useEventHandlers({
   }, [addToast, setState]);
 
   const handleUpdateEvent = useCallback(async (id: string, updates: Partial<Event>) => {
+    const previous = state.events.find(event => event.id === id);
     const { events, updatedEvent } = upsertEventInCollection(state.events, id, updates);
-    if (!updatedEvent) return;
+    if (!updatedEvent || !previous) return;
 
     setState(prev => ({ ...prev, events }));
 
@@ -60,11 +62,25 @@ export function useEventHandlers({
       await syncManager.syncEvent(updatedEvent);
     } catch (error) {
       console.error('Failed to sync event update:', error);
+      if (!isPermanentSyncError(error)) {
+        // Still queued: it keeps retrying.
+        addToast(getTranslations().savedLocallySyncFailed, 'error');
+        return;
+      }
+      // The server refused it: put the event back unless something newer replaced this edit.
+      setState(prev => ({
+        ...prev,
+        events: prev.events.map(event => (event === updatedEvent ? previous : event)),
+      }));
+      setSelectedEvent(current => (current === updatedEvent ? previous : current));
+      addToast(getTranslations().eventUpdateRefused, 'error');
     }
-  }, [selectedEvent?.id, setSelectedEvent, setState, state.events]);
+  }, [addToast, selectedEvent?.id, setSelectedEvent, setState, state.events]);
 
   const handleDeleteEvent = useCallback(async (id: string) => {
     // Cascading delete (removes its shared expenses): EventHeader confirms with ConfirmDialog first.
+    const index = state.events.findIndex(event => event.id === id);
+    const previous = index >= 0 ? state.events[index] : undefined;
     setState(prev => ({ ...prev, events: deleteEventFromCollection(prev.events, id) }));
     if (selectedEvent?.id === id) setSelectedEvent(null);
 
@@ -74,10 +90,24 @@ export function useEventHandlers({
       addToast(getTranslations().eventDeleted, 'info');
     } catch (error) {
       console.error('Failed to delete event:', error);
+      if (!isPermanentSyncError(error) || !previous) {
+        // Still queued: it keeps retrying.
+        addToast(getTranslations().eventDeleted, 'info');
+        return;
+      }
+      // Refused (only the owner or a team admin may delete): bring it back where it was.
+      setState(prev => {
+        if (prev.events.some(event => event.id === id)) return prev;
+        const restored = [...prev.events];
+        restored.splice(Math.min(index, restored.length), 0, previous);
+        return { ...prev, events: restored };
+      });
+      addToast(getTranslations().eventDeleteRefused, 'error');
     }
-  }, [addToast, selectedEvent?.id, setSelectedEvent, setState]);
+  }, [addToast, selectedEvent?.id, setSelectedEvent, setState, state.events]);
 
   const handleAddSharedExpense = useCallback(async (expense: SharedExpense) => {
+    const previous = state.sharedExpenses.find(existing => existing.id === expense.id);
     const { expenses, isUpdate } = upsertSharedExpenseInCollection(state.sharedExpenses, expense);
 
     setState(prev => ({ ...prev, sharedExpenses: expenses }));
@@ -106,7 +136,22 @@ export function useEventHandlers({
       }
     } catch (error) {
       console.error('Failed to sync shared expense:', error);
-      addToast(getTranslations().savedLocallySyncFailed, 'error');
+      if (!isPermanentSyncError(error)) {
+        addToast(getTranslations().savedLocallySyncFailed, 'error');
+        return;
+      }
+      // Refused by the server: undo the local change unless it was edited again since.
+      setState(prev => {
+        const current = prev.sharedExpenses.find(existing => existing.id === expense.id);
+        if (current !== expense) return prev;
+        return {
+          ...prev,
+          sharedExpenses: previous
+            ? upsertSharedExpenseInCollection(prev.sharedExpenses, previous).expenses
+            : deleteSharedExpenseFromCollection(prev.sharedExpenses, expense.id),
+        };
+      });
+      addToast(getTranslations().expenseSaveRefused, 'error');
     }
   }, [addToast, setState, state.language, state.sharedExpenses]);
 
@@ -120,6 +165,14 @@ export function useEventHandlers({
       await syncManager.deleteSharedExpense(id);
     } catch (error) {
       console.error('Failed to delete shared expense:', error);
+      if (isPermanentSyncError(error) && deleted) {
+        // Refused (only whoever added it, the event owner or a team admin may delete it): put it back.
+        setState(prev => (prev.sharedExpenses.some(expense => expense.id === id)
+          ? prev
+          : { ...prev, sharedExpenses: upsertSharedExpenseInCollection(prev.sharedExpenses, deleted).expenses }));
+        addToast(getTranslations().expenseDeleteRefused, 'error');
+        return;
+      }
     }
 
     if (!deleted) return;
@@ -137,6 +190,26 @@ export function useEventHandlers({
       },
     });
   }, [addToast, setState, state.language, state.sharedExpenses]);
+
+  // Writes replayed later (made offline, or retried after a network error) can still be refused.
+  // Nobody is waiting on those, so say so instead of leaving them silently in the dead letters.
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void getOfflineQueue().then(queue => {
+      if (cancelled) return;
+      unsubscribe = queue.subscribeRejections((operation, awaited) => {
+        if (awaited || (operation.type !== 'event' && operation.type !== 'sharedExpense')) return;
+        const name = typeof operation.payload?.name === 'string' ? operation.payload.name.trim() : '';
+        const t = getTranslations();
+        addToast(name ? t.eventChangeRefused.replace('{name}', name) : t.eventChangeRefusedGeneric, 'error');
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [addToast]);
 
   const handleShareEvent = useCallback(async (id: string, email: string) => {
     const event = state.events.find(e => e.id === id);

@@ -1,4 +1,4 @@
-import { Person, Currency, Transaction, Category, Account, SplitMode, SplitMethod, SplitShare, Event, ExchangeRates } from '../../types';
+import type { Account, AppState, Category, Currency, Event, ExchangeRates, HomeHeaderTone, Person, Transaction } from '../../types';
 
 export interface SplitExpenseModalProps {
     isOpen: boolean;
@@ -26,6 +26,14 @@ export interface SplitExpenseModalProps {
     rates: ExchangeRates;
     /** Opens prefilled with exact per-person amounts, e.g. from splitting a scanned receipt. */
     prefill?: SplitPrefill;
+    /** People picked before the form opened ("Split this bill" chips): split `transaction` evenly with them. */
+    preselect?: string[];
+    /** The Home header colour (Settings > Header), used for the form's top. */
+    headerTone?: HomeHeaderTone;
+    /** The workspace's state, for the card that shows the event after the split. */
+    appState?: AppState;
+    /** Adds someone to People from the form's "New person" tile. */
+    onAddPerson?: (name: string) => Promise<void>;
 }
 
 /** Exact split amounts worked out elsewhere (components/receipt-scan/SplitAssign.tsx). */
@@ -37,77 +45,8 @@ export interface SplitPrefill {
     date: string;
     note: string;
     receiptData?: Transaction['receiptData'];
-    /** 'self' (I paid: "I paid" mode) or a person id ("Someone paid for me" mode). */
+    /** 'self' (I paid) or the id of the person who paid. */
     payerId: string;
     /** Amount per participant, keyed by 'self' or person id; sums to `amount`. */
     amounts: Record<string, number>;
-}
-
-export interface Recipient {
-    personId: string; // 'self' for user, or person.id
-    name: string;
-    amount: number;
-    isIncluded: boolean;
-}
-
-export interface ModeToggleProps {
-    mode: SplitMode;
-    setMode: (mode: SplitMode) => void;
-    language: 'en' | 'sr';
-}
-
-export interface CommonFieldsProps {
-    mode: SplitMode;
-    amount: string;
-    setAmount: (val: string) => void;
-    currency: Currency;
-    setCurrency: (val: Currency) => void;
-    transactionDate: string;
-    setTransactionDate: (val: string) => void;
-    fees: string;
-    setFees: (val: string) => void;
-    note: string;
-    setNote: (val: string) => void;
-    categoryId: string;
-    setCategoryId: (val: string) => void;
-    accountId: string;
-    setAccountId: (val: string) => void;
-    categories: Category[];
-    accounts: Account[];
-    language: 'en' | 'sr';
-    t: Record<string, string>;
-}
-
-export interface IPaidSectionProps {
-    splitMethod: SplitMethod;
-    setSplitMethod: (method: SplitMethod) => void;
-    shares: SplitShare[];
-    setShares: React.Dispatch<React.SetStateAction<SplitShare[]>>;
-    amount: string;
-    fees: string;
-    currency: Currency;
-    people: Person[];
-    language: 'en' | 'sr';
-    t: Record<string, string>;
-    togglePersonIncluded: (personId: string) => void;
-    updateShareAmount: (personId: string, value: string) => void;
-    updateSharePercentage: (personId: string, value: string) => void;
-    remainingAmount: number;
-    remainingPercentage: number;
-    includedCount: number;
-    yourPortionPreview: number;
-}
-
-export interface TheyPaidSectionProps {
-    people: Person[];
-    payerId: string;
-    setPayerId: (id: string) => void;
-    availableRecipients: Recipient[];
-    includedRecipients: Recipient[];
-    recipientTotal: number;
-    toggleRecipient: (personId: string) => void;
-    updateRecipientAmount: (personId: string, value: string) => void;
-    currency: Currency;
-    language: 'en' | 'sr';
-    getPerson: (id: string) => Person | undefined;
 }

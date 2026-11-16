@@ -4,6 +4,8 @@ export interface EventDetailViewProps {
     event: Event;
     state: AppState;
     onBack: () => void;
+    /** Beside the Shared list on wide windows: the header's back arrow becomes Close. */
+    inPane?: boolean;
     onUpdateEvent: (id: string, updates: Partial<Event>) => void;
     onShareEvent: (id: string, email: string) => Promise<void>;
     onDeleteEvent: (id: string) => void;

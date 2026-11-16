@@ -3,6 +3,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { AppState, Transaction } from '../types';
 import { TRANSLATIONS } from '../constants';
+import { useTemplateDeleteRequests } from './entryBus';
+import { draftFromTemplate } from '../domain/transactions';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type AddToast = (message: string, type: ToastType, action?: { label: string; onClick: () => void }) => void;
@@ -60,29 +62,38 @@ export function useTemplateHandlers({
       ),
     }));
 
-    const newTransaction: Transaction = {
-      id: uuidv4(),
-      date: new Date().toISOString(),
-      amount: template.amount || 0,
-      currency: template.currency,
-      categoryId: template.categoryId,
-      accountId: template.accountId,
-      type: template.type,
-      note: template.note,
-      subcategory: template.subcategory,
-    };
+    const newTransaction = draftFromTemplate(template, { createId: uuidv4 });
 
     setSelectedTransaction(newTransaction);
     setIsEditModalOpen(true);
   }, [setIsEditModalOpen, setSelectedTransaction, setState, state.templates]);
 
+  /** Deletes a template with an Undo that puts it back in its old place. */
   const handleDeleteTemplate = useCallback((templateId: string) => {
+    const index = state.templates.findIndex(t => t.id === templateId);
+    const template = state.templates[index];
     setState(prev => ({
       ...prev,
       templates: prev.templates.filter(t => t.id !== templateId),
     }));
-    addToast(TRANSLATIONS[state.language].templateDeleted, 'success');
-  }, [addToast, setState, state.language]);
+    const strings = TRANSLATIONS[state.language];
+    if (!template) {
+      addToast(strings.templateDeleted, 'success');
+      return;
+    }
+    addToast(strings.templateDeleted, 'info', {
+      label: strings.undo,
+      onClick: () => setState(prev => {
+        if (prev.templates.some(t => t.id === templateId)) return prev;
+        const templates = [...prev.templates];
+        templates.splice(Math.min(index, templates.length), 0, template);
+        return { ...prev, templates };
+      }),
+    });
+  }, [addToast, setState, state.language, state.templates]);
+
+  // The Add sheet's template chips (edit mode or long-press) ask for deletes through the entry bus.
+  useTemplateDeleteRequests(handleDeleteTemplate);
 
   return {
     handleSaveAsTemplate,

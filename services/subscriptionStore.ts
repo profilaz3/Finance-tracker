@@ -80,3 +80,30 @@ export const takeSubscriptionsTabRequest = (): boolean => {
   openSubscriptionsRequested = false;
   return requested;
 };
+
+const NAMES_KEY = `${CONFIG.STORAGE_KEY}:subscriptions-names`;
+const MAX_NAMES = 200;
+/** Longest name kept for a renamed subscription. */
+export const SUBSCRIPTION_NAME_MAX = 60;
+
+/** Names the user gave subscriptions (per merchant key); they win over AI names. */
+export const readSubscriptionNames = (): Record<string, string> => {
+  const stored = readJson(NAMES_KEY);
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+  return Object.fromEntries(
+    Object.entries(stored as Record<string, unknown>)
+      .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim().length > 0)
+      .map(([key, name]) => [key, name.trim().slice(0, SUBSCRIPTION_NAME_MAX)]),
+  );
+};
+
+/** Renames one subscription; an empty name goes back to the detected one. */
+export const renameSubscription = (key: string, name: string): Record<string, string> => {
+  const names = readSubscriptionNames();
+  delete names[key];
+  const clean = name.trim().replace(/\s+/g, ' ').slice(0, SUBSCRIPTION_NAME_MAX);
+  const next = clean ? { ...names, [key]: clean } : names;
+  const trimmed = Object.fromEntries(Object.entries(next).slice(-MAX_NAMES));
+  writeJson(NAMES_KEY, trimmed);
+  return trimmed;
+};

@@ -4,7 +4,10 @@ import {
   buildPerson,
   buildSettlementDraft,
   buildUserProfile,
+  netPersonBalance,
+  pickSettlementAccountId,
   removeAccountFromCollection,
+  splitOpenBalances,
   removePersonFromCollection,
   updatePersonBalanceInCollection,
   updatePersonInCollection,
@@ -133,5 +136,38 @@ describe('people domain helpers', () => {
 
     const removed = removeAccountFromCollection(added, 'acc-1');
     expect(removed.map(account => account.id)).toEqual(['acc-2']);
+  });
+});
+
+describe('settling with a person', () => {
+  const accounts: Pick<Account, 'id' | 'currency'>[] = [
+    { id: 'eur-card', currency: 'EUR' },
+    { id: 'rsd-cash', currency: 'RSD' },
+    { id: 'rsd-bank', currency: 'RSD' },
+  ];
+
+  it('records a settlement in the first wallet of the settled currency', () => {
+    expect(pickSettlementAccountId(accounts, 'RSD')).toBe('rsd-cash');
+    expect(pickSettlementAccountId(accounts, 'EUR')).toBe('eur-card');
+  });
+
+  it('falls back to the first wallet when no wallet has that currency', () => {
+    expect(pickSettlementAccountId(accounts, 'USD')).toBe('eur-card');
+    expect(pickSettlementAccountId([], 'USD')).toBeUndefined();
+  });
+
+  it('splits open balances by direction of money', () => {
+    expect(splitOpenBalances({ EUR: -24, USD: 0.001, RSD: 2000 })).toEqual({
+      owedToMe: [['RSD', 2000]],
+      iOwe: [['EUR', 24]],
+    });
+    expect(splitOpenBalances({})).toEqual({ owedToMe: [], iOwe: [] });
+  });
+
+  it('nets balances in one currency before comparing people', () => {
+    const rates = { base: 'EUR' as const, date: '2026-11-01', rates: { EUR: 1, USD: 1, RSD: 100 } };
+    // +2,000 RSD is worth 20 EUR, so with -24 EUR this person is a net -4 EUR, not +1,976.
+    expect(netPersonBalance({ EUR: -24, RSD: 2000 }, 'EUR', rates)).toBeCloseTo(-4);
+    expect(netPersonBalance({ EUR: 10, USD: 0, RSD: 0 }, 'RSD', rates)).toBeCloseTo(1000);
   });
 });

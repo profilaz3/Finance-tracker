@@ -40,6 +40,9 @@ interface UseBackNavigationOptions {
   rootView?: View;
 }
 
+/** A history.go() that has not landed after this long never will (nothing to go back to). */
+const STALE_BACK_MS = 1000;
+
 const isHistoryEntry = (value: unknown): value is HistoryEntry =>
   typeof value === 'object' &&
   value !== null &&
@@ -86,7 +89,28 @@ export function useBackNavigation({ currentView, setView, layers, rootView = 'da
   const setViewRef = useRef(setView);
   const desiredRef = useRef<HistoryEntry>({ financeNav: true, view: currentView, depth: 0 });
   const ignorePopsRef = useRef(0);
+  const backStartedRef = useRef(0);
   const initializedRef = useRef(false);
+
+  /** Moves history from the entry it is on to the one the screen wants. */
+  const syncHistory = useCallback(() => {
+    const action = planHistorySync(window.history.state, desiredRef.current);
+    switch (action.type) {
+      case 'replace':
+        window.history.replaceState(action.entry, '');
+        break;
+      case 'push':
+        action.entries.forEach(entry => window.history.pushState(entry, ''));
+        break;
+      case 'back':
+        ignorePopsRef.current += 1;
+        backStartedRef.current = Date.now();
+        window.history.go(-action.steps);
+        break;
+      default:
+        break;
+    }
+  }, []);
 
   closersRef.current = new Map(layers.map(layer => [layer.id, layer.close]));
   setViewRef.current = setView;
@@ -113,29 +137,21 @@ export function useBackNavigation({ currentView, setView, layers, rootView = 'da
       return;
     }
 
-    const action = planHistorySync(window.history.state, desired);
-    switch (action.type) {
-      case 'replace':
-        window.history.replaceState(action.entry, '');
-        break;
-      case 'push':
-        action.entries.forEach(entry => window.history.pushState(entry, ''));
-        break;
-      case 'back':
-        ignorePopsRef.current += 1;
-        window.history.go(-action.steps);
-        break;
-      default:
-        break;
-    }
-  }, [currentView, openKey]);
+    // history.go() lands asynchronously. A layer that opens while a closed one is still being
+    // consumed (a sheet opened from a menu that just closed) must not be planned against the
+    // entry we are leaving, so wait for the pop and sync from where it lands.
+    if (ignorePopsRef.current > 0 && Date.now() - backStartedRef.current < STALE_BACK_MS) return;
+    ignorePopsRef.current = 0;
+    syncHistory();
+  }, [currentView, openKey, syncHistory]);
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       if (ignorePopsRef.current > 0) {
         ignorePopsRef.current -= 1;
-        // The entry we landed on may predate a view change; align it with the screen.
-        window.history.replaceState(desiredRef.current, '');
+        // The screen may have changed while we were going back (a view change, or a layer that
+        // opened right after another closed); catch history up from the entry we landed on.
+        if (ignorePopsRef.current === 0) syncHistory();
         return;
       }
 
@@ -159,7 +175,7 @@ export function useBackNavigation({ currentView, setView, layers, rootView = 'da
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [rootView]);
+  }, [rootView, syncHistory]);
 
   /** Closes the top overlay. Returns false when nothing was open. */
   const closeTopLayer = useCallback((): boolean => {

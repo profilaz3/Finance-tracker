@@ -17,11 +17,10 @@ describe('long-press actions have a visible, keyboard-reachable alternative', ()
     }
   );
 
-  it('person cards are focusable and open with Enter or Space', () => {
+  it('person cards open from a real button, so Enter and Space work', () => {
     const source = read('components/PeopleView.tsx');
-    expect(source).toContain('role="button"');
-    expect(source).toContain('tabIndex={0}');
-    expect(source).toContain("e.key === 'Enter' || e.key === ' '");
+    expect(source).toContain('<button type="button" onClick={onOpen}');
+    expect(source).not.toContain('role="button"');
   });
 
   it('hover-revealed controls also appear on keyboard focus', () => {

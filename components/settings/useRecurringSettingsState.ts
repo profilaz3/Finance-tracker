@@ -1,98 +1,103 @@
 import { useState } from 'react';
-import type { Account, Category, Currency, RecurrenceFrequency, RecurringTransaction, TransactionType } from '../../types';
+import type { Account, Category, Currency, RecurringTransaction } from '../../types';
+import {
+  amountError,
+  buildRecurring,
+  draftFromRecurring,
+  emptyRecurringDraft,
+  recurringUpdates,
+  validateRecurringDraft,
+  withAccount,
+  withType,
+  type RecurringDraft,
+  type RecurringErrors,
+} from './recurringDraft';
 
 interface UseRecurringSettingsStateOptions {
   baseCurrency: Currency;
   categories: Category[];
   accounts: Account[];
+  recurringTransactions: RecurringTransaction[];
+  language: 'en' | 'sr';
   onAddRecurring?: (recurring: RecurringTransaction) => void;
+  onUpdateRecurring?: (id: string, updates: Partial<RecurringTransaction>) => void;
+  onUpdated?: () => void;
 }
 
-const getTodayDate = () => new Date().toISOString().split('T')[0];
-
-const getInitialRecurringState = () => ({
-  isAddingRecurring: false,
-  newRecurringName: '',
-  newRecurringAmount: '',
-  newRecurringFrequency: 'monthly' as RecurrenceFrequency,
-  newRecurringType: 'expense' as TransactionType,
-  newRecurringCategoryId: '',
-  newRecurringAccountId: '',
-  newRecurringStartDate: getTodayDate(),
-});
+/** null: closed; 'new': the add form at the top; otherwise the id of the rule edited in place. */
+export type RecurringFormTarget = null | 'new' | string;
 
 export function useRecurringSettingsState({
   baseCurrency,
   categories,
   accounts,
+  recurringTransactions,
+  language,
   onAddRecurring,
+  onUpdateRecurring,
+  onUpdated,
 }: UseRecurringSettingsStateOptions) {
-  const initialState = getInitialRecurringState();
-  const [isAddingRecurring, setIsAddingRecurring] = useState(initialState.isAddingRecurring);
-  const [newRecurringName, setNewRecurringName] = useState(initialState.newRecurringName);
-  const [newRecurringAmount, setNewRecurringAmount] = useState(initialState.newRecurringAmount);
-  const [newRecurringFrequency, setNewRecurringFrequency] = useState<RecurrenceFrequency>(initialState.newRecurringFrequency);
-  const [newRecurringType, setNewRecurringType] = useState<TransactionType>(initialState.newRecurringType);
-  const [newRecurringCategoryId, setNewRecurringCategoryId] = useState(initialState.newRecurringCategoryId);
-  const [newRecurringAccountId, setNewRecurringAccountId] = useState(initialState.newRecurringAccountId);
-  const [newRecurringStartDate, setNewRecurringStartDate] = useState(initialState.newRecurringStartDate);
+  const [target, setTarget] = useState<RecurringFormTarget>(null);
+  const [draft, setDraft] = useState<RecurringDraft>(() => emptyRecurringDraft(accounts, baseCurrency));
+  // Field errors show after the first save attempt; the amount also as soon as it is unreadable.
+  const [submitted, setSubmitted] = useState(false);
 
-  const resetRecurringForm = () => {
-    const nextInitialState = getInitialRecurringState();
-    setIsAddingRecurring(nextInitialState.isAddingRecurring);
-    setNewRecurringName(nextInitialState.newRecurringName);
-    setNewRecurringAmount(nextInitialState.newRecurringAmount);
-    setNewRecurringFrequency(nextInitialState.newRecurringFrequency);
-    setNewRecurringType(nextInitialState.newRecurringType);
-    setNewRecurringCategoryId(nextInitialState.newRecurringCategoryId);
-    setNewRecurringAccountId(nextInitialState.newRecurringAccountId);
-    setNewRecurringStartDate(nextInitialState.newRecurringStartDate);
+  const allErrors = validateRecurringDraft(draft, categories, accounts, language);
+  const liveAmountError = draft.amountText.trim() ? amountError(draft.amountText, language) : undefined;
+  const errors: RecurringErrors = submitted ? allErrors : liveAmountError ? { amount: liveAmountError } : {};
+
+  const openAdd = () => {
+    setDraft(emptyRecurringDraft(accounts, baseCurrency));
+    setSubmitted(false);
+    setTarget('new');
   };
 
-  const handleCreateRecurring = () => {
-    if (!newRecurringName.trim() || !newRecurringAmount || !onAddRecurring) {
-      return;
+  const openEdit = (recurring: RecurringTransaction) => {
+    setDraft(draftFromRecurring(recurring, categories, accounts, language));
+    setSubmitted(false);
+    setTarget(recurring.id);
+  };
+
+  const close = () => {
+    setTarget(null);
+    setSubmitted(false);
+  };
+
+  const update = (patch: Partial<RecurringDraft>) => setDraft(current => ({ ...current, ...patch }));
+
+  /** Returns true when the rule was saved. */
+  const submit = (): boolean => {
+    setSubmitted(true);
+    if (Object.keys(allErrors).length > 0) return false;
+
+    if (target === 'new') {
+      if (!onAddRecurring) return false;
+      onAddRecurring(buildRecurring(draft, language, crypto.randomUUID()));
+    } else if (target) {
+      const previous = recurringTransactions.find(recurring => recurring.id === target);
+      if (!previous || !onUpdateRecurring) return false;
+      onUpdateRecurring(previous.id, recurringUpdates(previous, draft, language));
+      onUpdated?.();
     }
-
-    const categoryId = newRecurringCategoryId || categories.find(category => category.type === newRecurringType)?.id || categories[0]?.id || '';
-    const accountId = newRecurringAccountId || accounts[0]?.id || '';
-    const startDate = newRecurringStartDate || getTodayDate();
-
-    onAddRecurring({
-      id: crypto.randomUUID(),
-      name: newRecurringName.trim(),
-      amount: Number.parseFloat(newRecurringAmount),
-      currency: baseCurrency,
-      categoryId,
-      accountId,
-      type: newRecurringType,
-      frequency: newRecurringFrequency,
-      startDate,
-      nextDue: startDate,
-      isActive: true,
-    });
-
-    resetRecurringForm();
+    close();
+    return true;
   };
 
   return {
-    isAddingRecurring,
-    setIsAddingRecurring,
-    newRecurringName,
-    setNewRecurringName,
-    newRecurringAmount,
-    setNewRecurringAmount,
-    newRecurringFrequency,
-    setNewRecurringFrequency,
-    newRecurringType,
-    setNewRecurringType,
-    newRecurringCategoryId,
-    setNewRecurringCategoryId,
-    newRecurringAccountId,
-    setNewRecurringAccountId,
-    newRecurringStartDate,
-    setNewRecurringStartDate,
-    handleCreateRecurring,
-    resetRecurringForm,
+    target,
+    draft,
+    errors,
+    openAdd,
+    openEdit,
+    close,
+    submit,
+    setName: (name: string) => update({ name }),
+    setAmountText: (amountText: string) => update({ amountText }),
+    setFrequency: (frequency: RecurringDraft['frequency']) => update({ frequency }),
+    setStartDate: (startDate: string) => update({ startDate }),
+    setCategoryId: (categoryId: string) => update({ categoryId }),
+    setCurrency: (currency: Currency) => update({ currency, currencyChosen: true }),
+    setType: (type: RecurringDraft['type']) => setDraft(current => withType(current, type, categories)),
+    setAccountId: (accountId: string) => setDraft(current => withAccount(current, accountId, accounts)),
   };
 }

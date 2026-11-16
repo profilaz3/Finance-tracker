@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const DASHBOARD_SUMMARY_REGRESSION_URL = process.env.DASHBOARD_SUMMARY_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const DASHBOARD_SUMMARY_REGRESSION_EMAIL = process.env.DASHBOARD_SUMMARY_REGRESSION_EMAIL;
@@ -16,9 +17,14 @@ if (!DASHBOARD_SUMMARY_REGRESSION_EMAIL || !DASHBOARD_SUMMARY_REGRESSION_PASSWOR
 const screenshotDir = 'output/playwright';
 const successScreenshotPath = `${screenshotDir}/dashboard-summary-regression-success.png`;
 const failureScreenshotPath = `${screenshotDir}/dashboard-summary-regression-failure.png`;
-const dashboardHeadingLabel = 'Total Net Worth';
-const dashboardDebtLabels = ['Owes You', 'You Owe'];
-const consoleIssues = [];
+// Home (the old Dashboard) tiles and the People view use these labels. Home is recognised by its
+// Wallets block, which a new account's default layout has (it has no Net worth block).
+const walletsHeadingName = /^wallets$|^novčanici$/i;
+const debtLabel = /owes you|you owe|duguje ti|duguješ/i;
+const settledLabel = /all settled up|sve izmireno/i;
+// "+€42.50", "-RSD 1,200.00": a balance with its sign in front of the currency.
+// People cards say who owes whom in words; the amount is a plain number (base currency) or carries its symbol.
+const openAmount = /\d/;
 
 const isVisible = async locator => locator.isVisible().catch(() => false);
 
@@ -35,17 +41,20 @@ const signInIfNeeded = async page => {
 };
 
 const openDashboard = async page => {
-  const netWorthText = page.getByText(/total net worth|ukupna neto vrednost/i).first();
-  if (!(await isVisible(netWorthText))) {
-    await page.getByText(/dashboard/i).first().click();
-    await netWorthText.waitFor({ timeout: 15000 });
+  const walletsHeading = page.getByRole('main').getByRole('heading', { name: walletsHeadingName, level: 3 });
+  if (!(await isVisible(walletsHeading))) {
+    await page
+      .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+      .getByRole('button', { name: /^home$|^početna$/i })
+      .click();
+    await walletsHeading.waitFor({ timeout: 15000 });
   }
 };
 
 const waitForDashboardHydration = async page => {
   await page.waitForFunction(() => {
     const text = document.body.innerText;
-    const hasDashboard = /Total Net Worth|Ukupna neto vrednost/i.test(text);
+    const hasDashboard = /Wallets|Novčanici/i.test(text);
     const hasWalletAmounts = /\b(?:USD|EUR|RSD)\s*-?\d/.test(text);
 
     return hasDashboard && hasWalletAmounts;
@@ -53,39 +62,54 @@ const waitForDashboardHydration = async page => {
 };
 
 const verifyDashboardWallets = async page => {
-  await page.getByRole('button', { name: /my wallets|wallets/i }).first().click();
-  await page.waitForFunction(() => {
-    const text = document.body.innerText;
-    const currencyLabels = text.match(/\b(?:USD|EUR|RSD)\b/g) ?? [];
-    return currencyLabels.length >= 2;
-  }, { timeout: 10000 });
+  // The Wallets tile: a header (title + total in the base currency) and one entry per wallet,
+  // each amount in the wallet's own currency (symbol or code, depending on the tile style).
+  const walletsHeading = page.getByRole('main').getByRole('heading', { name: /^wallets$|^novčanici$/i, level: 3 });
+  await walletsHeading.waitFor({ timeout: 10000 });
 
-  const currencyLabels = await page.locator('span, p, div').evaluateAll(nodes =>
-    nodes
-      .map(node => node.textContent?.trim() ?? '')
-      .filter(text => /^(USD|EUR|RSD)$/.test(text))
-  );
+  const walletCurrencies = await walletsHeading.evaluate(heading => {
+    const header = heading.parentElement;
+    const tile = header?.parentElement;
+    const walletText = Array.from(tile?.children ?? [])
+      .filter(child => child !== header)
+      .map(child => child.innerText)
+      .join('\n');
+    const symbols = { '€': 'EUR', '$': 'USD' };
+    const tokens = walletText.match(/\b(?:USD|EUR|RSD)\b|€|\$/g) ?? [];
+    return [...new Set(tokens.map(token => symbols[token] ?? token))];
+  });
 
-  if (currencyLabels.length < 2) {
-    throw new Error(`Expected at least two wallet currency labels, found ${currencyLabels.length}.`);
+  if (walletCurrencies.length < 2) {
+    throw new Error(`Expected dashboard wallets in at least two currencies, found ${walletCurrencies.length} (${walletCurrencies.join(', ')}).`);
   }
 };
 
 const verifyDebtSummaries = async page => {
-  await page.getByRole('button', { name: /^people$/i }).first().click();
-  await page.waitForFunction(() => {
-    const text = document.body.innerText;
-    return /No active balances|Svi dugovi su podmireni|[+-](?:RSD|EUR|USD)/.test(text);
-  }, { timeout: 10000 });
+  const peopleTile = page.getByRole('main').getByRole('button', { name: /^people\b|^ljudi\b/i }).first();
+  await peopleTile.waitFor({ timeout: 10000 });
+  const summary = (await peopleTile.textContent()) ?? '';
 
-  const emptyStateVisible = await page.getByText(/no active balances|svi dugovi su podmireni/i).first().isVisible().catch(() => false);
-  if (emptyStateVisible) {
+  if (settledLabel.test(summary)) {
     return;
   }
 
-  const signedAmounts = await page.locator('p.text-sm.font-mono.mt-1').count();
-  if (signedAmounts < 1) {
-    throw new Error(`Expected dashboard people debt cards to show signed balances, found ${signedAmounts}.`);
+  if (!debtLabel.test(summary) || !/\d/.test(summary)) {
+    throw new Error(`Expected the dashboard People tile to show a net balance, got "${summary}".`);
+  }
+
+  // The tile opens People, where every open balance shows with "Owes you" or "You owe".
+  await peopleTile.click();
+  await page.getByRole('heading', { name: /^people$|^ljudi$/i, level: 1 }).waitFor({ timeout: 10000 });
+  const debtCards = page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: debtLabel })
+    .filter({ hasText: openAmount });
+  await debtCards.first().waitFor({ timeout: 10000 });
+
+  const openBalances = await debtCards.count();
+  if (openBalances < 1) {
+    throw new Error(`Expected people debt cards to show open balances, found ${openBalances}.`);
   }
 };
 
@@ -94,11 +118,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', message => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
@@ -109,9 +129,7 @@ try {
   await verifyDashboardWallets(page);
   await verifyDebtSummaries(page);
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 
   await page.screenshot({ path: successScreenshotPath, fullPage: true });
   console.log('Dashboard summary regression passed.');

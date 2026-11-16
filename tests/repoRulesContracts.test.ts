@@ -62,15 +62,13 @@ describe('repo rules contracts', () => {
     const router = readFileSync('components/app/AppViewRouter.tsx', 'utf8');
     const transactionsView = readFileSync('components/TransactionsView.tsx', 'utf8');
 
-    expect(app).toContain("import { createTransactionDraft } from './domain/transactions'");
+    expect(app).toContain("import { createTransactionDraft, draftFromParsed } from './domain/transactions'");
     expect(router).toContain("from '../../domain/transactions'");
     expect(router).toContain('duplicateTransactionDraft');
     expect(transactionsView).toContain("import { TransactionsToolbar } from './transactions/TransactionsToolbar'");
     expect(transactionsView).toContain("import { TransactionsList } from './transactions/TransactionsList'");
-    expect(transactionsView).toContain("import { TransactionsFab } from './transactions/TransactionsFab'");
-    expect(transactionsView).toContain("import { filterTransactions, groupTransactionsByDate } from '../utils/transactionFilters'");
-    expect(transactionsView).not.toContain('const getDateGroupLabel =');
-    expect(transactionsView).not.toContain('const groupTransactionsByDate =');
+    expect(transactionsView).toContain("import { filterTransactions, groupTransactionsByDay } from '../utils/transactionFilters'");
+    expect(transactionsView).not.toContain('const groupTransactionsByDay =');
   });
 
   it('keeps people and event mutations behind hooks and domain helpers', () => {

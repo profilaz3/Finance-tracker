@@ -8,14 +8,14 @@ import { MOTION } from '../../config';
 import { GlassSheet } from '../ui/GlassSheet';
 import { isVoiceRecordingSupported, MAX_RECORDING_MS, useVoiceRecorder, type VoiceRecording } from '../../hooks/useVoiceRecorder';
 import { blobToBase64 } from '../../utils/blobBase64';
-import { formatPercent } from '../../utils/locale';
-import { selectPeopleWithBalances } from '../../domain/balances';
 import { LIMITS, type QueryExecution } from '../../domain/financeQuery';
 import { transcribeQuestion, type AskFailure } from '../../services/askService';
 import { useAskConversation, type AskTurn } from './useAskConversation';
 import { AskChart } from './AskChart';
 import { AskExplain } from './AskExplain';
 import { formatAskValue } from './askFormat';
+import { Headline } from './AskHeadline';
+import { askSuggestions } from './askSuggestions';
 
 type Strings = (typeof TRANSLATIONS)['en'];
 
@@ -58,24 +58,6 @@ const TypingDots: React.FC<{ label: string }> = ({ label }) => (
     {label}
   </div>
 );
-
-const Headline: React.FC<{ execution: QueryExecution; language: 'en' | 'sr' }> = ({ execution, language }) => {
-  const { table } = execution;
-  if (table.dataset === 'balances' || table.rows.length > 0 || table.count === 0) return null;
-  const change = table.changePct;
-  // More spending reads as bad, more income as good.
-  const good = change !== undefined && (change > 0) === (table.dataset === 'transactions' && table.type !== 'expense');
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-      <span className="text-[26px] font-bold leading-none tracking-[-0.5px] tabular-nums">{formatAskValue(table.total, table, language)}</span>
-      {change !== undefined && (
-        <span className={clsx('rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums', good ? 'bg-pos/15 text-pos' : 'bg-neg/15 text-neg')}>
-          {change > 0 ? '+' : ''}{formatPercent(change, Math.abs(change) < 10 ? 1 : 0, language)}
-        </span>
-      )}
-    </div>
-  );
-};
 
 const TurnView: React.FC<{
   turn: AskTurn;
@@ -219,15 +201,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ isOpen, onClose, state, seed
     onClose();
   };
 
-  const suggestions = useMemo(() => {
-    const list = [t.askSuggestMonth, t.askSuggestAutumn, t.askSuggestSubs];
-    const event = [...state.events].sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))[0];
-    if (event) list.splice(1, 0, t.askSuggestEvent.replace('{event}', event.name));
-    const owing = selectPeopleWithBalances(state.people, state.transactions)
-      .find((person) => person.id !== state.userProfile?.id && Object.values(person.balances).some((value) => value > 0));
-    list.push(owing ? t.askSuggestPerson.replace('{name}', owing.name) : t.askSuggestOwe);
-    return list;
-  }, [state.events, state.people, state.transactions, state.userProfile?.id, t]);
+  const suggestions = useMemo(() => askSuggestions(state, t), [state, t]);
 
   const footer = (
     <form

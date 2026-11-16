@@ -174,7 +174,6 @@ describe('supabase row mappers', () => {
       },
     }, 'user-1')).toEqual({
       baseCurrency: 'EUR',
-      theme: 'harbor',
       language: 'sr',
       userProfile: {
         id: 'profile-1',
@@ -190,19 +189,14 @@ describe('supabase row mappers', () => {
   it('keeps app defaults when a settings row has not been created yet', () => {
     expect(mapSettingsRow(null, 'user-1')).toEqual({
       baseCurrency: 'RSD',
-      theme: 'lime-dark',
       language: 'en',
       userProfile: undefined,
     });
   });
 
-  it('normalizes legacy remote theme names before app state merge', () => {
-    expect(mapSettingsRow({
-      theme: 'oled',
-    }, 'user-1')).toMatchObject({
-      baseCurrency: 'RSD',
-      theme: 'graphite',
-      language: 'en',
-    });
+  it('ignores the retired settings.theme column', () => {
+    const mapped = mapSettingsRow({ theme: 'oled' }, 'user-1');
+    expect(mapped).not.toHaveProperty('theme');
+    expect(mapped).toMatchObject({ baseCurrency: 'RSD', language: 'en' });
   });
 });

@@ -4,6 +4,7 @@ import {
   buildSettlementExpense,
   isSettlementExpense,
   netBalancesByCurrency,
+  planBalances,
   planSettlement,
   simplifyDebts,
   spendingExpenses,
@@ -199,5 +200,32 @@ describe('person settlements', () => {
     expect(draft(40, -5)).toBeNull();
     expect(draft(40, 40.01)).toBeNull();
     expect(draft(0)).toBeNull();
+  });
+});
+
+describe('planBalances', () => {
+  it('matches the plan exactly, so per-person totals and payments never differ by a unit', () => {
+    // 1,000 RSD for three: equal shares are 333.33, so the payer is owed 666.67 on paper,
+    // but the plan pays whole dinars (333 + 333). Per-person totals must show 666, not 667.
+    const expenses = [expense({ amount: 1000, currency: 'RSD', paidBy: 'a', sharedWith: ['a', 'b', 'c'] })];
+    const debts = planSettlement(expenses, { currency: 'RSD', rates });
+    const balances = planBalances(debts);
+    const paid = debts.filter(debt => debt.to === 'a').reduce((sum, debt) => sum + debt.amount, 0);
+    expect(balances.get('a')).toBe(paid);
+    expect(balances.get('a')).toBe(666);
+    expect(balances.get('b')).toBe(-333);
+    expect(balances.get('c')).toBe(-333);
+  });
+
+  it('nets several payments per person and leaves even people out', () => {
+    const balances = planBalances([
+      { from: 'b', to: 'a', amount: 10.1, currency: 'EUR' },
+      { from: 'c', to: 'a', amount: 5.2, currency: 'EUR' },
+      { from: 'c', to: 'd', amount: 1, currency: 'EUR' },
+    ]);
+    expect(balances.get('a')).toBe(15.3);
+    expect(balances.get('c')).toBe(-6.2);
+    expect(balances.has('e')).toBe(false);
+    expect([...balances.values()].reduce((sum, value) => sum + Math.round(value * 100), 0)).toBe(0);
   });
 });

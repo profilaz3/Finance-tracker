@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const EXPORT_REGRESSION_URL = process.env.EXPORT_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const EXPORT_REGRESSION_EMAIL = process.env.EXPORT_REGRESSION_EMAIL;
@@ -18,7 +19,6 @@ const successScreenshotPath = 'output/playwright/export-regression-success.png';
 const failureScreenshotPath = 'output/playwright/export-regression-failure.png';
 const csvArtifactPath = `${screenshotDir}/export-regression.csv`;
 const jsonArtifactPath = `${screenshotDir}/export-regression.json`;
-const consoleIssues = [];
 
 const isVisible = async (locator) => locator.isVisible().catch(() => false);
 
@@ -36,16 +36,25 @@ const signInIfNeeded = async (page) => {
 };
 
 const openTransactions = async (page) => {
-  const transactionsHeading = page.getByRole('heading', { name: /transactions|transakcije/i }).first();
+  const transactionsHeading = page.getByRole('heading', { name: /^activity$|^aktivnost$/i }).first();
 
   if (!(await isVisible(transactionsHeading))) {
-    await page.getByText(/transactions|transakcije/i).first().click();
+    await page
+      .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+      .getByRole('button', { name: /^activity$|^aktivnost$/i })
+      .click();
     await transactionsHeading.waitFor({ timeout: 15000 });
   }
 };
 
+// Export and the printable report sit in the Activity header's ⋯ menu (rows have their own ⋯ too).
+const openHeaderMenuItem = async (page, name) => {
+  await page.locator('section.screen-hero').getByRole('button', { name: /^more actions$|^više opcija$/i }).first().click();
+  await page.getByRole('menuitem', { name }).click();
+};
+
 const openExportModal = async (page) => {
-  await page.getByRole('button', { name: /open export options|otvori opcije izvoza/i }).click();
+  await openHeaderMenuItem(page, /^export$|^izvezi$/i);
   await page.getByRole('heading', { name: /export data|izvoz podataka/i }).waitFor({ timeout: 10000 });
 };
 
@@ -134,7 +143,7 @@ const verifyPrintableReport = async (page) => {
     };
   });
 
-  await page.getByRole('button', { name: /open printable report|otvori stampani izvestaj/i }).click();
+  await openHeaderMenuItem(page, /^printable report$|^izveštaj za štampu$/i);
   await page.waitForFunction(() => window.__exportRegression?.printCalled === true, null, { timeout: 15000 });
 
   const printState = await page.evaluate(() => window.__exportRegression);
@@ -158,11 +167,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', (message) => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });
@@ -173,9 +178,7 @@ try {
   await verifyJsonExport(page);
   await verifyPrintableReport(page);
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 
   await page.screenshot({ path: successScreenshotPath, fullPage: true });
   console.log('Export regression passed.');

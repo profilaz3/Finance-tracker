@@ -1,8 +1,8 @@
 import type { Currency, Event, Person } from '../types';
 import { getTranslations } from './i18n';
+import { EMAIL_PLACEHOLDER_ID_PREFIX, getEventOwnerIds, isEventGuestView, resolveOwnerName } from '../domain/eventViewer';
 
 const PLACEHOLDER_COLOR = '#9E9E9E';
-const EMAIL_PLACEHOLDER_ID_PREFIX = 'shared-email:';
 
 export const normalizeParticipantEmail = (email: string): string =>
   email.trim().toLowerCase();
@@ -85,41 +85,56 @@ export const resolveEventParticipants = ({
   people,
   userProfile,
   fallbackCurrency,
+  viewerUserId,
 }: {
   event: Event;
   people: Person[];
   userProfile?: Person;
   fallbackCurrency: Currency;
+  /**
+   * The signed-in user's auth id (useSessionIdentity), never `userProfile.id`. When it is not the
+   * event's owner, the owner's own ids are shown under the owner's name, not as the viewer.
+   */
+  viewerUserId?: string | null;
 }): Person[] => {
   const peopleById = new Map(people.map(person => [person.id, person]));
   const sharedEmails = Array.from(new Set((event.sharedEmails || []).map(normalizeParticipantEmail).filter(Boolean)));
+  // In a collaborator's view the ids are all the organizer's: their own ids are the organizer, the
+  // rest are the organizer's people. The collaborator's own profile is never one of them.
+  const isCollaboratorView = isEventGuestView(event, viewerUserId);
+  const ownerIds = new Set(isCollaboratorView ? getEventOwnerIds(event) : []);
+  const ownerLabel = isCollaboratorView ? resolveOwnerName(event, people) ?? getTranslations().organizer : '';
+  const isViewerProfile = (personId: string) => !isCollaboratorView && userProfile?.id === personId;
+
   const linkedSharedParticipantCount = event.personIds.filter(personId =>
-    personId !== userProfile?.id && personId !== event.userId
+    !isViewerProfile(personId) && personId !== event.userId && !ownerIds.has(personId)
   ).length;
 
   const resolvedKnownParticipants = event.personIds.flatMap(personId => {
-    if (userProfile?.id === personId) {
+    if (isViewerProfile(personId) && userProfile) {
       return [userProfile];
     }
 
     const matchingPerson = peopleById.get(personId);
-    return matchingPerson ? [matchingPerson] : [];
+    if (!matchingPerson) return [];
+    // "Me" in the organizer's people is the organizer, not the person reading it.
+    return [ownerIds.has(personId) ? { ...matchingPerson, name: ownerLabel } : matchingPerson];
   });
 
   const missingIds = event.personIds.filter(personId =>
-    personId !== userProfile?.id && !peopleById.has(personId)
+    !isViewerProfile(personId) && !peopleById.has(personId)
   );
 
-  // In a collaborator's view the missing ids are the organizer and the
-  // organizer's local people, not the invited emails, so naming them by email
-  // position would mislabel them (e.g. the organizer shown as the viewer).
-  const isCollaboratorView = !!userProfile && !!event.userId && userProfile.id !== event.userId;
-  const guestIds = missingIds.filter(personId => personId !== event.userId);
+  // In a collaborator's view the missing ids are the organizer and the organizer's local people,
+  // not the invited emails, so naming them by email position would mislabel them (e.g. the
+  // organizer shown as the viewer).
+  const isOwnerId = (personId: string) => personId === event.userId || ownerIds.has(personId);
+  const guestIds = missingIds.filter(personId => !isOwnerId(personId));
 
   const placeholderParticipants = missingIds.map(personId => ({
     id: personId,
-    name: personId === event.userId
-      ? getTranslations().organizer
+    name: isOwnerId(personId)
+      ? ownerLabel || getTranslations().organizer
       : buildPlaceholderName(guestIds.indexOf(personId), isCollaboratorView ? undefined : sharedEmails, guestIds.length),
     color: PLACEHOLDER_COLOR,
     defaultCurrency: userProfile?.defaultCurrency ?? fallbackCurrency,

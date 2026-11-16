@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const EVENT_SUMMARY_REGRESSION_URL = process.env.EVENT_SUMMARY_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const EVENT_SUMMARY_REGRESSION_EMAIL = process.env.EVENT_SUMMARY_REGRESSION_EMAIL;
@@ -17,7 +18,6 @@ if (!EVENT_SUMMARY_REGRESSION_EMAIL || !EVENT_SUMMARY_REGRESSION_PASSWORD) {
 const screenshotDir = 'output/playwright';
 const successScreenshotPath = `${screenshotDir}/event-summary-regression-success.png`;
 const failureScreenshotPath = `${screenshotDir}/event-summary-regression-failure.png`;
-const consoleIssues = [];
 
 const isVisible = async locator => locator.isVisible().catch(() => false);
 
@@ -34,9 +34,12 @@ const signInIfNeeded = async page => {
 };
 
 const openEventSummary = async page => {
-  const eventsHeading = page.getByRole('heading', { name: /events/i }).first();
+  const eventsHeading = page.getByRole('heading', { name: /^shared$|^zajedničko$/i, level: 1 });
   if (!(await isVisible(eventsHeading))) {
-    await page.getByText(/events/i).first().click();
+    await page
+      .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+      .getByRole('button', { name: /^shared$|^zajedničko$/i })
+      .click();
     await eventsHeading.waitFor({ timeout: 15000 });
   }
 
@@ -45,36 +48,39 @@ const openEventSummary = async page => {
   await eventCard.waitFor({ timeout: 15000 });
   await eventCard.click();
   await page.getByRole('heading', { name: EVENT_SUMMARY_REGRESSION_EVENT, exact: true }).waitFor({ timeout: 15000 });
-  await page.getByRole('radio', { name: 'Summary', exact: true }).click();
-  await page.getByText('Spending Breakdown', { exact: true }).waitFor({ timeout: 15000 });
+  // The summary is on the event screen itself: paid vs share, settle up and categories, no tabs.
+  await page.getByRole('heading', { name: 'Paid vs share', exact: true }).waitFor({ timeout: 15000 });
 };
 
 const verifySummary = async page => {
-  await page.getByText('Individual Stats', { exact: true }).waitFor({ timeout: 15000 });
-  await page.getByText('By Category', { exact: true }).waitFor({ timeout: 15000 });
-  await page.getByText('Settlement', { exact: true }).waitFor({ timeout: 15000 });
-  await page.getByText('Display Currency', { exact: true }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Settle up', exact: true }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'By category', exact: true }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Expenses', exact: true }).waitFor({ timeout: 15000 });
 
-  const cardCount = await page.locator('text=Paid').count();
-  if (cardCount < 1) {
-    throw new Error(`Expected at least one event summary person card, found ${cardCount}.`);
+  // One row per person who paid or has a share, each saying what they paid.
+  const paidRows = await page.locator('section[aria-labelledby="event-paid-title"] li').count();
+  if (paidRows < 1) {
+    throw new Error(`Expected at least one paid vs share row, found ${paidRows}.`);
   }
 
   const svgCount = await page.locator('svg').count();
   if (svgCount < 3) {
-    throw new Error(`Expected event summary charts/icons to render SVG output, found ${svgCount}.`);
+    throw new Error(`Expected event summary icons to render SVG output, found ${svgCount}.`);
   }
 
-  const usdButton = page.getByRole('radio', { name: 'USD', exact: true }).first();
-  await usdButton.click();
+  // Display currency lives on the header ("Show amounts in").
+  const currency = page.getByRole('combobox', { name: 'Show amounts in', exact: true });
+  await currency.selectOption('USD');
   await page.waitForTimeout(300);
-  if ((await usdButton.getAttribute('aria-checked')) !== 'true') {
-    throw new Error('Summary currency toggle did not activate USD.');
+  if ((await currency.inputValue()) !== 'USD') {
+    throw new Error('Summary currency did not switch to USD.');
+  }
+  const tiles = await page.locator('section.screen-hero dd').allInnerTexts();
+  if (!tiles.some(text => text.includes('$'))) {
+    throw new Error(`Header sums did not switch to USD: ${tiles.join(' | ')}`);
   }
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 };
 
 const browser = await chromium.launch({ headless: !EVENT_SUMMARY_REGRESSION_HEADED });
@@ -82,11 +88,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', message => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });

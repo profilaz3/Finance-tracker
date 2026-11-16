@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { CONFIG } from '../config';
 import { TRANSLATIONS } from '../constants';
 import { computeBudgetProgress, computeMonthSummary, monthKeyOf } from '../domain/home';
+import { scopeStateToWorkspace } from '../domain/teams';
 import {
   budgetMonthKey,
   DEFAULT_NOTIFICATION_PREFS,
@@ -21,6 +22,7 @@ import { formatMoney, formatPercent } from '../utils/locale';
 import { requestOpenLetter } from '../services/letterStore';
 import { readDismissedSubscriptions, readMerchantMeta, requestSubscriptionsTab } from '../services/subscriptionStore';
 import { resolveEventParticipants } from '../utils/eventParticipants';
+import { buildEventViewer, participantName, readViewerPick } from '../domain/eventViewer';
 import {
   canScheduleReminders,
   ensureChannels,
@@ -207,8 +209,11 @@ export function useNotifications({
     if (!budget || (budget.monthly <= 0 && Object.keys(budget.categoryLimits ?? {}).length === 0)) return;
 
     const now = new Date();
-    const summary = computeMonthSummary(state, monthKeyOf(now), now);
-    const progress = computeBudgetProgress(budget, summary, state.categories);
+    // `state.budget` is the Personal budget: measure it against Personal spending only (team
+    // workspaces have their own budgets, shown on their Budgets page).
+    const personal = scopeStateToWorkspace(state, null);
+    const summary = computeMonthSummary(personal, monthKeyOf(now), now);
+    const progress = computeBudgetProgress(budget, summary, personal.categories);
     const key = `${CONFIG.NOTIFICATIONS_KEY}:budget:${currentUserId}`;
     const saved = readJson(key) as { month?: string; sent?: string[] } | null;
     const month = budgetMonthKey(now);
@@ -318,8 +323,16 @@ export function useNotifications({
     const justFetched = hydrated && previous !== hydrationStatus;
 
     if (justFetched && Array.isArray(saved) && prefs.events) {
+      // In someone else's event, "mine" is the participant this user said they are (domain/eventViewer).
+      const viewerOf = (event: Event) => buildEventViewer({
+        event,
+        sessionUserId: currentUserId,
+        userProfileId: state.userProfile?.id,
+        pick: readViewerPick(currentUserId, event.id),
+        people: state.people ?? [],
+      });
       const fresh = findNewSharedExpenses(expenses, known, state.events, currentUserId)
-        .filter(({ expense }) => expense.paidBy !== state.userProfile?.id && expense.paidBy !== 'me');
+        .filter(({ expense, event }) => !viewerOf(event).selfIds.has(expense.paidBy) && expense.paidBy !== 'me');
       const byEvent = new Map<string, typeof fresh>();
       fresh.forEach(entry => byEvent.set(entry.event.id, [...(byEvent.get(entry.event.id) ?? []), entry]));
 
@@ -328,14 +341,21 @@ export function useNotifications({
         let body: string;
         if (entries.length === 1) {
           const { expense } = entries[0];
-          const payer = resolveEventParticipants({
+          const eventPeople = resolveEventParticipants({
             event,
             people: state.people ?? [],
             userProfile: state.userProfile,
             fallbackCurrency: state.baseCurrency,
-          }).find(person => person.id === expense.paidBy) ?? state.people.find(person => person.id === expense.paidBy);
-          const values = { name: payer?.name ?? '', expense: expense.name, amount: money(expense.amount, expense.currency), event: event.name };
-          body = fill(payer ? t.notifEventExpense : t.notifEventExpenseNoName, values);
+            viewerUserId: currentUserId,
+          });
+          // The organizer keeps their name (or "Organizer") even when their id is not a person row.
+          const payerName = participantName(expense.paidBy, viewerOf(event), [...eventPeople, ...(state.people ?? [])], {
+            you: t.you,
+            organizer: t.organizer,
+            unknown: '',
+          });
+          const values = { name: payerName, expense: expense.name, amount: money(expense.amount, expense.currency), event: event.name };
+          body = fill(payerName ? t.notifEventExpense : t.notifEventExpenseNoName, values);
         } else {
           body = fill(t.notifEventMany, { count: entries.length, event: event.name });
         }

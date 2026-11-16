@@ -2,9 +2,12 @@ import React from 'react';
 import { AppState, Currency } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { Segmented } from '../ui/Segmented';
-import { ChevronRight, LineChart } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { CurrencyFlag, CurrencyPair } from '../ui/CurrencyFlag';
 import { formatMediumDate } from '../../utils/locale';
 import { openRates } from '../rates/ratesBus';
+import { SHORTCUTS_HELP_EVENT } from '../app/AppNavigation';
+import { SETTINGS_STRINGS } from './settingsStrings';
 
 interface GeneralSettingsProps {
     state: AppState;
@@ -23,7 +26,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
     const t = TRANSLATIONS[state.language];
 
     const shortcuts: Array<{ label: string; keys: React.ReactNode }> = [
-        { label: t.shortcutNewTransaction, keys: <><Kbd>Ctrl</Kbd><Kbd>N</Kbd></> },
+        { label: t.shortcutNewTransaction, keys: <Kbd>N</Kbd> },
         { label: t.shortcutCloseModal, keys: <Kbd>Esc</Kbd> },
         { label: t.shortcutContextMenu, keys: <span className="text-[13px] text-muted">{t.shortcutLongPress}</span> },
     ];
@@ -31,7 +34,22 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
     return (
         <>
             <section className="paper-tile flex flex-wrap items-center justify-between gap-3 p-4">
-                <div className="min-w-0 flex-1">
+                <h3 className="min-w-[150px] flex-1 text-[15px] font-bold">{t.languageLabel}</h3>
+                <Segmented<AppState['language']>
+                    size="sm"
+                    ariaLabel={t.languageLabel}
+                    value={state.language}
+                    onChange={language => setState(prev => ({ ...prev, language }))}
+                    options={[
+                        { value: 'en', label: 'English' },
+                        { value: 'sr', label: 'Srpski' },
+                    ]}
+                    className="shrink-0"
+                />
+            </section>
+
+            <section className="paper-tile flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="min-w-[150px] flex-1">
                     <h3 className="text-[15px] font-bold">{t.baseCurrency}</h3>
                     <p className="text-[13px] text-muted">{t.baseCurrencyDesc}</p>
                 </div>
@@ -40,7 +58,15 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                     ariaLabel={t.baseCurrency}
                     value={state.baseCurrency}
                     onChange={currency => setState(prev => ({ ...prev, baseCurrency: currency }))}
-                    options={CURRENCIES.map(currency => ({ value: currency, label: currency }))}
+                    options={CURRENCIES.map(currency => ({
+                        value: currency,
+                        label: (
+                            <span className="flex items-center gap-1.5">
+                                <CurrencyFlag currency={currency} size={16} />
+                                {currency}
+                            </span>
+                        ),
+                    }))}
                     className="shrink-0"
                 />
             </section>
@@ -50,9 +76,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                 onClick={openRates}
                 className="paper-tile flex w-full items-center gap-3 p-4 text-left"
             >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
-                    <LineChart size={19} aria-hidden="true" />
-                </span>
+                <CurrencyPair base="EUR" quote="RSD" size={30} className="w-[52px]" />
                 <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-bold">{t.ratesTitle}</span>
                     <span className="block truncate text-[13px] text-muted">
@@ -78,6 +102,14 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                         </li>
                     ))}
                 </ul>
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new Event(SHORTCUTS_HELP_EVENT))}
+                    className="-mx-1 mb-2 mt-1 flex h-11 items-center gap-2 rounded-full px-3 text-[15px] font-semibold text-accent"
+                >
+                    {SETTINGS_STRINGS[state.language].allShortcuts}
+                    <Kbd>?</Kbd>
+                </button>
             </section>
         </>
     );

@@ -27,6 +27,23 @@ const TRANSFER_NOTE_PREFIX = 'Transfer:';
 /** Fees are always entered in USD. */
 export const FEE_CURRENCY: Currency = 'USD';
 
+/** Stored fees keep 1/100 of a cent, so a fee typed in RSD or EUR reads back as typed. */
+const FEE_PRECISION = 10_000;
+
+/**
+ * A fee read in another currency (a scanned receipt, a typed or spoken entry) as it is stored:
+ * in FEE_CURRENCY. Empty, invalid or non-positive fees become undefined.
+ */
+export const toStoredFee = (fee: number | undefined, currency: Currency, rates: ExchangeRates): number | undefined => {
+  if (typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0) return undefined;
+  // convertAmount rounds to cents; a fee needs more so it survives the trip back to its currency.
+  const fromRate = rates.rates[currency];
+  const toRate = rates.rates[FEE_CURRENCY];
+  const converted = currency === FEE_CURRENCY || !fromRate || !toRate ? fee : (fee / fromRate) * toRate;
+  const stored = Math.round(converted * FEE_PRECISION) / FEE_PRECISION;
+  return stored > 0 ? stored : undefined;
+};
+
 type Classifiable = Pick<Transaction, 'categoryId' | 'note'> & { transferId?: string };
 
 export const isTransferTransaction = (item: Classifiable | Pick<RecurringTransaction, 'categoryId' | 'note'>): boolean =>

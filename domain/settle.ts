@@ -133,6 +133,22 @@ export const planSettlement = (expenses: SharedExpense[], options: SettlementPla
   return simplifyDebts(netted, target);
 };
 
+/**
+ * What each person still gets back (positive) or owes (negative) according to a settle-up plan,
+ * in that plan's currency. Payments are rounded once, inside the plan (whole dinars for RSD), so
+ * per-person balances shown from this always add up to exactly the suggested payments instead of
+ * drifting by a unit from separately rounded totals. People the plan does not mention are even.
+ */
+export const planBalances = (debts: EventDebt[]): Map<string, number> => {
+  const cents = new Map<string, number>();
+  debts.forEach(debt => {
+    const amountCents = Math.round(debt.amount * 100);
+    addCents(cents, debt.to, amountCents);
+    addCents(cents, debt.from, -amountCents);
+  });
+  return new Map([...cents.entries()].map(([personId, value]) => [personId, value / 100]));
+};
+
 interface BuildSettlementExpenseInput {
   createId: () => string;
   eventId: string;

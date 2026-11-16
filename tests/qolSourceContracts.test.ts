@@ -5,9 +5,9 @@ import { TRANSLATIONS } from '../constants';
 const readSource = (path: string) => readFileSync(path, 'utf8');
 
 describe('QOL source contracts', () => {
-  it('wires Home quick add and the Add sheet template shortcuts through the app router', () => {
+  it('wires Home quick add and the Add menu template shortcuts through the app router', () => {
     const router = readSource('components/app/AppViewRouter.tsx');
-    const addSheet = readSource('components/app/AddSheet.tsx');
+    const addSheet = readSource('components/app/AddMenu.tsx');
 
     expect(addSheet).toContain('selectDashboardTemplates');
     expect(addSheet).toContain('onUseTemplate(template.id)');

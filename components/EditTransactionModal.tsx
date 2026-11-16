@@ -1,19 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import clsx from 'clsx';
-import { ArrowDownLeft, ArrowUpRight, X } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { Check } from 'lucide-react';
 import { MOTION } from '../config';
 import { TRANSLATIONS } from '../constants';
 import { useEscapeKey, useFocusTrap } from '../hooks/useFocusTrap';
 import { useSheetDrag } from '../hooks/useSheetDrag';
-import { FieldValidation, useFormValidation, validationRules } from '../hooks/useFormValidation';
-import { Account, Category, Event, Person, Transaction } from '../types';
+import { Account, AppState, Category, Event, ExchangeRates, HomeHeaderTone, Person, Transaction } from '../types';
 import { HAPTIC_PATTERNS, vibrate } from '../utils/haptics';
-import { merchantMemoryFor, usualChoice } from '../domain/merchantMemory';
+import { calculateAccountBalance } from '../utils/financialSelectors';
 import { AmountFields } from './transaction-modal/AmountFields';
+import { EntryTiles, type EntryPanel } from './transaction-modal/EntryTiles';
+import { Keypad } from './transaction-modal/Keypad';
 import { MoreOptionsFields } from './transaction-modal/MoreOptionsFields';
 import { ReceiptFields } from './transaction-modal/ReceiptFields';
+import { ENTRY_STRINGS } from './transaction-modal/entryStrings';
+import { languageOf, useEntryForm } from './transaction-modal/useEntryForm';
 
 interface EditTransactionModalProps {
     isOpen: boolean;
@@ -24,14 +26,27 @@ interface EditTransactionModalProps {
     categories: Category[];
     people: Person[];
     events: Event[];
+    /** `targetAccountId` is the To wallet of a transfer (new or edited). */
     onSave: (updated: Transaction, targetAccountId?: string) => void;
     onDelete: (id: string) => void;
     t: typeof TRANSLATIONS['en'];
-    /** History for "usual category" suggestions on new entries. */
+    /** History for "usual category" suggestions and the default category of new entries. */
     transactions?: Transaction[];
+    /** Fee in the entry's currency and the amount a transfer arrives as; without it fees are typed in USD. */
+    rates?: ExchangeRates;
+    /** The Home header colour (Settings > Header), used for the form's top. */
+    headerTone?: HomeHeaderTone;
+    /** `pane`: in the Activity side pane in place of the entry's details (no scrim, drag or focus trap). */
+    variant?: 'modal' | 'pane';
 }
 
 const NO_TRANSACTIONS: Transaction[] = [];
+
+/** How long after opening the dialog takes focus back if something outside grabs it. */
+const FOCUS_SETTLE_MS = 1000;
+
+/** Touch screens type the amount on the app's keypad (with sums); a mouse and keyboard type it directly. */
+const touchFirst = () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
 
 export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     isOpen,
@@ -45,90 +60,67 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     onSave,
     onDelete,
     t,
-    transactions = NO_TRANSACTIONS
+    transactions = NO_TRANSACTIONS,
+    rates,
+    headerTone = 'accent',
+    variant = 'modal',
 }) => {
-    const [edited, setEdited] = useState<Transaction | null>(null);
-    const [targetAccountId, setTargetAccountId] = useState('');
-    const [showMoreOptions, setShowMoreOptions] = useState(false);
+    const inPane = variant === 'pane';
+    const language = languageOf(t);
+    const s = ENTRY_STRINGS[language];
+    const form = useEntryForm({ transaction, isNewTransaction, accounts, categories, transactions, t, rates });
+    const { edited, kind } = form;
+    const [keypad] = useState(touchFirst);
+    // With the keypad, a new entry starts on it; the pickers and More take its place while open.
+    const rest: EntryPanel = keypad ? 'keypad' : null;
+    const [shownFor, setShownFor] = useState(transaction);
+    const [panel, setPanel] = useState<EntryPanel>(() => (isNewTransaction ? rest : null));
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    if (shownFor !== transaction) {
+        setShownFor(transaction);
+        setPanel(isNewTransaction ? rest : null);
+        setShowDeleteConfirm(false);
+    }
+    const togglePanel = (next: EntryPanel) => setPanel(current => (current === next ? rest : next));
+    const balances = useMemo(
+        () => (rates ? new Map(accounts.map(account => [account.id, calculateAccountBalance({ transactions, rates } as AppState, account)])) : null),
+        [accounts, transactions, rates]
+    );
     const amountInputRef = useRef<HTMLInputElement>(null);
-    const categoryPickedRef = useRef(false);
-    const focusTrapRef = useFocusTrap(isOpen);
+    // A new entry starts in the amount field; an edit focuses the sheet itself (no keyboard pops up).
+    const focusTrapRef = useFocusTrap(isOpen && !inPane, { initialFocus: isNewTransaction ? '#edit-tx-amount' : undefined });
 
     useEscapeKey(onClose, isOpen);
     const { wrapRef, handleProps } = useSheetDrag(onClose);
 
-    const validationConfig: FieldValidation = useMemo(() => ({
-        amount: [
-            validationRules.required(t.fieldRequired),
-            validationRules.positive(t.amountMustBePositive)
-        ],
-        accountId: [
-            validationRules.required(t.fieldRequired)
-        ]
-    }), [t]);
-    const { validateAll, validateOnBlur, getFieldState, clearErrors } = useFormValidation(validationConfig);
-
+    // A sheet that opened this dialog (the Add sheet) hands focus back to its own trigger when its
+    // exit animation ends, after this dialog has focused itself. While it settles, focus that lands
+    // outside every dialog comes back here.
     useEffect(() => {
-        if (transaction) {
-            setEdited(transaction);
-            setShowMoreOptions(
-                !!transaction.personId ||
-                !!transaction.eventId ||
-                !!transaction.fees ||
-                !!transaction.note
-            );
-        } else {
-            setEdited({
-                id: uuidv4(),
-                date: new Date().toISOString(),
-                amount: 0,
-                currency: accounts[0]?.currency || 'USD',
-                categoryId: categories[0]?.id || 'others',
-                accountId: accounts[0]?.id || '',
-                type: 'expense',
-                note: ''
-            });
-            setShowMoreOptions(false);
-        }
-        setTargetAccountId('');
-        setShowDeleteConfirm(false);
-        categoryPickedRef.current = false;
-        clearErrors();
-    }, [transaction, accounts, categories, clearErrors]);
+        if (!isOpen || inPane) return;
+        const onFocusIn = (event: FocusEvent) => {
+            const container = focusTrapRef.current;
+            const target = event.target;
+            if (!container || !(target instanceof Element) || container.contains(target) || target.closest('[role="dialog"]')) return;
+            const initial = isNewTransaction ? container.querySelector<HTMLElement>('#edit-tx-amount') : null;
+            (initial ?? container).focus({ preventScroll: true });
+        };
+        document.addEventListener('focusin', onFocusIn);
+        const timer = window.setTimeout(() => document.removeEventListener('focusin', onFocusIn), FOCUS_SETTLE_MS);
+        return () => {
+            window.clearTimeout(timer);
+            document.removeEventListener('focusin', onFocusIn);
+        };
+    }, [isOpen, isNewTransaction, focusTrapRef, inPane]);
 
-    // New entries: once the note names a shop the user has a clear habit for, preselect that
-    // category, unless they already picked one themselves.
-    const merchantText = edited?.receiptData?.merchant || edited?.note || '';
-    const usual = useMemo(
-        () => (isNewTransaction && merchantText ? usualChoice(merchantMemoryFor(transactions), merchantText) : null),
-        [isNewTransaction, merchantText, transactions]
-    );
-    useEffect(() => {
-        if (!usual || categoryPickedRef.current) return;
-        const category = categories.find(c => c.id === usual.categoryId);
-        if (!category) return;
-        setEdited(current => {
-            if (!current || current.categoryId === category.id || current.categoryId === 'internal-transfer') return current;
-            if (category.type !== current.type) return current;
-            return { ...current, categoryId: category.id, subcategory: '' };
-        });
-    }, [usual, categories]);
+    if (!isOpen) return null;
 
-    useEffect(() => {
-        if (!isOpen || !amountInputRef.current) return;
-        const timer = setTimeout(() => {
-            amountInputRef.current?.focus();
-            amountInputRef.current?.select();
-        }, 100);
-        return () => clearTimeout(timer);
-    }, [isOpen]);
-
-    if (!isOpen || !edited) return null;
-
-    const isInternalTransfer = edited.categoryId === 'internal-transfer';
-    const selectedCategory = categories.find(c => c.id === edited.categoryId);
-    const canSave = edited.amount > 0 && !!edited.accountId;
+    const canSave = form.canSave;
+    const saveLabel = !isNewTransaction ? s.saveChanges : kind === 'transfer' ? s.saveTransfer : kind === 'income' ? s.saveIncome : s.saveExpense;
+    // The title names the kind, so the kind switch below never needs a second label.
+    const title = isNewTransaction
+        ? (kind === 'transfer' ? t.newTransfer : kind === 'income' ? t.newIncome : t.newExpense)
+        : (kind === 'transfer' ? t.editTransfer : kind === 'income' ? t.editIncome : t.editExpense);
 
     const handleDelete = () => {
         vibrate(HAPTIC_PATTERNS.error);
@@ -137,13 +129,141 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     };
 
     const handleSave = () => {
-        if (validateAll({ amount: edited.amount, accountId: edited.accountId })) {
+        const entry = form.submit();
+        if (entry) {
             vibrate(HAPTIC_PATTERNS.success);
-            onSave(edited, targetAccountId);
+            onSave(entry, kind === 'transfer' ? form.targetAccountId : undefined);
             return;
         }
         vibrate(HAPTIC_PATTERNS.error);
     };
+
+    // The form's inside: the same as a sheet and in the Activity pane.
+    const body = (
+        <>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain custom-scrollbar">
+                <AmountFields
+                    form={form}
+                    categories={categories}
+                    amountInputRef={amountInputRef}
+                    isNewTransaction={isNewTransaction}
+                    canTransfer={accounts.length >= 2}
+                    title={title}
+                    tone={headerTone}
+                    language={language}
+                    t={t}
+                    s={s}
+                    rates={rates}
+                    keypad={keypad}
+                    onClose={onClose}
+                    onAmountFocus={() => keypad && setPanel('keypad')}
+                    // The phone keyboard needs the room: the keypad steps aside while the note is typed.
+                    onNoteFocus={() => setPanel(current => (current === 'keypad' ? null : current))}
+                    onSubmit={handleSave}
+                    handleProps={handleProps}
+                />
+                <div className="space-y-2 px-4 pb-2 pt-4">
+                    <EntryTiles
+                        form={form}
+                        accounts={accounts}
+                        categories={categories}
+                        balances={balances}
+                        panel={panel}
+                        onToggle={togglePanel}
+                        onPicked={() => setPanel(rest)}
+                        language={language}
+                        t={t}
+                        s={s}
+                    />
+                    <MoreOptionsFields
+                        form={form}
+                        people={people}
+                        events={events}
+                        showMoreOptions={panel === 'more'}
+                        onToggle={() => togglePanel('more')}
+                        language={language}
+                        t={t}
+                        s={s}
+                    >
+                        {edited.receiptData && (
+                            <ReceiptFields edited={edited} setEdited={form.setEdited} language={language} t={t} />
+                        )}
+                    </MoreOptionsFields>
+                    {keypad && panel === 'keypad' && <Keypad inputRef={amountInputRef} language={language} s={s} />}
+                </div>
+            </div>
+
+            <div className="flex shrink-0 flex-col gap-2 px-4 pb-4 pt-2">
+                <AnimatePresence>
+                    {showDeleteConfirm && (
+                        <m.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="mb-1 flex items-center justify-between rounded-[18px] bg-neg/10 px-4 py-3">
+                                <span className="text-[14px] font-semibold text-neg">{t.deleteConfirm}</span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(false)}
+                                        className="h-10 rounded-full px-3.5 text-[13px] font-semibold text-muted hover:bg-chip"
+                                    >
+                                        {t.no}
+                                    </button>
+                                    <button
+                                        onClick={handleDelete}
+                                        className="h-10 rounded-full bg-neg px-3.5 text-[13px] font-semibold text-white"
+                                    >
+                                        {t.yesDelete}
+                                    </button>
+                                </div>
+                            </div>
+                        </m.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="flex items-center gap-2">
+                    {!isNewTransaction ? (
+                        <button
+                            onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+                            className={clsx(
+                                "h-[54px] shrink-0 rounded-full px-5 text-[15px] font-semibold transition-colors",
+                                showDeleteConfirm ? "bg-neg/10 text-neg" : "text-neg hover:bg-neg/10"
+                            )}
+                        >
+                            {t.delete}
+                        </button>
+                    ) : null}
+                    {/* Stays tappable when incomplete: tapping shows what is missing. */}
+                    <button
+                        aria-disabled={!canSave}
+                        onClick={handleSave}
+                        className={clsx(
+                            "flex h-[54px] min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-6 text-[16px] font-semibold text-on-accent shadow-[0_10px_24px_-10px_rgb(var(--accent-rgb)/0.75)] transition-[transform,opacity]",
+                            canSave ? "active:scale-[0.98]" : "opacity-50 shadow-none"
+                        )}
+                    >
+                        <Check size={19} strokeWidth={2.6} aria-hidden="true" className="shrink-0" />
+                        <span className="truncate">{saveLabel}</span>
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+
+    if (inPane) {
+        return (
+            <section
+                aria-labelledby="edit-transaction-title"
+                data-pane-editing=""
+                className="relative flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-[32px] bg-[var(--paper-bg)] text-on-surface shadow-[0_18px_48px_-24px_rgba(0,0,0,0.35)] ring-1 ring-hair"
+            >
+                {body}
+            </section>
+        );
+    }
 
     return (
         <m.div
@@ -160,139 +280,16 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             <div ref={wrapRef} className="relative flex w-full justify-center" onClick={e => e.stopPropagation()}>
             <m.div
                 ref={focusTrapRef}
+                tabIndex={-1}
                 onClick={e => e.stopPropagation()}
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
                 exit={MOTION.sheet.exit}
                 transition={MOTION.sheet.spring}
-                className="glass-sheet flex max-h-[90dvh] w-full max-w-[480px] flex-col overflow-hidden rounded-[36px] text-on-surface"
+                style={{ maxHeight: 'calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)))' }}
+                className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-[32px] bg-[var(--paper-bg)] text-on-surface shadow-[0_28px_70px_-24px_rgba(0,0,0,0.5)] outline-none"
             >
-                <div className="shrink-0 touch-none" {...handleProps}>
-                <div className="paper-grab mx-auto mt-2 h-[5px] w-9 rounded-full md:hidden" aria-hidden="true" />
-                <div className="flex items-center justify-between px-5 pb-3 pt-2 md:pt-5">
-                    <div className="flex items-center gap-2">
-                        <h3 id="edit-transaction-title" className="text-[22px] font-bold tracking-[-0.4px]">
-                            {isNewTransaction ? t.addTransaction : t.editTransaction}
-                        </h3>
-                        {selectedCategory && (
-                            <span className={clsx(
-                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                edited.type === 'income' ? "bg-pos/15 text-pos" : "bg-chip text-muted"
-                            )}>
-                                {edited.type === 'income'
-                                    ? <ArrowDownLeft size={10} aria-hidden="true" />
-                                    : <ArrowUpRight size={10} aria-hidden="true" />}
-                                {edited.type === 'income' ? t.incomeType : t.expenseType}
-                            </span>
-                        )}
-                    </div>
-                    <button
-                        onClick={onClose}
-                        type="button"
-                        className="glass flex h-11 w-11 items-center justify-center rounded-full"
-                        aria-label={t.close}
-                    >
-                        <X size={20} aria-hidden="true" />
-                    </button>
-                </div>
-                </div>
-
-                <div className="space-y-4 overflow-y-auto px-5 pb-5 custom-scrollbar">
-                    <AmountFields
-                        edited={edited}
-                        setEdited={setEdited}
-                        accounts={accounts}
-                        categories={categories}
-                        amountInputRef={amountInputRef}
-                        targetAccountId={targetAccountId}
-                        setTargetAccountId={setTargetAccountId}
-                        validateOnBlur={validateOnBlur}
-                        getFieldState={getFieldState}
-                        t={t}
-                        usualHint={usual && usual.categoryId === edited.categoryId ? t.usualCategory.replace('{merchant}', usual.merchant) : null}
-                        onCategoryPicked={() => { categoryPickedRef.current = true; }}
-                    />
-                    <MoreOptionsFields
-                        edited={edited}
-                        setEdited={setEdited}
-                        people={people}
-                        events={events}
-                        isInternalTransfer={isInternalTransfer}
-                        showMoreOptions={showMoreOptions}
-                        onToggle={() => setShowMoreOptions(!showMoreOptions)}
-                        t={t}
-                    />
-                    {edited.receiptData && (
-                        <ReceiptFields edited={edited} setEdited={setEdited} t={t} />
-                    )}
-                </div>
-
-                <div className="flex flex-col gap-3 border-t border-hair px-5 pb-5 pt-3">
-                    <AnimatePresence>
-                        {showDeleteConfirm && (
-                            <m.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.15 }}
-                                className="overflow-hidden"
-                            >
-                                <div className="mb-1 flex items-center justify-between rounded-[18px] bg-neg/10 px-4 py-3">
-                                    <span className="text-[14px] font-semibold text-neg">{t.deleteConfirm}</span>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setShowDeleteConfirm(false)}
-                                            className="h-9 rounded-full px-3.5 text-[13px] font-semibold text-muted hover:bg-chip"
-                                        >
-                                            {t.no}
-                                        </button>
-                                        <button
-                                            onClick={handleDelete}
-                                            className="h-9 rounded-full bg-neg px-3.5 text-[13px] font-semibold text-white"
-                                        >
-                                            {t.yesDelete}
-                                        </button>
-                                    </div>
-                                </div>
-                            </m.div>
-                        )}
-                    </AnimatePresence>
-
-                    <div className="flex justify-between items-center">
-                        {!isNewTransaction ? (
-                            <button
-                                onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
-                                className={clsx(
-                                    "h-11 rounded-full px-4 text-[15px] font-semibold transition-colors",
-                                    showDeleteConfirm ? "bg-neg/10 text-neg" : "text-neg hover:bg-neg/10"
-                                )}
-                            >
-                                {t.delete}
-                            </button>
-                        ) : (
-                            <div />
-                        )}
-
-                        <div className="flex gap-2">
-                            <button
-                                onClick={onClose}
-                                className="h-11 rounded-full px-5 text-[15px] font-semibold text-muted hover:bg-chip"
-                            >
-                                {t.cancel}
-                            </button>
-                            <button
-                                disabled={!edited.amount || edited.amount <= 0 || !edited.accountId}
-                                onClick={handleSave}
-                                className={clsx(
-                                    "h-11 rounded-full px-6 text-[15px] font-semibold transition-colors",
-                                    canSave ? "bg-accent text-on-accent active:scale-95" : "cursor-not-allowed bg-chip text-faint"
-                                )}
-                            >
-                                {t.save}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                {body}
             </m.div>
             </div>
         </m.div>

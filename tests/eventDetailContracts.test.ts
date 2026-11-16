@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { TRANSLATIONS } from '../constants';
 
 describe('event detail contracts', () => {
-  it('renders the shared tab once, with Add expense in the action row instead of a floating button', () => {
+  it('shows the event on one screen, with Add expense in the action row instead of a floating button', () => {
     const eventDetailView = readFileSync('components/event-detail/EventDetailView.tsx', 'utf8');
-    const sharedBranchCount = (eventDetailView.match(/activeTab === 'shared' && \(/g) || []).length;
 
-    expect(sharedBranchCount).toBe(1);
+    // No tabs: the expenses, who paid what and settling up are all on the event screen.
+    expect(eventDetailView).not.toContain('activeTab');
     expect(eventDetailView).toContain('<ExpensesList');
     expect(eventDetailView).not.toContain('<ExpensesFab');
     expect(eventDetailView).toContain('onClick={openAddExpense}');
@@ -40,11 +40,9 @@ describe('event detail contracts', () => {
   });
 
   it('uses the shared participant initials helper instead of raw first-character avatars', () => {
-    const eventHeader = readFileSync('components/event-detail/EventHeader.tsx', 'utf8');
     const expensesList = readFileSync('components/event-detail/ExpensesList.tsx', 'utf8');
     const eventCard = readFileSync('components/EventCard.tsx', 'utf8');
 
-    expect(eventHeader).toContain('getParticipantInitials');
     expect(expensesList).toContain('getParticipantInitials');
     expect(eventCard).toContain('getParticipantInitials');
   });
@@ -63,11 +61,9 @@ describe('event detail contracts', () => {
   });
 
   it('uses participant tooltip labels for invited guest placeholders', () => {
-    const eventHeader = readFileSync('components/event-detail/EventHeader.tsx', 'utf8');
     const expensesList = readFileSync('components/event-detail/ExpensesList.tsx', 'utf8');
     const eventCard = readFileSync('components/EventCard.tsx', 'utf8');
 
-    expect(eventHeader).toContain('getParticipantTooltipLabel');
     expect(expensesList).toContain('getParticipantTooltipLabel');
     expect(eventCard).toContain('getParticipantTooltipLabel');
   });
@@ -75,10 +71,10 @@ describe('event detail contracts', () => {
   it('labels the event header icon buttons for accessibility and automation', () => {
     const eventHeader = readFileSync('components/event-detail/EventHeader.tsx', 'utf8');
 
-    expect(eventHeader).toContain('aria-label={t.backToEvents}');
-    expect(eventHeader).toContain('title={t.backToEvents}');
-    expect(eventHeader).toContain('aria-label={t.eventActions}');
-    expect(eventHeader).toContain('title={t.eventActions}');
+    // HeroIconButton and HeroMenu set both aria-label and title from `label`.
+    // Back to events as a page; Close beside the Shared list on wide windows.
+    expect(eventHeader).toContain('<HeroIconButton icon={inPane ? X : ArrowLeft} label={inPane ? t.close : t.backToEvents}');
+    expect(eventHeader).toContain('<HeroMenu label={t.eventActions}');
     expect(TRANSLATIONS.en.backToEvents).toBe('Back to events');
     expect(TRANSLATIONS.en.eventActions).toBe('Event actions');
     expect(TRANSLATIONS.sr.backToEvents).toBe('Nazad na događaje');

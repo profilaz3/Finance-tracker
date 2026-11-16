@@ -38,6 +38,31 @@ export interface Person {
   teamId?: string | null;
 }
 
+export interface ReceiptItem {
+  name: string;
+  /** Unit price; the line total is price x quantity. */
+  price: number;
+  quantity: number;
+}
+
+/** What a scanned receipt said. The optional fields come from a Serbian fiscal receipt. */
+export interface ReceiptData {
+  items: ReceiptItem[];
+  total: number;
+  merchant: string;
+  /** Verification page on the tax portal (suf.purs.gov.rs). Untrusted: check with parseFiscalUrl before linking. */
+  url?: string;
+  /** Registered company name when it differs from the shop name. */
+  companyName?: string;
+  address?: string;
+  city?: string;
+  /** Tax id (PIB). */
+  pib?: string;
+  invoiceNumber?: string;
+  /** Path of the receipt photo in the `receipts` Storage bucket (`domain/receiptPhoto.ts`). */
+  photo?: string;
+}
+
 export interface Transaction {
   id: string;
   date: string; // ISO string
@@ -49,11 +74,7 @@ export interface Transaction {
   subcategory?: string;
   note?: string;
   type: TransactionType;
-  receiptData?: {
-    items: { name: string; price: number; quantity: number }[];
-    total: number;
-    merchant: string;
-  };
+  receiptData?: ReceiptData;
   fees?: number;
   eventId?: string;
   /** Shared by both legs of an account-to-account transfer. */
@@ -205,19 +226,26 @@ export interface AppState {
   templates: TransactionTemplate[];
   recurringTransactions: RecurringTransaction[];
 
-  theme: 'neon' | 'racing-orange' | 'graphite' | 'coffee' | 'gilded' | 'crimson-red' | 'lime-dark' | 'sterling' | 'canyon' | 'cyberpunk-pink' | 'harbor' | 'galaxy' | 'evergreen' | 'linen' | 'mist' | 'light';
   language: 'en' | 'sr';
 
   events: Event[];
   sharedExpenses: SharedExpense[];
   isGuest?: boolean;
 
-  /** Paper look: light/dark/system, accent and glass level. */
+  /** Paper look: light/dark/system, theme, accent and glass level. */
   appearance?: Appearance;
   /** Ordered Home blocks; undefined means the default layout. */
   homeLayout?: HomeBlock[];
-  /** Monthly budget in the base currency; null or undefined means none set. */
+  /** What the Home header shows (main number, three numbers under it, trip, colour); undefined means the default. */
+  homeHeader?: HomeHeader;
+  /**
+   * Monthly budget in the base currency; null or undefined means none set. In the stored state
+   * this is the Personal workspace's budget; a workspace-scoped state (scopeStateToWorkspace)
+   * carries the budget of the workspace on screen.
+   */
   budget?: Budget | null;
+  /** The user's own budget for each team workspace, by team id (settings.prefs.teamBudgets). */
+  teamBudgets?: Record<string, Budget>;
   /** Teams the signed-in user belongs to; undefined until fetched. */
   teams?: Team[];
   /** Where people pay the user back (IPS QR requests); null or undefined means not set. */
@@ -254,12 +282,18 @@ export interface Team {
 }
 
 export type AppearanceMode = 'light' | 'dark' | 'system';
-export type AccentName = 'teal' | 'ember' | 'iris' | 'ink';
+export type ThemeName = 'paper' | 'midnight' | 'sand' | 'forest' | 'ocean' | 'rose';
+export type NamedAccent = 'teal' | 'moss' | 'sky' | 'iris' | 'grape' | 'berry' | 'ember' | 'amber' | 'cocoa' | 'ink';
+export type AccentName = NamedAccent | 'custom';
 export type GlassLevel = 'frosted' | 'clear' | 'solid';
 
 export interface Appearance {
   mode: AppearanceMode;
+  /** Whole palette; undefined (older saves) means paper. */
+  theme?: ThemeName;
   accent: AccentName;
+  /** `#RRGGBB`, used when `accent` is `custom`. */
+  customAccent?: string;
   glass: GlassLevel;
 }
 
@@ -277,6 +311,24 @@ export type HomeBlockType =
   | 'quickadd';
 
 export type HomeBlockSize = 's' | 'm' | 'l';
+
+/** Main number of the Home header. */
+export type HomeHeaderFace = 'budget' | 'networth' | 'today' | 'month' | 'owed' | 'rate';
+
+/** Header colour: the theme's accent card (follows theme and accent) or near-black. */
+export type HomeHeaderTone = 'accent' | 'dark';
+
+export interface HomeHeader {
+  face: HomeHeaderFace;
+  /**
+   * The numbers under the main one, in order (at most 3): `in`, `spent`, `budget`, `left`, `net`,
+   * `networth`, `owed`, `iOwe`, `today`, `avgDay`, `week`, or `wallet:<account id>`.
+   */
+  stats: string[];
+  /** While a trip (active event with dates) is on, the header shows it instead of `face`. */
+  trip: boolean;
+  tone: HomeHeaderTone;
+}
 
 export interface HomeBlock {
   id: string;

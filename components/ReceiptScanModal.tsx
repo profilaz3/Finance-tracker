@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { m } from 'motion/react';
 import clsx from 'clsx';
-import { X, Camera, Loader2, AlertCircle, Check, Trash2, Plus, ScanLine, QrCode, ShieldCheck, ChevronRight, ChevronLeft, Info, Users } from 'lucide-react';
-import { Category, Account, Currency, Person, Transaction } from '../types';
+import { X, Camera, Loader2, AlertCircle, Check, Trash2, Plus, ScanLine, QrCode, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Info, Users, PenLine } from 'lucide-react';
+import { Category, Account, Currency, ExchangeRates, Person, Transaction } from '../types';
+import { toStoredFee } from '../domain/money';
 import { TRANSLATIONS } from '../constants';
 import { formatMoney } from '../utils/locale';
 import { scanReceipt, ParsedReceipt, isAIAvailable } from '../services/aiService';
@@ -10,10 +11,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { vibrate, HAPTIC_PATTERNS } from '../utils/haptics';
 import { useImagePicker, ImageResult } from '../hooks/useImagePicker';
 import { ImagePickerSheet } from './ImagePickerSheet';
+import { QrViewfinder } from './receipt-scan/QrViewfinder';
+import { IconTile } from './ui/IconTile';
 import { MOTION } from '../config';
 import { useDialog } from '../hooks/useFocusTrap';
 import { isSupportedReceiptImageType, RECEIPT_IMAGE_ACCEPT } from '../utils/receiptImage';
-import { processImage } from '../utils/imageResize';
+import { dataUrlToBlob, fetchAsBlob, processImage } from '../utils/imageResize';
+import { withReceiptPhoto } from '../domain/receiptPhoto';
+import { ReceiptPhotoError, uploadReceiptPhoto } from '../services/receiptPhotoService';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { CategoryGlyph } from './ui/CategoryGlyph';
 import { QrScanner } from './receipt-scan/QrScanner';
@@ -24,8 +29,12 @@ import { merchantMemoryFor, usualChoice } from '../domain/merchantMemory';
 import { importFiscalReceipt } from '../services/fiscalReceiptService';
 import { SplitAssign } from './receipt-scan/SplitAssign';
 import { receiptItemsForSplit } from '../domain/receiptSplit';
+import { fiscalDetails } from '../domain/receiptDetails';
 import { excludeOwnProfile } from '../domain/people';
 import type { SplitPrefill } from './split-expense/types';
+import { AmountInput } from './ui/AmountInput';
+import { defaultCategoryId, isSystemCategoryId } from '../domain/transactions';
+import { localizeCategoryName } from '../utils/systemText';
 
 /** What the result screen needs to know about a receipt imported from a fiscal QR code. */
 interface FiscalInfo {
@@ -46,10 +55,14 @@ interface ReceiptScanModalProps {
   categories: Category[];
   accounts: Account[];
   baseCurrency: Currency;
+  /** Turns a fee read off the receipt (in the receipt currency) into the stored USD fee. */
+  rates: ExchangeRates;
   language: 'en' | 'sr';
   onTransactionCreated: (transaction: Transaction) => void;
   /** A receipt image (data URL) shared into the app from another app; shown preloaded. */
   initialImage?: string | null;
+  /** A receipt file dropped onto the app window; read like a picked file. */
+  initialFile?: File | null;
   /** People to split the receipt with; enables "Split this receipt" together with `onSplitRequested`. */
   people?: Person[];
   userProfile?: Person;
@@ -66,9 +79,11 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   categories,
   accounts,
   baseCurrency,
+  rates,
   language,
   onTransactionCreated,
   initialImage,
+  initialFile,
   people: allPeople = [],
   userProfile,
   onAddPerson,
@@ -102,13 +117,25 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [billInfo, setBillInfo] = useState<BillInfo | null>(null);
   const [scanMode, setScanMode] = useState<'fiscal' | 'ai'>('ai');
   const [isSplitting, setIsSplitting] = useState(false);
+  // What the result will be saved as: shown and editable on the result screen.
+  const [targetCategoryId, setTargetCategoryId] = useState('');
+  const [targetAccountId, setTargetAccountId] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [isManualEntry, setIsManualEntry] = useState(false);
   // The built-in "me" is the user, so their own profile is not offered as someone to split with.
   const splitPeople = useMemo(() => excludeOwnProfile(allPeople, userProfile), [allPeople, userProfile]);
   const qrDetection = useRef<Promise<ScannedQr | null> | null>(null);
+  // The full-size photo behind the (downscaled) preview, for the QR search only.
+  const originalImage = useRef<Blob | null>(null);
+  // Keep the scanned photo with the entry (private Storage); needs a connection when saving.
+  const [keepPhoto, setKeepPhoto] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   // An image shared into the app (Android share sheet) opens preloaded, ready to scan.
   React.useEffect(() => {
     if (!isOpen || !initialImage) return;
+    originalImage.current = null;
     setImagePreview(initialImage);
     setParsedReceipt(null);
     setError(null);
@@ -117,6 +144,9 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const unsupportedFileMessage = t.receiptUnsupportedFile;
 
   const resetState = () => {
+    setPhotoError(null);
+    setSavingPhoto(false);
+    originalImage.current = null;
     setImagePreview(null);
     setIsScanning(false);
     setIsProcessingImage(false);
@@ -128,6 +158,10 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setFiscalInfo(null);
     setBillInfo(null);
     setIsSplitting(false);
+    setTargetCategoryId('');
+    setTargetAccountId('');
+    setTargetDate('');
+    setIsManualEntry(false);
   };
 
   // Look for a fiscal receipt or IPS bill QR code in every new photo; it beats reading the photo with AI.
@@ -138,7 +172,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       return;
     }
     let cancelled = false;
-    const detection = decodeQrFromImage(imagePreview)
+    const detection = decodeQrFromImage(originalImage.current ?? imagePreview)
       .then((text) => (text ? classifyScannedQr(text) : null))
       .catch(() => null);
     qrDetection.current = detection;
@@ -161,11 +195,13 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const handleImageResult = useCallback((result: ImageResult | null) => {
     if (result) {
       if (result.file && !isSupportedReceiptImageType(result.file.type)) {
+        originalImage.current = null;
         setImagePreview(null);
         setParsedReceipt(null);
         setError(unsupportedFileMessage);
         return;
       }
+      originalImage.current = result.original ?? null;
       setImagePreview(result.dataUrl);
       setError(null);
       setParsedReceipt(null);
@@ -235,6 +271,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setError(null);
     try {
       const processed = await processImage(file, { fileName: 'receipt' });
+      originalImage.current = file;
       setImagePreview(processed.dataUrl);
       setParsedReceipt(null);
     } catch (err) {
@@ -244,6 +281,13 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       setIsProcessingImage(false);
     }
   };
+
+  // A file dropped onto the app window opened the scanner: read it as if it was picked here.
+  const handleFileSelectRef = useRef(handleFileSelect);
+  handleFileSelectRef.current = handleFileSelect;
+  useEffect(() => {
+    if (isOpen && initialFile) void handleFileSelectRef.current(initialFile);
+  }, [isOpen, initialFile]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -262,7 +306,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setIsDragging(false);
   };
 
-  const fiscalToParsed = (receipt: FiscalReceipt): ParsedReceipt => {
+  const fiscalToParsed = (receipt: FiscalReceipt, url: string): ParsedReceipt => {
     const refund = receipt.transactionType === 1;
     const pool = categories.filter(c => c.type === (refund ? 'income' : 'expense'));
     const suggested = receipt.categoryName?.toLowerCase();
@@ -285,6 +329,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         items: receipt.items.map(item => ({ name: item.name, price: item.unitPrice, quantity: item.quantity })),
         total: receipt.total,
         merchant: receipt.merchant,
+        ...fiscalDetails(receipt, url),
       },
     };
   };
@@ -309,7 +354,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         return;
       }
       const { receipt } = result;
-      setParsedReceipt(fiscalToParsed(receipt));
+      presentReceipt(fiscalToParsed(receipt, url), receipt.transactionType === 1 ? 'income' : 'expense');
       setBillInfo(null);
       setFiscalInfo({
         partial: receipt.partial,
@@ -334,7 +379,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     const categoryName = usualCategory?.name ?? rule?.categoryName ?? expense[0]?.name ?? categories[0]?.name ?? '';
     const usualAccount = usual?.accountId ? accounts.find(a => a.id === usual.accountId && a.currency === 'RSD') : undefined;
     const account = usualAccount ?? accounts.find(a => a.currency === 'RSD') ?? accounts[0];
-    setParsedReceipt({
+    presentReceipt({
       amount: bill.amount,
       currency: 'RSD',
       categoryName,
@@ -392,7 +437,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       const result = await scanReceipt(imagePreview, categories, accounts);
 
       if (result) {
-        setParsedReceipt(result);
+        presentReceipt(result);
         vibrate(HAPTIC_PATTERNS.success);
       } else {
         setError(t.receiptReadFailed);
@@ -415,41 +460,94 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
   };
 
-  // Category and account the scan suggested, falling back to the first sensible ones.
-  const resolveTargets = (receipt: ParsedReceipt) => {
-    const category = categories.find(c =>
-      c.name.toLowerCase() === receipt.categoryName.toLowerCase()
-    ) || categories.find(c => c.type === 'expense') || categories[0];
+  const resultType = fiscalInfo?.refund ? 'income' : 'expense';
+  // Categories the result can be saved under: its own type, never a transfer or debt category.
+  const categoryPool = categories.filter(c => c.type === resultType && !isSystemCategoryId(c.id));
 
-    const account = receipt.accountName
+  /** Shows a receipt on the result screen with the category, wallet and date it will be saved with. */
+  const presentReceipt = (receipt: ParsedReceipt, type: 'expense' | 'income' = 'expense') => {
+    const pool = categories.filter(c => c.type === type && !isSystemCategoryId(c.id));
+    const named = receipt.categoryName.toLowerCase();
+    const category = pool.find(c => c.name.toLowerCase() === named);
+    const account = (receipt.accountName
       ? accounts.find(a => a.name.toLowerCase() === receipt.accountName?.toLowerCase())
-      : accounts[0];
-    return { category, account };
+      : undefined) ?? accounts.find(a => a.currency === receipt.currency) ?? accounts[0];
+    const date = new Date(receipt.date || Date.now());
+    setParsedReceipt(receipt);
+    setIsManualEntry(false);
+    setTargetCategoryId(category?.id ?? defaultCategoryId(type, categories, transactions ?? []));
+    setTargetAccountId(account?.id ?? '');
+    setTargetDate(Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString());
   };
 
-  const handleConfirm = () => {
-    if (!parsedReceipt) return;
+  /** After a failed scan: the same result screen, empty, to type the receipt in by hand. */
+  const enterManually = () => {
+    const account = accounts[0];
+    setError(null);
+    setFiscalInfo(null);
+    setBillInfo(null);
+    presentReceipt({
+      amount: 0,
+      currency: account?.currency ?? baseCurrency,
+      categoryName: '',
+      type: 'expense',
+      note: '',
+      date: new Date().toISOString(),
+      accountName: account?.name,
+      receiptData: { items: [{ name: '', price: 0, quantity: 1 }], total: 0, merchant: '' },
+    });
+    setIsManualEntry(true);
+  };
+
+  const resultTotal = parsedReceipt ? parsedReceipt.receiptData?.total || parsedReceipt.amount || 0 : 0;
+  const canConfirm = resultTotal > 0 && !!targetAccountId;
+
+  const handleConfirm = async () => {
+    if (!parsedReceipt || !canConfirm || savingPhoto) return;
+
+    let photo: string | null = null;
+    if (keepPhoto && imagePreview) {
+      setSavingPhoto(true);
+      setPhotoError(null);
+      try {
+        const blob = imagePreview.startsWith('data:') ? dataUrlToBlob(imagePreview) : await fetchAsBlob(imagePreview);
+        photo = await uploadReceiptPhoto(blob);
+      } catch (photoFailure) {
+        const reason = photoFailure instanceof ReceiptPhotoError ? photoFailure.reason : 'upload';
+        // Nothing is saved yet: the user can try again or switch the photo off and save.
+        setPhotoError(
+          reason === 'offline' ? t.receiptPhotoOffline
+            : reason === 'too-large' ? t.receiptPhotoTooLarge
+              : reason === 'unsupported' ? t.receiptPhotoUnsupported
+                : t.receiptPhotoFailed,
+        );
+        setSavingPhoto(false);
+        return;
+      }
+      setSavingPhoto(false);
+    }
 
     vibrate(HAPTIC_PATTERNS.success);
 
-    const { category, account } = resolveTargets(parsedReceipt);
-
+    const currency = parsedReceipt.currency || baseCurrency;
     const transaction: Transaction = {
       id: uuidv4(),
-      date: new Date(parsedReceipt.date || new Date()).toISOString(),
+      date: targetDate || new Date().toISOString(),
       amount: parsedReceipt.amount || parsedReceipt.receiptData?.total || 0,
-      currency: parsedReceipt.currency || baseCurrency,
-      categoryId: category?.id || categories[0]?.id,
-      accountId: account?.id || accounts[0]?.id,
+      currency,
+      categoryId: targetCategoryId || defaultCategoryId(resultType, categories, transactions ?? []),
+      accountId: targetAccountId,
       // A fiscal refund receipt is money coming back.
-      type: fiscalInfo?.refund ? 'income' : 'expense',
+      type: resultType,
       note: parsedReceipt.note || parsedReceipt.receiptData?.merchant || '',
-      subcategory: parsedReceipt.subcategory,
+      // The scan's subcategory only belongs to the category it suggested.
+      subcategory: categories.find(c => c.id === targetCategoryId)?.subcategories?.includes(parsedReceipt.subcategory ?? '') ? parsedReceipt.subcategory : undefined,
       receiptData: parsedReceipt.receiptData,
-      fees: parsedReceipt.fees
+      // The scan reads the fee in the receipt currency; fees are stored in USD.
+      fees: toStoredFee(parsedReceipt.fees, currency, rates)
     };
 
-    onTransactionCreated(transaction);
+    onTransactionCreated(photo ? withReceiptPhoto(transaction, photo) : transaction);
     handleClose();
   };
 
@@ -462,14 +560,13 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   const handleSplitContinue = (split: { payerId: string; amounts: Record<string, number> }) => {
     if (!parsedReceipt || !onSplitRequested) return;
-    const { category, account } = resolveTargets(parsedReceipt);
     vibrate(HAPTIC_PATTERNS.success);
     onSplitRequested({
       amount: splitTotal,
       currency: parsedReceipt.currency || baseCurrency,
-      categoryId: category?.id || categories[0]?.id || '',
-      accountId: account?.id || accounts[0]?.id || '',
-      date: new Date(parsedReceipt.date || new Date()).toISOString(),
+      categoryId: targetCategoryId || defaultCategoryId('expense', categories, transactions ?? []),
+      accountId: targetAccountId || accounts[0]?.id || '',
+      date: targetDate || new Date().toISOString(),
       note: parsedReceipt.note || parsedReceipt.receiptData?.merchant || '',
       receiptData: parsedReceipt.receiptData,
       payerId: split.payerId,
@@ -494,9 +591,25 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   if (!isOpen) return null;
 
-  const matchedCategory = parsedReceipt
-    ? categories.find(c => c.name.toLowerCase() === parsedReceipt.categoryName.toLowerCase())
-    : undefined;
+  const targetCategory = categories.find(c => c.id === targetCategoryId);
+  const targetDay = (() => {
+    const date = new Date(targetDate);
+    if (!Number.isFinite(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  })();
+  const merchantText = parsedReceipt ? parsedReceipt.receiptData?.merchant ?? parsedReceipt.note : '';
+  const setMerchant = (merchant: string) =>
+    setParsedReceipt(prev => {
+      if (!prev) return prev;
+      const previous = prev.receiptData?.merchant ?? '';
+      // A note that only repeated the shop name follows it.
+      const note = !prev.note || prev.note === previous ? merchant : prev.note;
+      return {
+        ...prev,
+        note,
+        receiptData: { items: prev.receiptData?.items ?? [], total: prev.receiptData?.total ?? prev.amount, merchant },
+      };
+    });
 
   const errorBox = error && (
     <div role="alert" className="flex items-start gap-2 rounded-[16px] bg-neg/10 px-4 py-3">
@@ -504,6 +617,17 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       <p className="text-[14px] text-on-surface">{error}</p>
     </div>
   );
+  const manualButton = error && !isScanning && (
+    <button
+      type="button"
+      onClick={enterManually}
+      className="mx-auto flex h-11 items-center justify-center gap-1.5 rounded-full bg-chip px-4 text-[14px] font-semibold"
+    >
+      <PenLine size={16} aria-hidden="true" />
+      {t.enterManually}
+    </button>
+  );
+  const fieldRowSelect = 'h-10 min-w-0 max-w-full appearance-none truncate rounded-[12px] bg-chip pl-3 pr-8 text-right text-[15px] font-semibold text-on-surface outline-none focus:ring-2 focus:ring-accent';
 
   return (
     <div className="modal-safe-area fixed inset-0 z-50 flex items-end justify-center md:items-center">
@@ -546,13 +670,16 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
             <h3 id={titleId} className="flex-1 text-[22px] font-bold tracking-[-0.4px]">
               {isSplitting ? t.splitReceiptTitle : t.scanReceipt}
             </h3>
+            {/* 36px chip, 44px hit area (the negative margin keeps the header height). */}
             <button
               type="button"
               onClick={handleClose}
               aria-label={t.close}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chip text-muted"
+              className="-m-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted"
             >
-              <X size={18} aria-hidden="true" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-chip">
+                <X size={18} aria-hidden="true" />
+              </span>
             </button>
           </div>
         </div>
@@ -567,6 +694,25 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 {isProcessingImage ? t.loadingImage : t.fiscalLoading}
               </p>
             </div>
+          )}
+
+          {/* Serbian fiscal receipts: read the QR code live instead of photographing the whole receipt.
+              The fastest and most exact path, so it leads. */}
+          {!imagePreview && !parsedReceipt && !isProcessingImage && !isScanning && (
+            <button
+              type="button"
+              onClick={() => { setError(null); setIsQrOpen(true); }}
+              className="flex w-full items-center gap-4 rounded-[26px] bg-accent-soft p-4 text-left shadow-[inset_0_0_0_2px_rgb(var(--accent-rgb))] outline-none transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            >
+              <QrViewfinder size={84} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[17px] font-bold leading-tight">{t.scanQrCode}</span>
+                <span className="mt-0.5 block text-[13px] leading-snug text-muted">{t.scanQrCodeHint}</span>
+              </span>
+              <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent">
+                <ChevronRight size={18} />
+              </span>
+            </button>
           )}
 
           {/* Upload Area */}
@@ -586,7 +732,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               tabIndex={0}
               aria-label={t.addReceiptImage}
               className={clsx(
-                'cursor-pointer rounded-[26px] border-2 border-dashed px-6 py-10 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
+                'flex cursor-pointer items-center gap-4 rounded-[26px] border-2 border-dashed p-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
                 isDragging ? 'border-accent bg-accent-soft' : 'border-hair bg-chip/60 hover:bg-chip'
               )}
             >
@@ -598,45 +744,24 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-accent text-on-accent shadow-[0_10px_24px_-10px_rgb(var(--accent-rgb))]">
-                {isPickerLoading || isProcessingImage ? (
-                  <Loader2 className="animate-spin" size={28} aria-hidden="true" />
-                ) : (
-                  <Camera size={28} aria-hidden="true" />
-                )}
-              </div>
-              <p className="mb-1 text-[16px] font-semibold">
+              <IconTile icon={isPickerLoading || isProcessingImage ? Loader2 : Camera} size={52} className={isPickerLoading || isProcessingImage ? '[&_svg]:animate-spin' : undefined} />
+              <div className="min-w-0 flex-1">
+              <p className="mb-0.5 text-[16px] font-semibold">
                 {isProcessingImage
                   ? t.loading
                   : t.addReceiptImage
                 }
               </p>
-              <p className="text-[14px] text-muted">
+              <p className="text-[13px] leading-snug text-muted">
                 {t.takeOrChoosePhoto}
               </p>
+              </div>
             </div>
-          )}
-
-          {/* Serbian fiscal receipts: read the QR code live instead of photographing the whole receipt. */}
-          {!imagePreview && !parsedReceipt && !isProcessingImage && !isScanning && (
-            <button
-              type="button"
-              onClick={() => { setError(null); setIsQrOpen(true); }}
-              className="paper-tile flex w-full items-center gap-3 p-3.5 text-left outline-none transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-accent-soft text-accent">
-                <QrCode size={22} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold">{t.scanQrCode}</span>
-                <span className="block text-[13px] text-muted">{t.scanQrCodeHint}</span>
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden="true" />
-            </button>
           )}
 
           {/* Error Display (when no image) */}
           {!imagePreview && !parsedReceipt && errorBox}
+          {!imagePreview && !parsedReceipt && manualButton}
 
           {/* Image Preview */}
           {imagePreview && !parsedReceipt && (
@@ -649,9 +774,9 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={() => { setImagePreview(null); setError(null); }}
+                  onClick={() => { originalImage.current = null; setImagePreview(null); setError(null); }}
                   aria-label={t.remove}
-                  className="glass absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full"
+                  className="glass absolute right-2 top-2 flex h-10 w-10 items-center justify-center rounded-full"
                 >
                   <X size={16} aria-hidden="true" />
                 </button>
@@ -665,6 +790,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               )}
 
               {errorBox}
+              {manualButton}
 
               <button
                 type="button"
@@ -719,7 +845,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
           {/* Parsed Results */}
           {parsedReceipt && !isSplitting && (
             <div className="space-y-4">
-              {billInfo ? (
+              {isManualEntry ? null : billInfo ? (
                 <div className="flex items-center gap-2 px-1 text-pos">
                   <QrCode size={18} aria-hidden="true" />
                   <span className="text-[15px] font-semibold">{t.ipsBillScanned}</span>
@@ -750,26 +876,76 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
               {/* Summary Card */}
               <div className="paper-tile p-4">
-                <p className="text-[13px] font-semibold text-muted">{parsedReceipt.receiptData?.merchant || parsedReceipt.note}</p>
+                <p className="text-[13px] font-semibold text-muted">{merchantText}</p>
                 <p className="mt-0.5 text-[30px] font-bold leading-tight tracking-tight tabular-nums">
-                  {formatMoney(parsedReceipt.receiptData?.total || parsedReceipt.amount, parsedReceipt.currency, language)}
+                  {formatMoney(resultTotal, parsedReceipt.currency, language)}
                 </p>
                 <div className="mt-3 divide-y divide-hair border-t border-hair">
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-[14px] text-muted">{t.merchant}</span>
-                    <span className="truncate pl-3 text-[15px] font-semibold">{parsedReceipt.receiptData?.merchant || parsedReceipt.note}</span>
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <label htmlFor="receipt-merchant" className="shrink-0 text-[14px] text-muted">{t.merchant}</label>
+                    <input
+                      id="receipt-merchant"
+                      value={merchantText}
+                      onChange={e => setMerchant(e.target.value)}
+                      className="h-10 min-w-0 flex-1 rounded-[12px] bg-chip px-3 text-right text-[15px] font-semibold text-on-surface outline-none focus:ring-2 focus:ring-accent"
+                    />
                   </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="text-[14px] text-muted">{t.category}</span>
-                    <span className="flex items-center gap-2 text-[15px] font-semibold">
-                      <CategoryGlyph category={matchedCategory ?? { name: parsedReceipt.categoryName, color: 'var(--paper-muted)' }} size={26} className="!rounded-[9px]" />
-                      {parsedReceipt.categoryName}
+                  {/* What is shown here is exactly what will be saved. */}
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <label htmlFor="receipt-category" className="shrink-0 text-[14px] text-muted">{t.category}</label>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <CategoryGlyph category={targetCategory} size={26} className="shrink-0 !rounded-[9px]" />
+                      <span className="relative min-w-0">
+                        <select
+                          id="receipt-category"
+                          value={targetCategoryId}
+                          onChange={e => setTargetCategoryId(e.target.value)}
+                          className={fieldRowSelect}
+                        >
+                          {!categoryPool.some(c => c.id === targetCategoryId) && <option value={targetCategoryId}>{targetCategory ? localizeCategoryName(targetCategory, language) : t.chooseCategory}</option>}
+                          {categoryPool.map(c => <option key={c.id} value={c.id}>{localizeCategoryName(c, language)}</option>)}
+                        </select>
+                        <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                      </span>
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <label htmlFor="receipt-wallet" className="shrink-0 text-[14px] text-muted">{t.wallet}</label>
+                    <span className="relative min-w-0">
+                      <select
+                        id="receipt-wallet"
+                        value={targetAccountId}
+                        onChange={e => setTargetAccountId(e.target.value)}
+                        className={fieldRowSelect}
+                      >
+                        {!targetAccountId && <option value="">{t.chooseWallet}</option>}
+                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                      </select>
+                      <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <label htmlFor="receipt-date" className="shrink-0 text-[14px] text-muted">{t.date}</label>
+                    <input
+                      id="receipt-date"
+                      type="date"
+                      value={targetDay}
+                      onChange={e => {
+                        const [year, month, day] = e.target.value.split('-').map(Number);
+                        if (!year || !month || !day) return;
+                        const current = new Date(targetDate);
+                        const next = new Date(year, month - 1, day);
+                        if (Number.isFinite(current.getTime())) next.setHours(current.getHours(), current.getMinutes(), 0, 0);
+                        else next.setHours(12, 0, 0, 0);
+                        setTargetDate(next.toISOString());
+                      }}
+                      className="h-10 min-w-0 rounded-[12px] bg-chip px-3 text-[15px] font-semibold text-on-surface outline-none focus:ring-2 focus:ring-accent"
+                    />
                   </div>
                   {parsedReceipt.fees && parsedReceipt.fees > 0 && (
                     <div className="flex items-center justify-between py-2.5">
                       <span className="text-[14px] text-muted">{t.feesOptional}</span>
-                      <span className="text-[15px] font-semibold tabular-nums">{formatMoney(parsedReceipt.fees, 'USD', language)}</span>
+                      <span className="text-[15px] font-semibold tabular-nums">{formatMoney(parsedReceipt.fees, parsedReceipt.currency || baseCurrency, language)}</span>
                     </div>
                   )}
                 </div>
@@ -783,7 +959,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                     <button
                       type="button"
                       onClick={() => editItems(items => [...items, { name: t.newItem, price: 0, quantity: 1 }], false)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent"
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-accent"
                       title={t.addItem}
                       aria-label={t.addItem}
                     >
@@ -793,47 +969,46 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   <div className="max-h-56 space-y-1.5 overflow-y-auto custom-scrollbar">
                     {parsedReceipt.receiptData.items.map((item, idx) => (
                       <div key={idx} className="group flex items-center gap-1.5 text-[14px]">
-                        <input
-                          type="number"
+                        {/* Weighed items (0,754 kg) need decimals, typed in the app's number format. */}
+                        <AmountInput
                           aria-label={t.qty}
+                          language={language}
                           value={item.quantity}
-                          onChange={(e) => {
-                            // Weighed items (0,754 kg) need decimals.
-                            const parsed = parseFloat(e.target.value);
-                            const qty = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-                            editItems(items => items.map((it, i) => i === idx ? { ...it, quantity: qty } : it), true);
+                          emptyWhenZero
+                          placeholder="1"
+                          onValueChange={(qty) => {
+                            const quantity = qty !== undefined && qty > 0 ? qty : 0;
+                            editItems(items => items.map((it, i) => i === idx ? { ...it, quantity } : it), true);
                           }}
-                          className="h-9 w-12 shrink-0 rounded-[10px] border-none bg-chip px-1 text-center tabular-nums text-on-surface outline-none focus:ring-2 focus:ring-accent"
-                          min="0"
-                          step="any"
-                          inputMode="decimal"
+                          className="h-10 w-11 shrink-0 rounded-[10px] border-none bg-chip px-1 text-center tabular-nums text-on-surface outline-none focus:ring-2 focus:ring-accent"
                         />
                         <input
                           type="text"
-                          aria-label={t.name}
+                          aria-label={t.itemName}
                           value={item.name}
+                          placeholder={t.itemName}
                           onChange={(e) => {
                             const name = e.target.value;
                             editItems(items => items.map((it, i) => i === idx ? { ...it, name } : it), false);
                           }}
-                          className="h-9 min-w-0 flex-1 rounded-[10px] border-none bg-chip px-2.5 text-on-surface outline-none focus:ring-2 focus:ring-accent"
+                          className="h-10 min-w-0 flex-1 rounded-[10px] border-none bg-chip px-2.5 text-on-surface outline-none placeholder:text-faint focus:ring-2 focus:ring-accent"
                         />
-                        <input
-                          type="number"
-                          aria-label={t.amount}
+                        <AmountInput
+                          aria-label={t.itemPrice}
+                          language={language}
                           value={item.price}
-                          onChange={(e) => {
-                            const price = parseFloat(e.target.value) || 0;
-                            editItems(items => items.map((it, i) => i === idx ? { ...it, price } : it), true);
+                          emptyWhenZero
+                          placeholder="0"
+                          onValueChange={(price) => {
+                            editItems(items => items.map((it, i) => i === idx ? { ...it, price: price ?? 0 } : it), true);
                           }}
-                          step="0.01"
-                          className="h-9 w-20 shrink-0 rounded-[10px] border-none bg-chip px-2.5 text-right font-semibold tabular-nums text-on-surface outline-none focus:ring-2 focus:ring-accent"
+                          className="h-10 w-24 shrink-0 rounded-[10px] border-none bg-chip px-2 text-right font-semibold tabular-nums text-on-surface outline-none focus:ring-2 focus:ring-accent"
                         />
                         <button
                           type="button"
                           onClick={() => editItems(items => items.filter((_, i) => i !== idx), true)}
                           aria-label={t.remove}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neg transition-opacity hover:bg-neg/10 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neg transition-opacity hover:bg-neg/10 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 sm:group-focus-within:opacity-100"
                         >
                           <Trash2 size={14} aria-hidden="true" />
                         </button>
@@ -848,24 +1023,65 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 </div>
               )}
 
+              {imagePreview && (
+                <div>
+                  <label className="paper-tile flex min-h-[60px] cursor-pointer items-center gap-3 px-3.5 py-2.5">
+                    <img src={imagePreview} alt="" className="h-10 w-10 shrink-0 rounded-[10px] object-cover" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-semibold">{t.receiptKeepPhoto}</span>
+                      <span className="block text-[12px] text-muted">{t.receiptKeepPhotoHint}</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={keepPhoto}
+                      onChange={event => {
+                        setKeepPhoto(event.target.checked);
+                        setPhotoError(null);
+                      }}
+                      className="peer sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={clsx(
+                        'relative h-[30px] w-[50px] shrink-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2',
+                        keepPhoto ? 'bg-accent' : 'bg-chip',
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          'absolute top-[3px] h-6 w-6 rounded-full bg-white shadow transition-transform',
+                          keepPhoto ? 'translate-x-[23px]' : 'translate-x-[3px]',
+                        )}
+                      />
+                    </span>
+                  </label>
+                  {photoError && (
+                    <p role="alert" className="mt-1.5 flex items-center gap-1.5 px-1 text-[13px] font-medium text-neg">
+                      <AlertCircle size={14} aria-hidden="true" /> {photoError}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { setParsedReceipt(null); setImagePreview(null); setFiscalInfo(null); setBillInfo(null); setError(null); }}
+                  onClick={resetState}
                   className="h-12 flex-1 rounded-full bg-chip text-[15px] font-semibold text-on-surface"
                 >
                   {t.scanAnother}
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirm}
-                  // A bill without an amount needs one before it becomes an expense.
-                  disabled={Boolean(billInfo) && !((parsedReceipt.receiptData?.total || parsedReceipt.amount) > 0)}
+                  onClick={() => void handleConfirm()}
+                  // Nothing to save until there is an amount (a bill without one, a receipt typed in).
+                  disabled={!canConfirm || savingPhoto}
                   className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent transition-opacity disabled:opacity-50"
                 >
-                  <Check size={18} aria-hidden="true" />
-                  {t.addTransactionAction}
+                  {savingPhoto ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}
+                  {savingPhoto ? t.receiptPhotoUploading : t.addTransactionAction}
                 </button>
               </div>
               {canSplit && (

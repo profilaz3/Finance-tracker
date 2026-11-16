@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { guardBackend } from './e2eGuard.mjs';
+import { assertNoConsoleIssues, trackConsoleIssues } from './e2eConsole.mjs';
 
 const ANALYTICS_REGRESSION_URL = process.env.ANALYTICS_REGRESSION_URL ?? 'http://127.0.0.1:3000';
 const ANALYTICS_REGRESSION_EMAIL = process.env.ANALYTICS_REGRESSION_EMAIL;
@@ -16,7 +17,6 @@ if (!ANALYTICS_REGRESSION_EMAIL || !ANALYTICS_REGRESSION_PASSWORD) {
 const screenshotDir = 'output/playwright';
 const successScreenshotPath = 'output/playwright/analytics-regression-success.png';
 const failureScreenshotPath = 'output/playwright/analytics-regression-failure.png';
-const consoleIssues = [];
 
 const isVisible = async (locator) => locator.isVisible().catch(() => false);
 
@@ -34,12 +34,21 @@ const signInIfNeeded = async (page) => {
 };
 
 const openAnalytics = async (page) => {
-  const analyticsHeading = page.getByRole('heading', { name: /analytics|analitika/i }).first();
+  // Insights opens on its Numbers side; the Ask AI side has the same heading.
+  const numbersTab = page.getByRole('radio', { name: /^numbers$|^brojke$/i });
 
-  if (!(await isVisible(analyticsHeading))) {
-    await page.getByText(/analytics|analitika/i).first().click();
-    await analyticsHeading.waitFor({ timeout: 15000 });
+  if (!(await isVisible(numbersTab))) {
+    await page
+      .getByRole('navigation', { name: /main navigation|glavna navigacija/i })
+      .getByRole('button', { name: /^insights$|^uvidi$/i })
+      .click();
+    await numbersTab.waitFor({ timeout: 15000 });
   }
+  if ((await numbersTab.getAttribute('aria-checked')) !== 'true') {
+    await numbersTab.click();
+  }
+  await page.getByRole('heading', { name: /^insights$|^uvidi$/i, level: 1 }).waitFor({ timeout: 15000 });
+  await page.getByText(/^spent in |^spent this |^potrošeno /i).first().waitFor({ timeout: 15000 });
 
   await page.waitForTimeout(400);
 };
@@ -73,9 +82,7 @@ const verifyAnalytics = async (page) => {
     throw new Error(`Expected analytics charts to render SVG output, found ${svgCount}.`);
   }
 
-  if (consoleIssues.length > 0) {
-    throw new Error(`Console issues detected: ${consoleIssues.join(' | ')}`);
-  }
+  assertNoConsoleIssues(consoleIssues);
 };
 
 const browser = await chromium.launch({ headless: !ANALYTICS_REGRESSION_HEADED });
@@ -83,11 +90,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1080
 await guardBackend(context);
 const page = await context.newPage();
 
-page.on('console', (message) => {
-  if (message.type() === 'error' || message.type() === 'warning') {
-    consoleIssues.push(`${message.type()}: ${message.text()}`);
-  }
-});
+const consoleIssues = trackConsoleIssues(page);
 
 try {
   await mkdir(screenshotDir, { recursive: true });

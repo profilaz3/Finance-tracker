@@ -1,4 +1,6 @@
 const DEFAULT_ORIGINS = [
+  // Web app on Cloudflare (wrangler.jsonc); the Netlify one stays until that site is switched off.
+  'https://vratipare.profilaz3.workers.dev',
   'https://vratipare.netlify.app',
   'http://localhost:3000',
   'https://localhost',
