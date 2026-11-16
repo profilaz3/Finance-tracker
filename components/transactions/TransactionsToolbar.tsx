@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckSquare, FileSpreadsheet, Loader2, Search, SlidersHorizontal, Sparkles, Square, Trash2, X } from 'lucide-react';
+import { CheckSquare, FileSpreadsheet, Loader2, Search, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { AppState, TransactionType } from '../../types';
 import { CommonFilterChips } from './CommonFilterChips';
@@ -34,6 +34,10 @@ interface TransactionsToolbarProps {
   exitSelectionMode: () => void;
   handleBatchExport: () => void;
   handleBatchDelete: () => void;
+  /** Opens the category picker for the selected entries. */
+  handleBatchCategory?: () => void;
+  /** List or table (wide windows only); left out, there is no switch. */
+  viewToggle?: React.ReactNode;
   onSmartParse: () => void;
   filterAccount: string;
   setFilterAccount: (value: string) => void;
@@ -80,6 +84,8 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
   exitSelectionMode,
   handleBatchExport,
   handleBatchDelete,
+  handleBatchCategory,
+  viewToggle,
   onSmartParse,
   filterAccount,
   setFilterAccount,
@@ -162,6 +168,17 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
           <div className="flex shrink-0 items-center gap-1.5">
             {hasSelection && (
               <>
+                {handleBatchCategory && (
+                  <button
+                    type="button"
+                    onClick={handleBatchCategory}
+                    aria-label={s.changeCategory}
+                    title={s.changeCategory}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-chip"
+                  >
+                    <Shapes size={18} aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleBatchExport}
@@ -197,6 +214,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
             )}
             <input
               type="text"
+              data-shortcut-search=""
               value={inputMode === 'search' ? searchQuery : smartInput}
               onChange={(event) => {
                 if (inputMode === 'search') {
@@ -273,6 +291,7 @@ export const TransactionsToolbar: React.FC<TransactionsToolbarProps> = ({
               </span>
             )}
           </button>
+          {viewToggle}
         </div>
       )}
 

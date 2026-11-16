@@ -14,6 +14,7 @@ import {
   type QueryPlan,
 } from '../../domain/financeQuery';
 import { requestAnswer, requestPlan, type AskFailure } from '../../services/askService';
+import { setLastAnswer } from './lastAnswer';
 
 export type AskTurnStatus = 'thinking' | 'done' | 'clarify' | 'error';
 
@@ -93,6 +94,7 @@ export function useAskConversation(state: AppState, formatTotal: (execution: Que
     if (generation.current !== runGeneration) return;
     if (answered.ok) {
       update(id, { status: 'done', answer: answered.value.answer, chart: answered.value.chart });
+      setLastAnswer({ id, question, status: 'done', plan, title, execution, answer: answered.value.answer, chart: answered.value.chart });
       return;
     }
     if (answered.error === 'quota' || answered.error === 'offline') {
@@ -100,14 +102,16 @@ export function useAskConversation(state: AppState, formatTotal: (execution: Que
       return;
     }
     const nothing = execution.table.count === 0 && execution.table.rows.length === 0;
-    update(id, {
+    const local: Partial<AskTurn> = {
       status: 'done',
       localOnly: true,
       chart: 'none',
       answer: nothing
         ? t.askNothing
         : t.askLocalAnswer.replace('{title}', title || question).replace('{total}', formatTotal(execution)),
-    });
+    };
+    update(id, local);
+    setLastAnswer({ id, question, plan, title, execution, ...local, status: 'done' });
   }, [formatTotal]);
 
   const retry = useCallback((id: string) => {

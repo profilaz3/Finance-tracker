@@ -6,6 +6,8 @@ import { ChevronRight } from 'lucide-react';
 import { CurrencyFlag, CurrencyPair } from '../ui/CurrencyFlag';
 import { formatMediumDate } from '../../utils/locale';
 import { openRates } from '../rates/ratesBus';
+import { SHORTCUTS_HELP_EVENT } from '../app/AppNavigation';
+import { SETTINGS_STRINGS } from './settingsStrings';
 
 interface GeneralSettingsProps {
     state: AppState;
@@ -24,13 +26,28 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
     const t = TRANSLATIONS[state.language];
 
     const shortcuts: Array<{ label: string; keys: React.ReactNode }> = [
-        { label: t.shortcutNewTransaction, keys: <><Kbd>Ctrl</Kbd><Kbd>N</Kbd></> },
+        { label: t.shortcutNewTransaction, keys: <Kbd>N</Kbd> },
         { label: t.shortcutCloseModal, keys: <Kbd>Esc</Kbd> },
         { label: t.shortcutContextMenu, keys: <span className="text-[13px] text-muted">{t.shortcutLongPress}</span> },
     ];
 
     return (
         <>
+            <section className="paper-tile flex flex-wrap items-center justify-between gap-3 p-4">
+                <h3 className="min-w-[150px] flex-1 text-[15px] font-bold">{t.languageLabel}</h3>
+                <Segmented<AppState['language']>
+                    size="sm"
+                    ariaLabel={t.languageLabel}
+                    value={state.language}
+                    onChange={language => setState(prev => ({ ...prev, language }))}
+                    options={[
+                        { value: 'en', label: 'English' },
+                        { value: 'sr', label: 'Srpski' },
+                    ]}
+                    className="shrink-0"
+                />
+            </section>
+
             <section className="paper-tile flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-[150px] flex-1">
                     <h3 className="text-[15px] font-bold">{t.baseCurrency}</h3>
@@ -85,6 +102,14 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ state, setStat
                         </li>
                     ))}
                 </ul>
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new Event(SHORTCUTS_HELP_EVENT))}
+                    className="-mx-1 mb-2 mt-1 flex h-11 items-center gap-2 rounded-full px-3 text-[15px] font-semibold text-accent"
+                >
+                    {SETTINGS_STRINGS[state.language].allShortcuts}
+                    <Kbd>?</Kbd>
+                </button>
             </section>
         </>
     );

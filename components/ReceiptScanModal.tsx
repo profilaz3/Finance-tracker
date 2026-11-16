@@ -61,6 +61,8 @@ interface ReceiptScanModalProps {
   onTransactionCreated: (transaction: Transaction) => void;
   /** A receipt image (data URL) shared into the app from another app; shown preloaded. */
   initialImage?: string | null;
+  /** A receipt file dropped onto the app window; read like a picked file. */
+  initialFile?: File | null;
   /** People to split the receipt with; enables "Split this receipt" together with `onSplitRequested`. */
   people?: Person[];
   userProfile?: Person;
@@ -81,6 +83,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   language,
   onTransactionCreated,
   initialImage,
+  initialFile,
   people: allPeople = [],
   userProfile,
   onAddPerson,
@@ -278,6 +281,13 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       setIsProcessingImage(false);
     }
   };
+
+  // A file dropped onto the app window opened the scanner: read it as if it was picked here.
+  const handleFileSelectRef = useRef(handleFileSelect);
+  handleFileSelectRef.current = handleFileSelect;
+  useEffect(() => {
+    if (isOpen && initialFile) void handleFileSelectRef.current(initialFile);
+  }, [isOpen, initialFile]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();

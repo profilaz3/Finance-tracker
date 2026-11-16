@@ -28,37 +28,35 @@ describe('analytics studio source contracts', () => {
   });
 
   it('uses mobile-safe layout classes in the new overview panels', () => {
-    const kpiGrid = readSource('components/stats/AnalyticsKpiGrid.tsx');
+    const hero = readSource('components/stats/AnalyticsHero.tsx');
+    const compare = readSource('components/stats/CompareCard.tsx');
     const categoryPanel = readSource('components/stats/CategoryDrilldownPanel.tsx');
     const anomalyPanel = readSource('components/stats/AnomalyPanel.tsx');
-    const header = readSource('components/stats/AnalyticsStudioHeader.tsx');
 
-    // Paper redesign: a 2x2 grid on phones, the projected tile spans both columns.
-    expect(kpiGrid).toContain('grid-cols-2');
-    expect(kpiGrid).toContain('col-span-2');
-    expect(kpiGrid).toContain('2xl:grid-cols-5');
+    // The header number shrinks to fit instead of wrapping; mover amounts never truncate.
+    expect(hero).toContain('fitFont(52');
+    expect(hero).toContain('whitespace-nowrap');
+    expect(compare).toContain('min-w-0 flex-1');
+    expect(compare).toContain('shrink-0 items-center gap-1.5 whitespace-nowrap');
     expect(categoryPanel).toContain('min-h-[44px]');
     expect(categoryPanel).not.toContain('shrink-0');
     expect(anomalyPanel).toContain('min-w-0 flex-1');
     expect(anomalyPanel).not.toContain('whitespace-nowrap');
-    expect(header).toContain("(['month', 'quarter', 'year'] as const)");
+    expect(hero).toContain("{ value: 'month', label: s.thisMonth }");
   });
 
   it('keeps studio panel controls and forecast confidence labels safe for reuse', () => {
-    const kpiGrid = readSource('components/stats/AnalyticsKpiGrid.tsx');
     const forecastPanel = readSource('components/stats/CashFlowForecastPanel.tsx');
     const categoryPanel = readSource('components/stats/CategoryDrilldownPanel.tsx');
-    const header = readSource('components/stats/AnalyticsStudioHeader.tsx');
+    const hero = readSource('components/stats/AnalyticsHero.tsx');
 
-    expect(kpiGrid).toContain('lowConfidenceForecast');
-    expect(kpiGrid).toContain('normalConfidenceForecast');
-    expect(kpiGrid).not.toContain(': summary.forecast.confidence');
     expect(forecastPanel).toContain('lowConfidenceReason');
     expect(forecastPanel).toContain('normalConfidenceReason');
     expect(forecastPanel).not.toContain('forecast.reason');
     expect(categoryPanel).toContain('type="button"');
-    // The period switch is the shared Segmented control, whose buttons carry type="button".
-    expect(header).toContain('<Segmented');
+    // The period and Numbers / Ask AI switches are the shared Segmented control on the header colour.
+    expect(hero).toContain('<Segmented');
+    expect(hero).toContain('tone="hero"');
   });
 
   it('keeps anomaly selectors semantic and localizes anomaly copy in the lazy overview', () => {
@@ -91,18 +89,15 @@ describe('analytics studio source contracts', () => {
 
   it('uses metric-aware delta semantics and preserves null savings-rate comparisons', () => {
     const selectors = readSource('utils/analyticsSelectors.ts');
-    const kpiGrid = readSource('components/stats/AnalyticsKpiGrid.tsx');
+    const hero = readSource('components/stats/AnalyticsHero.tsx');
     const overview = readSource('components/stats/AnalyticsStudioOverview.tsx');
     const labels = readSource('components/stats/analyticsStudioLabels.ts');
 
     expect(selectors).toContain('calculateNullableDelta(current.totals.savingsRate, previous.totals.savingsRate)');
     expect(selectors).not.toContain('current.totals.savingsRate ?? 0');
-    expect(kpiGrid).toContain("type AnalyticsKpiMetric = 'income' | 'expense' | 'net' | 'savingsRate'");
-    expect(kpiGrid).toContain("const decreaseIsImproved = metric === 'expense'");
-    expect(kpiGrid).toContain("formatDelta('expense'");
-    expect(kpiGrid).toContain("formatDelta('income'");
-    expect(kpiGrid).toContain("formatDelta('net'");
-    expect(kpiGrid).toContain("formatDelta('savingsRate'");
+    // No income means no savings rate: the header leaves the Saved chip out instead of showing 0%.
+    expect(hero).toContain('savingsRate === null ? null');
+    expect(hero).toContain('{income > 0 && (');
     expect(overview).toContain('improved: localLabels.improved');
     expect(overview).toContain('worsened: localLabels.worsened');
     expect(labels).toContain("improved: 'Improved'");
@@ -131,12 +126,11 @@ describe('analytics studio source contracts', () => {
     expect(statsIndex.indexOf('<AnalyticsStudioOverviewSection')).toBeLessThan(statsIndex.indexOf('<DeferredStatsSection'));
     expect(statsIndex).not.toContain('buildAnalyticsStudioSummary');
     expect(statsIndex).not.toContain('type AnalyticsPeriod');
-    expect(statsIndex).not.toContain("from './AnalyticsStudioHeader'");
-    expect(statsIndex).not.toContain("from './AnalyticsKpiGrid'");
+    expect(statsIndex).not.toContain("from './AnalyticsHero'");
+    expect(statsIndex).not.toContain("from './CompareCard'");
     expect(statsIndex).not.toContain("from './CategoryDrilldownPanel'");
     expect(statsIndex).not.toContain("from './AnomalyPanel'");
     expect(statsIndex).not.toContain("from './CashFlowForecastPanel'");
-    expect(statsIndex).not.toContain("from './AnalyticsSummaryPanel'");
   });
 
   it('keeps Analytics Studio overview wiring in the lazy overview chunk', () => {
@@ -147,12 +141,14 @@ describe('analytics studio source contracts', () => {
     const overview = existsSync(overviewPath) ? readSource(overviewPath) : '';
 
     expect(overview).toContain('buildAnalyticsStudioSummary');
-    expect(overview).toContain('<AnalyticsStudioHeader');
-    expect(overview).toContain('<AnalyticsKpiGrid');
+    expect(overview).toContain('<AnalyticsHero');
+    expect(overview).toContain('<CompareCard');
+    expect(overview).toContain('compareSameDays(');
+    expect(overview).toContain('spendingBars(');
     expect(overview).toContain('<CategoryDrilldownPanel');
     expect(overview).toContain('<CashFlowForecastPanel');
     expect(overview).toContain('<AnomalyPanel');
-    expect(overview).toContain('<AnalyticsSummaryPanel');
+    expect(overview).toContain('screen-sheet');
     expect(overview).toContain('lowConfidenceForecast: t.lowConfidenceForecast');
     expect(overview).toContain('normalConfidenceForecast: t.normalConfidenceForecast');
     expect(overview).toContain('lowConfidenceReason: t.lowConfidenceReason');
@@ -161,12 +157,11 @@ describe('analytics studio source contracts', () => {
 
   it('does not add AI explanation controls to the v1 studio panels', () => {
     [
-      'components/stats/AnalyticsStudioHeader.tsx',
-      'components/stats/AnalyticsKpiGrid.tsx',
+      'components/stats/AnalyticsHero.tsx',
+      'components/stats/CompareCard.tsx',
       'components/stats/CategoryDrilldownPanel.tsx',
       'components/stats/AnomalyPanel.tsx',
       'components/stats/CashFlowForecastPanel.tsx',
-      'components/stats/AnalyticsSummaryPanel.tsx',
       'components/stats/AnalyticsStudioOverview.tsx',
     ].forEach(path => {
       const source = readSource(path);

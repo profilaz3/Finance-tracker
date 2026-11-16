@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { AnimatePresence, m, useIsPresent } from 'motion/react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Camera, Loader2, Mic, PenLine, Plus, Sparkles, Split, Square, Users, X, type LucideIcon } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUp, ArrowUpRight, Loader2, Mic, PenLine, Plus, ScanLine, Sparkles, Split, Square, Users, X, type LucideIcon } from 'lucide-react';
 import type { AppState, TransactionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { MOTION } from '../../config';
@@ -11,8 +11,12 @@ import { isVoiceRecordingSupported, MAX_RECORDING_MS, useVoiceRecorder, type Voi
 import { useDialog } from '../../hooks/useFocusTrap';
 import { selectDashboardTemplates } from '../../utils/qolSuggestions';
 import { CategoryGlyph } from '../ui/CategoryGlyph';
-import { lgStyle } from '../ui/LiquidGlassDefs';
+import { ON_COLOUR } from '../ui/ScreenHero';
 import { money } from '../home/parts';
+import { formatNumber } from '../../utils/locale';
+import { localizeCategoryName } from '../../utils/systemText';
+import { resolveHomeHeader } from '../../domain/homeHeader';
+import { ADD_MENU_STRINGS } from './addMenuStrings';
 import { defaultCategoryId, splitAmountFromText, type EntryKind } from '../../domain/transactions';
 import { requestTemplateDelete } from '../../hooks/entryBus';
 import { findAddTrigger, placeAddMenu, type AnchorRect } from './addMenuPlacement';
@@ -38,8 +42,8 @@ interface Way {
   icon: LucideIcon;
   label: string;
   onSelect: () => void;
-  /** Expense is the everyday action and the only solid one; income reads green like income amounts. */
-  tone?: 'solid' | 'pos';
+  /** Expense is the everyday action and the only solid one. */
+  tone?: 'solid';
 }
 
 const formatElapsed = (ms: number): string => {
@@ -51,15 +55,9 @@ const formatElapsed = (ms: number): string => {
 const TRANSCRIPT_HOLD_MS = 650;
 // Holding a template chip this long switches the chips to delete mode.
 const TEMPLATE_HOLD_MS = 500;
-// Each way rises a beat after the one below it, nearest the + first.
-const STAGGER_S = 0.03;
-const RISE_SPRING = { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.7 };
-
-const rise = {
-  hidden: { opacity: 0, y: 14, scale: 0.92 },
-  shown: (step: number) => ({ opacity: 1, y: 0, scale: 1, transition: { ...RISE_SPRING, delay: step * STAGGER_S } }),
-  gone: { opacity: 0, y: 8, scale: 0.96, transition: { duration: 0.12 } },
-};
+// The ways appear one after another in reading order.
+const STAGGER_S = 0.025;
+const TILE_SPRING = { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.7 };
 
 const measure = (anchor: HTMLElement | null): AnchorRect | null => {
   const rect = findAddTrigger(anchor)?.getBoundingClientRect();
@@ -95,9 +93,9 @@ const useKeyboardInset = (): number => {
 };
 
 /**
- * The + button's menu: the ways to add an entry rise from the button, Expense nearest the thumb,
- * with the "type or say it" field at the bottom and recent templates on top. Typing hides the
- * list so the field and keyboard have the room.
+ * The + button's menu: a panel in the Home header colour above the + (or below a button near the
+ * top) with the ways to add an entry as a grid, your usual templates as chips, and the "type it"
+ * field at the bottom. Typing hides the grid and chips so the field and keyboard have the room.
  */
 export const AddMenu: React.FC<AddMenuProps> = ({ isOpen, ...rest }) => (
   <AnimatePresence>{isOpen && <AddMenuPanel isOpen {...rest} />}</AnimatePresence>
@@ -115,6 +113,8 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
   workspaceName,
 }) => {
   const t = TRANSLATIONS[state.language];
+  const s = ADD_MENU_STRINGS[state.language];
+  const dark = resolveHomeHeader(state.homeHeader).tone === 'dark';
   const { dialogProps, titleId } = useDialog(true, onClose);
   // False while the menu animates out: late voice or parse results must not open the form then.
   const present = useIsPresent();
@@ -230,7 +230,7 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
   const busy = parsing || transcribing;
   const carriesText = parseFailed && !!input.trim();
   // On a phone the keyboard takes half the screen: while typing, only the field stays.
-  const typing = up && (focused || !!input.trim() || busy || recording);
+  const typing = up && (focused || !!input.trim() || busy);
 
   /** Opens the form with what the unreadable text still says: its amount, the rest as the note. */
   const enterManually = (type: TransactionType) => {
@@ -248,16 +248,15 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
 
   const manual = (type: TransactionType) => (carriesText ? enterManually(type) : onManual(type));
 
-  // Top to bottom as they rise: the everyday ones end up nearest the +.
+  // Reading order: the everyday ones first, Expense leading.
   const ways: Way[] = [
-    { id: 'transfer', icon: ArrowLeftRight, label: t.transferType, onSelect: () => onManual('transfer'), hidden: state.accounts.length < 2 },
-    { id: 'split', icon: Split, label: t.splitBill, onSelect: onSplitBill },
-    { id: 'income', icon: ArrowDownLeft, label: t.incomeType, onSelect: () => manual('income'), tone: 'pos' as const },
-    { id: 'scan', icon: Camera, label: t.scanReceipt, onSelect: onScanReceipt, hidden: !aiAvailable },
-    { id: 'expense', icon: ArrowUpRight, label: t.expenseType, onSelect: () => manual('expense'), tone: 'solid' as const },
+    { id: 'expense', icon: ArrowUpRight, label: t.expenseType, onSelect: () => close(() => manual('expense')), tone: 'solid' as const },
+    { id: 'income', icon: ArrowDownLeft, label: t.incomeType, onSelect: () => close(() => manual('income')) },
+    { id: 'transfer', icon: ArrowLeftRight, label: t.transferType, onSelect: () => close(() => onManual('transfer')), hidden: state.accounts.length < 2 },
+    { id: 'scan', icon: ScanLine, label: t.scanReceipt, onSelect: () => close(onScanReceipt), hidden: !aiAvailable },
+    { id: 'split', icon: Split, label: t.splitBill, onSelect: () => close(onSplitBill) },
+    { id: 'speak', icon: Mic, label: t.speak, onSelect: toggleVoice, hidden: !aiAvailable || !voiceSupported },
   ].filter(way => !way.hidden);
-  // Dropping from a button at the top, the order flips so Expense is still nearest.
-  const orderedWays = up ? ways : [...ways].reverse();
 
   const stopHold = () => {
     if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
@@ -273,98 +272,126 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
   };
   useEffect(() => stopHold, []);
 
-  // Rising order: the field (step 0), then each way from the bottom up, then the templates.
-  const fieldStep = 0;
-  const wayStep = (index: number) => (aiAvailable ? 1 : 0) + (ways.length - 1 - index);
-  const topStep = (aiAvailable ? 1 : 0) + ways.length;
-  // Lines a way's icon up with the centre of the round + below it.
-  const iconInset = up && placement.fab ? Math.max(0, Math.round((placement.fab.width - 48) / 2)) : 0;
+  const templateDetail = (template: (typeof templates)[number]): string => {
+    if (template.amount != null) {
+      const amount = template.currency === state.baseCurrency
+        ? formatNumber(template.amount, { maximumFractionDigits: 2 }, state.language)
+        : money(template.amount, template.currency, state.language, true);
+      const wallet = state.accounts.find(account => account.id === template.accountId)?.name;
+      return [amount, wallet].filter(Boolean).join(' · ');
+    }
+    const category = state.categories.find(item => item.id === template.categoryId);
+    return category ? localizeCategoryName(category, state.language) : '';
+  };
 
-  const workspaceChip = workspaceName ? (
-    <span
-      className={clsx(
-        'flex h-8 max-w-[200px] items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-muted',
-        up ? 'self-end bg-tile shadow-[var(--paper-tile-shadow)]' : 'self-start bg-chip',
-      )}
-      title={`${t.workspace}: ${workspaceName}`}
-    >
-      <Users size={14} aria-hidden="true" className="shrink-0" />
-      <span className="sr-only">{t.workspace}: </span>
-      <span className="truncate">{workspaceName}</span>
-    </span>
-  ) : null;
+  const tile = (way: Way, index: number) => {
+    const isSpeak = way.id === 'speak';
+    const stopping = isSpeak && recording;
+    return (
+      <m.button
+        key={way.id}
+        type="button"
+        onClick={way.onSelect}
+        disabled={isSpeak && (transcribing || voice.status === 'starting')}
+        aria-pressed={isSpeak ? recording : undefined}
+        aria-label={stopping ? t.voiceStop : undefined}
+        initial={{ opacity: 0, y: 10, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1, transition: { ...TILE_SPRING, delay: 0.04 + index * STAGGER_S } }}
+        className="flex min-w-0 flex-col items-center gap-2 rounded-[20px] px-1 py-1 text-[13px] font-semibold text-white disabled:opacity-50"
+      >
+        <span
+          ref={isSpeak ? element => { voice.levelRef.current = element; } : undefined}
+          className="relative flex h-14 w-14 items-center justify-center"
+          style={isSpeak ? { ['--voice-level' as string]: 0 } : undefined}
+          aria-hidden="true"
+        >
+          {stopping && (
+            <>
+              <span
+                className="pointer-events-none absolute inset-0 rounded-full bg-white/25"
+                style={{ transform: 'scale(calc(1 + var(--voice-level) * 0.6))', transition: 'transform 90ms linear' }}
+              />
+              <span className="pointer-events-none absolute inset-0 animate-ping rounded-full bg-white/15 motion-reduce:hidden" />
+            </>
+          )}
+          <span
+            className={clsx(
+              'relative flex h-14 w-14 items-center justify-center rounded-full',
+              stopping ? 'bg-neg text-white'
+                : way.tone === 'solid' ? 'bg-white text-[#0B0D0C] shadow-[0_10px_22px_-10px_rgba(0,0,0,0.45)]'
+                  : clsx(ON_COLOUR, 'text-white'),
+            )}
+          >
+            {stopping ? <Square size={18} fill="currentColor" /> : <way.icon size={23} strokeWidth={2.2} />}
+          </span>
+        </span>
+        <span className="max-w-full truncate">{stopping ? s.stop : way.label}</span>
+      </m.button>
+    );
+  };
 
-  const templateBlock = templates.length > 0 ? (
-    <div className={clsx('flex flex-col gap-2', up && 'items-end')}>
-      <div className={clsx('flex items-center gap-1', up && 'rounded-full bg-tile pl-3 shadow-[var(--paper-tile-shadow)]')}>
-        <span className="text-[13px] font-semibold text-muted">{editingTemplates ? t.templatesEditHint : t.again}</span>
+  const usual = templates.length > 0 ? (
+    <div>
+      <div className="flex min-h-10 items-center justify-between gap-3 px-1">
+        <span className={clsx('min-w-0 truncate text-[12px] font-semibold', editingTemplates ? 'text-white/80' : 'uppercase tracking-[0.06em] text-white/60')}>
+          {editingTemplates ? t.templatesEditHint : s.yourUsual}
+        </span>
         <button
           type="button"
           onClick={() => setEditingTemplates(editing => !editing)}
           aria-pressed={editingTemplates}
           aria-label={editingTemplates ? t.done : t.editTemplates}
-          className="flex h-10 shrink-0 items-center rounded-full px-3 text-[13px] font-semibold text-accent"
+          className="-mr-2 flex h-10 shrink-0 items-center rounded-full px-3 text-[13px] font-semibold text-white/85"
         >
           {editingTemplates ? t.done : t.edit}
         </button>
       </div>
-      <div className={clsx('flex flex-wrap gap-2', up && 'justify-end')}>
-        {templates.map(template => (
-          <button
-            key={template.id}
-            type="button"
-            onPointerDown={() => {
-              if (editingTemplates) heldTemplate.current = false;
-              else startHold();
-            }}
-            onPointerUp={stopHold}
-            onPointerLeave={stopHold}
-            onPointerCancel={stopHold}
-            onContextMenu={event => event.preventDefault()}
-            onClick={() => {
-              if (heldTemplate.current) {
-                heldTemplate.current = false;
-                return;
-              }
-              if (editingTemplates) {
-                requestTemplateDelete(template.id);
-                return;
-              }
-              close(() => onUseTemplate(template.id));
-            }}
-            aria-label={editingTemplates ? t.deleteTemplateNamed.replace('{name}', template.name) : undefined}
-            className={clsx(
-              'flex h-10 max-w-full items-center gap-2 rounded-full pl-[7px] pr-3.5 text-sm font-semibold select-none [-webkit-touch-callout:none]',
-              up ? 'bg-tile shadow-[var(--paper-tile-shadow)]' : 'bg-chip',
-              editingTemplates && 'shadow-[inset_0_0_0_1.5px_var(--paper-neg)]',
-            )}
-          >
-            <CategoryGlyph category={state.categories.find(category => category.id === template.categoryId)} size={26} className="!rounded-full" />
-            <span className="truncate">{template.name}</span>
-            {editingTemplates ? (
-              <X size={16} aria-hidden="true" className="shrink-0 text-neg" />
-            ) : template.amount != null && (
-              <span className="shrink-0 font-medium text-muted">{money(template.amount, template.currency, state.language, true)}</span>
-            )}
-          </button>
-        ))}
+      <div className="scrollbar-none -mx-3.5 mt-1 flex gap-2 overflow-x-auto px-3.5 pb-0.5">
+        {templates.map(template => {
+          const detail = templateDetail(template);
+          return (
+            <button
+              key={template.id}
+              type="button"
+              onPointerDown={() => {
+                if (editingTemplates) heldTemplate.current = false;
+                else startHold();
+              }}
+              onPointerUp={stopHold}
+              onPointerLeave={stopHold}
+              onPointerCancel={stopHold}
+              onContextMenu={event => event.preventDefault()}
+              onClick={() => {
+                if (heldTemplate.current) {
+                  heldTemplate.current = false;
+                  return;
+                }
+                if (editingTemplates) {
+                  requestTemplateDelete(template.id);
+                  return;
+                }
+                close(() => onUseTemplate(template.id));
+              }}
+              aria-label={editingTemplates ? t.deleteTemplateNamed.replace('{name}', template.name) : undefined}
+              className={clsx(
+                ON_COLOUR,
+                'flex h-11 max-w-[260px] shrink-0 select-none items-center gap-2 rounded-full pl-1.5 pr-3.5 text-[14.5px] font-semibold text-white [-webkit-touch-callout:none]',
+                editingTemplates && '!ring-2 !ring-white/70',
+              )}
+            >
+              <CategoryGlyph category={state.categories.find(category => category.id === template.categoryId)} size={30} shape="circle" tone="solid" />
+              <span className="min-w-0 truncate">{template.name}</span>
+              {editingTemplates ? (
+                <X size={16} aria-hidden="true" className="shrink-0" />
+              ) : detail && (
+                <span className="shrink-0 whitespace-nowrap text-[13px] font-medium tabular-nums text-white/60">{detail}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   ) : null;
-
-  const wayIcon = (way: Way, size: number) => (
-    <span
-      aria-hidden="true"
-      className={clsx(
-        'flex shrink-0 items-center justify-center rounded-full',
-        way.tone === 'solid' ? 'bg-accent text-on-accent' : up ? 'bg-tile shadow-[var(--paper-tile-shadow)]' : 'bg-chip',
-        way.tone !== 'solid' && (way.tone === 'pos' ? 'text-pos' : 'text-accent'),
-      )}
-      style={{ width: size, height: size }}
-    >
-      <way.icon size={size >= 48 ? 22 : 19} strokeWidth={2.2} />
-    </span>
-  );
 
   const field = aiAvailable ? (
     <form
@@ -376,14 +403,13 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
       <label htmlFor="add-menu-describe" className="sr-only">{t.describeEntry}</label>
       <div
         className={clsx(
-          'flex items-center gap-2 rounded-[26px] p-1.5 pl-4 transition-shadow',
-          up ? 'bg-tile shadow-[var(--paper-tile-shadow)]' : 'paper-field',
-          recording ? 'ring-2 ring-neg/40' : focused && 'ring-2 ring-accent',
+          'flex h-14 items-center gap-2.5 rounded-[18px] bg-white pl-4 pr-1.5 text-[#111] shadow-[0_8px_24px_-14px_rgba(0,0,0,0.5)] transition-shadow',
+          recording ? 'ring-2 ring-neg/60' : focused && 'ring-2 ring-white/70',
         )}
       >
         {busy
-          ? <Loader2 size={18} aria-hidden="true" className="shrink-0 animate-spin text-accent" />
-          : <Sparkles size={18} aria-hidden="true" className="shrink-0 text-accent" />}
+          ? <Loader2 size={20} aria-hidden="true" className="shrink-0 animate-spin text-accent" />
+          : <Sparkles size={20} aria-hidden="true" className="shrink-0 text-accent" />}
         <input
           id="add-menu-describe"
           data-focus-ring="parent"
@@ -397,52 +423,33 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
           placeholder={
             recording ? t.voiceTapToStop.replace('{time}', formatElapsed(voice.elapsedMs))
             : transcribing ? t.voiceTranscribing
-            : t.typeOrSayPlaceholder
+            : s.typeIt
           }
           readOnly={recording || transcribing}
           autoComplete="off"
           enterKeyHint="go"
-          className="h-11 min-w-0 flex-1 bg-transparent text-[16px] text-on-surface placeholder:text-faint focus:outline-none"
+          className="h-11 min-w-0 flex-1 bg-transparent text-[16px] text-[#111] caret-accent placeholder:text-[#6B6F6D] focus:outline-none"
         />
-        {voiceSupported && (
-          <span
-            ref={element => { voice.levelRef.current = element; }}
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center"
-            style={{ ['--voice-level' as string]: 0 }}
+        {recording ? (
+          <button
+            type="button"
+            onClick={toggleVoice}
+            aria-label={t.voiceStop}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-neg text-white"
           >
-            {recording && (
-              <>
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 rounded-full bg-neg/25"
-                  style={{ transform: 'scale(calc(1 + var(--voice-level) * 0.75))', transition: 'transform 90ms linear' }}
-                />
-                <span aria-hidden="true" className="pointer-events-none absolute inset-0 animate-ping rounded-full bg-neg/15 motion-reduce:hidden" />
-              </>
-            )}
-            <button
-              type="button"
-              onClick={toggleVoice}
-              disabled={transcribing || voice.status === 'starting'}
-              aria-label={recording ? t.voiceStop : t.speak}
-              aria-pressed={recording}
-              className={clsx(
-                'relative flex h-10 w-10 items-center justify-center rounded-full transition-colors disabled:opacity-50',
-                recording ? 'bg-neg text-white' : 'bg-chip text-muted',
-              )}
-            >
-              {recording ? <Square size={14} fill="currentColor" aria-hidden="true" /> : <Mic size={18} aria-hidden="true" />}
-            </button>
-          </span>
+            <Square size={15} fill="currentColor" aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim() || busy}
+            aria-label={t.fillIn}
+            title={t.fillIn}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-[image:var(--accent-card)] text-white disabled:opacity-35"
+          >
+            {parsing ? <Loader2 size={19} className="animate-spin" aria-hidden="true" /> : <ArrowUp size={20} strokeWidth={2.4} aria-hidden="true" />}
+          </button>
         )}
-        <button
-          type="submit"
-          disabled={!input.trim() || busy || recording}
-          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-40"
-        >
-          {parsing && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-          {t.fillIn}
-        </button>
       </div>
       <span className="sr-only" aria-live="polite">{recording ? t.listening : transcribing ? t.voiceTranscribing : ''}</span>
     </form>
@@ -450,9 +457,9 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
 
   const message = error ?? voiceError;
   const feedback = message || carriesText ? (
-    <div className={clsx('flex flex-wrap items-center gap-2', up && 'justify-end')}>
+    <div className="flex flex-wrap items-center gap-2">
       {message && (
-        <p role="alert" className={clsx('text-[13px] font-medium text-neg', up && 'rounded-full bg-tile px-3.5 py-2.5 shadow-[var(--paper-tile-shadow)]')}>
+        <p role="alert" className="min-w-0 flex-1 rounded-[16px] bg-white/[0.12] px-3.5 py-2.5 text-[13.5px] font-medium text-white">
           {message}
         </p>
       )}
@@ -460,7 +467,7 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
         <button
           type="button"
           onClick={() => close(() => enterManually('expense'))}
-          className={clsx('flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold', up ? 'bg-tile shadow-[var(--paper-tile-shadow)]' : 'bg-chip')}
+          className={clsx(ON_COLOUR, 'flex h-11 items-center gap-1.5 rounded-full px-4 text-[14px] font-semibold text-white')}
         >
           <PenLine size={16} aria-hidden="true" />
           {t.enterManually}
@@ -468,6 +475,81 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
       )}
     </div>
   ) : null;
+
+  const workspaceChip = workspaceName ? (
+    <span
+      className={clsx(ON_COLOUR, 'flex h-8 max-w-[220px] items-center gap-1.5 self-start rounded-full px-3 text-[13px] font-semibold text-white')}
+      title={`${t.workspace}: ${workspaceName}`}
+    >
+      <Users size={14} aria-hidden="true" className="shrink-0" />
+      <span className="sr-only">{t.workspace}: </span>
+      <span className="truncate">{workspaceName}</span>
+    </span>
+  ) : null;
+
+  // The panel's left edge, so its pointer can sit over the centre of the + below it.
+  const panelLeft = up ? viewport.width - placement.right - placement.width : placement.left;
+  const pointerX = up && placement.fab
+    ? Math.min(Math.max(placement.fab.left + placement.fab.width / 2 - panelLeft, 30), placement.width - 30)
+    : null;
+
+  const panel = (
+    <m.div
+      initial={{ opacity: 0, y: up ? 14 : -8, scale: 0.94 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: up ? 10 : -6, scale: 0.97, transition: { duration: 0.14 } }}
+      transition={MOTION.modal.spring}
+      className={clsx(
+        'hero-bg absolute flex flex-col rounded-[30px] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_-20px_rgba(0,0,0,0.7)]',
+        dark && 'hero-dark',
+      )}
+      style={up
+        ? {
+          right: placement.right,
+          bottom: placement.bottom,
+          width: placement.width,
+          maxHeight: `calc(${placement.maxHeight}px - env(safe-area-inset-top))`,
+          transformOrigin: pointerX !== null ? `${pointerX}px calc(100% + 20px)` : '100% 100%',
+        }
+        : { left: placement.left, top: placement.top, width: placement.width, maxHeight: placement.maxHeight, transformOrigin: '24px 0' }}
+    >
+      <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto overscroll-contain rounded-[30px] px-3.5 pb-3.5 pt-4 [scrollbar-width:none]">
+        <AnimatePresence initial={false}>
+          {!typing && (
+            <m.div
+              key="ways"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 520, damping: 44 }}
+              className="-mx-3.5 overflow-hidden px-3.5"
+            >
+              <div className="flex flex-col gap-3.5">
+                {workspaceChip}
+                <div className="grid grid-cols-3 gap-y-3.5">{ways.map(tile)}</div>
+                {usual && (
+                  <>
+                    <div className="mx-1 h-px bg-white/[0.14]" aria-hidden="true" />
+                    {usual}
+                  </>
+                )}
+              </div>
+            </m.div>
+          )}
+        </AnimatePresence>
+        {feedback}
+        {field}
+      </div>
+      {pointerX !== null && (
+        <span
+          aria-hidden="true"
+          className={clsx('absolute -bottom-[7px] h-4 w-4 rotate-45 rounded-[3px]', dark && 'bg-[#0e100f]')}
+          // The header colour is a gradient: zoom in on its bottom right end, where the + sits.
+          style={dark ? { left: pointerX - 8 } : { left: pointerX - 8, backgroundImage: 'var(--accent-card)', backgroundSize: '2000% 2000%', backgroundPosition: '100% 100%' }}
+        />
+      )}
+    </m.div>
+  );
 
   return (
     <div {...dialogProps} className="fixed inset-0 z-[70] outline-none">
@@ -482,93 +564,17 @@ const AddMenuPanel: React.FC<AddMenuProps> = ({
         aria-hidden="true"
       />
 
-      {placement.direction === 'up' ? (
-        <m.div
-          // Closing fades the whole column down toward the + (the ways' own exits are for typing).
-          exit={{ opacity: 0, y: 10, transition: { duration: 0.14 } }}
-          className="absolute flex flex-col gap-2.5"
-          style={{ right: placement.right, bottom: placement.bottom, width: placement.width, maxHeight: `calc(${placement.maxHeight}px - env(safe-area-inset-top))` }}
-        >
-          {/* Scrolls on a short screen; the extra padding keeps tile shadows from being clipped. */}
-          <div className="-m-2 flex min-h-0 flex-col gap-2.5 overflow-y-auto overscroll-contain p-2 [scrollbar-width:none]">
-            <div className="mt-auto" />
-            <AnimatePresence>
-              {!typing && workspaceChip && (
-                <m.div key="workspace" className="flex justify-end" variants={rise} custom={topStep} initial="hidden" animate="shown" exit="gone">
-                  {workspaceChip}
-                </m.div>
-              )}
-              {!typing && templateBlock && (
-                <m.div key="templates" className="mb-1 origin-bottom-right" variants={rise} custom={topStep} initial="hidden" animate="shown" exit="gone">
-                  {templateBlock}
-                </m.div>
-              )}
-              {!typing && orderedWays.map((way, index) => (
-                <m.button
-                  key={way.id}
-                  type="button"
-                  onClick={() => close(way.onSelect)}
-                  variants={rise}
-                  custom={wayStep(index)}
-                  initial="hidden"
-                  animate="shown"
-                  exit="gone"
-                  style={{ paddingRight: iconInset }}
-                  className="flex min-h-12 origin-right items-center gap-3 self-end rounded-full text-on-surface"
-                >
-                  <span className="flex h-10 items-center rounded-full bg-tile px-4 text-[15px] font-semibold tracking-[-0.2px] shadow-[var(--paper-tile-shadow)]">
-                    {way.label}
-                  </span>
-                  {wayIcon(way, 48)}
-                </m.button>
-              ))}
-            </AnimatePresence>
-          </div>
-          {feedback}
-          {field && (
-            <m.div variants={rise} custom={fieldStep} initial="hidden" animate="shown" className="origin-bottom-right">
-              {field}
-            </m.div>
-          )}
-        </m.div>
-      ) : (
-        <m.div
-          initial={{ opacity: 0, scale: 0.96, y: -6 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: 0.12 } }}
-          transition={MOTION.modal.spring}
-          className="absolute flex origin-top-left flex-col gap-3 overflow-y-auto overscroll-contain rounded-[28px] border border-hair bg-tile p-3 text-on-surface shadow-[0_18px_48px_-16px_rgba(0,0,0,0.3)]"
-          style={{ left: placement.left, top: placement.top, width: placement.width, maxHeight: placement.maxHeight }}
-        >
-          {workspaceChip}
-          {field}
-          {feedback}
-          <div className="flex flex-col">
-            {orderedWays.map(way => (
-              <button
-                key={way.id}
-                type="button"
-                onClick={() => close(way.onSelect)}
-                className="flex h-12 items-center gap-3 rounded-[18px] px-1.5 text-left text-[15px] font-semibold transition-colors hover:bg-chip"
-              >
-                {wayIcon(way, 36)}
-                {way.label}
-              </button>
-            ))}
-          </div>
-          {templateBlock}
-        </m.div>
-      )}
+      {panel}
 
-      {placement.direction === 'up' && placement.fab && (
+      {up && placement.fab && (
         // Covers the + it rose from (now under the scrim) and turns it into the close button.
         <button
           type="button"
           onClick={() => close()}
           aria-label={t.close}
           title={t.close}
-          style={{ left: placement.fab.left, top: placement.fab.top, width: placement.fab.width, height: placement.fab.height, ...lgStyle('lg-fab') }}
-          className="glass-accent absolute flex items-center justify-center rounded-full"
+          style={{ left: placement.fab.left, top: placement.fab.top, width: placement.fab.width, height: placement.fab.height }}
+          className="absolute flex items-center justify-center rounded-full bg-white text-[#0B0D0C] shadow-[0_12px_28px_-12px_rgba(0,0,0,0.55)]"
         >
           <m.span
             className="flex"

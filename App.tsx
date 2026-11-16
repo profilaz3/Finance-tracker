@@ -19,6 +19,10 @@ installPreloadErrorReload();
 
 // Reminders, alerts and the monthly letter: loaded after first paint, see BackgroundJobs.
 const BackgroundJobs = lazyWithReload(() => import('./components/app/BackgroundJobs'));
+// Single-key shortcuts (N, A, /, 1 to 6, E, ?) and their help list: lazy, they wait for a keyboard.
+const DesktopShortcuts = lazyWithReload(() => import('./components/app/DesktopShortcuts'));
+// Drag a receipt photo onto the window to scan it (lazy, like the shortcuts).
+const ReceiptDropZone = lazyWithReload(() => import('./components/app/ReceiptDropZone'));
 const AuthView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.AuthView })));
 const SetNewPasswordView = lazyWithReload(() => import('./components/AuthView').then(m => ({ default: m.SetNewPasswordView })));
 import type { ParsedTransaction } from './services/aiService';
@@ -29,7 +33,7 @@ import { AppNavigation } from './components/app/AppNavigation';
 import { AppSheets } from './components/app/AppSheets';
 import { LiquidGlassDefs } from './components/ui/LiquidGlassDefs';
 import { AppViewRouter } from './components/app/AppViewRouter';
-import { preloadViews, subViewGroup, type PeekControl } from './components/app/AppViewRouter';
+import { preloadViews, type PeekControl } from './components/app/AppViewRouter';
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
@@ -481,10 +485,6 @@ const App: React.FC = () => {
     if (pageIndex < 0) return dir === -1 ? 'dashboard' : null;
     return PAGE_ORDER[pageIndex + dir] ?? null;
   };
-  const sharesHeader = (view: View) => {
-    const group = subViewGroup(view, selectedEvent);
-    return !!group && group === subViewGroup(currentView, selectedEvent);
-  };
 
   // Once a page has settled and the app is idle, mount its swipe neighbours hidden so the first
   // frame of a swipe only reveals them. Phones only (desktop has no swipe), and not with reduced
@@ -499,10 +499,7 @@ const App: React.FC = () => {
         const views = ([ahead, -ahead as SwipeDirection])
           .map(neighbourView)
           .filter((view): view is View => !!view && view !== currentView);
-        peekControlRef.current?.park(views.map(view => ({
-          view,
-          header: !!subViewGroup(view, selectedEvent) && !sharesHeader(view),
-        })));
+        peekControlRef.current?.park(views.map(view => ({ view })));
       };
       idle = 'requestIdleCallback' in window ? window.requestIdleCallback(run, { timeout: 1500 }) : (window as Window).setTimeout(run, 0);
     }, 450);
@@ -511,7 +508,7 @@ const App: React.FC = () => {
       if (idle && 'cancelIdleCallback' in window) window.cancelIdleCallback(idle);
       else window.clearTimeout(idle);
     };
-    // neighbourView/sharesHeader read only currentView, selectedEvent and the DOM.
+    // neighbourView reads only currentView, selectedEvent and the DOM.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView, selectedEvent, isAuthenticated, homeEditing]);
   const swipeHandlers = useSwipePager({
@@ -536,12 +533,10 @@ const App: React.FC = () => {
         control?.show(null);
         return false;
       }
-      const sameHeader = sharesHeader(view);
-      // Place the neighbour where it will sit once current: below a shared switch, and at its
-      // own remembered scroll position. A parked neighbour is revealed at once; otherwise it
-      // mounts in a transition.
-      const top = (sameHeader ? page.offsetTop : 0) + main.scrollTop - scrollRestore.get(view);
-      control.show({ view, dir, top, header: !!subViewGroup(view, selectedEvent) && !sameHeader });
+      // Place the neighbour where it will sit once current, at its own remembered scroll
+      // position. A parked neighbour is revealed at once; otherwise it mounts in a transition.
+      const top = main.scrollTop - scrollRestore.get(view);
+      control.show({ view, dir, top });
       return true;
     },
     getPeek: dir => pagerRef.current?.querySelector<HTMLElement>(`:scope > [data-pager-peek="${dir}"]`),
@@ -636,6 +631,8 @@ const App: React.FC = () => {
 
   // Android: the home screen widget mirrors this month, and its "+" and the share sheet open the app.
   const [sharedReceiptImage, setSharedReceiptImage] = useState<string | null>(null);
+  // A receipt file dragged onto the window (ReceiptDropZone).
+  const [droppedReceipt, setDroppedReceipt] = useState<File | null>(null);
   useWidgetSync(viewState, isAuthenticated);
   useNativeIntents({
     enabled: isAuthenticated === true,
@@ -648,7 +645,10 @@ const App: React.FC = () => {
     },
   });
   useEffect(() => {
-    if (!modals.isReceiptScanModalOpen) setSharedReceiptImage(null);
+    if (!modals.isReceiptScanModalOpen) {
+      setSharedReceiptImage(null);
+      setDroppedReceipt(null);
+    }
   }, [modals.isReceiptScanModalOpen]);
 
   // --- Render ---
@@ -712,6 +712,7 @@ const App: React.FC = () => {
           add: t.addEntry,
           budgets: t.budgets,
           settings: t.settings,
+          shortcuts: t.keyboardShortcuts,
         }}
       />
       <LiquidGlassDefs />
@@ -743,6 +744,8 @@ const App: React.FC = () => {
                 peekControlRef={peekControlRef}
                 pageFallback={viewSkeleton[currentView] || <DashboardSkeleton />}
                 state={viewState}
+                paneDetailsId={modals.detailsInPane ? modals.detailsId : null}
+                selectedPerson={selectedPerson}
                 homeEditing={homeEditing}
                 setHomeEditing={setHomeEditing}
                 onNavigate={handleNavigate}
@@ -807,11 +810,33 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      <Suspense fallback={null}>
+        <DesktopShortcuts
+          language={state.language}
+          onNavigate={handleNavigate}
+          onNewEntry={handleOpenAddTransaction}
+          onAddMenu={() => modals.openAddMenu()}
+        />
+        <ReceiptDropZone
+          language={state.language}
+          onReceiptFile={file => {
+            setSharedReceiptImage(null);
+            setDroppedReceipt(file);
+            modals.setIsReceiptScanModalOpen(true);
+          }}
+        />
+      </Suspense>
+
       <AppModals
         modals={modals}
         state={viewState}
         selectedTransaction={selectedTransaction}
         selectedPerson={selectedPerson}
+        onOpenEvent={(event: Event) => {
+          setSelectedPerson(null);
+          setSelectedEvent(event);
+          handleViewChange('events');
+        }}
         personToEdit={personToEdit}
         splitTransactionContext={splitTransactionContext}
         activeEvent={activeEvent}
@@ -838,6 +863,7 @@ const App: React.FC = () => {
         addToast={addToast}
         t={t}
         sharedReceiptImage={sharedReceiptImage}
+        droppedReceipt={droppedReceipt}
         clearSharedReceiptImage={() => setSharedReceiptImage(null)}
         onSavePaymentDetails={details => setState(prev => ({ ...prev, paymentDetails: details }))}
       />

@@ -7,6 +7,8 @@ export function useModals() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   // The row the details card grows out of (and shrinks back into).
   const [detailsOrigin, setDetailsOrigin] = useState<Element | null>(null);
+  // Opened in the Activity side pane on a wide window rather than as a pop-up card.
+  const [detailsInPane, setDetailsInPane] = useState(false);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
   const [isEventCreationModalOpen, setIsEventCreationModalOpen] = useState(false);
   const [isReceiptScanModalOpen, setIsReceiptScanModalOpen] = useState(false);
@@ -41,8 +43,9 @@ export function useModals() {
     setIsAddMenuOpen(true);
   }, []);
 
-  const openDetails = useCallback((transactionId: string, origin: Element | null = null) => {
+  const openDetails = useCallback((transactionId: string, origin: Element | null = null, inPane = false) => {
     setDetailsOrigin(origin);
+    setDetailsInPane(inPane);
     setDetailsId(transactionId);
   }, []);
   const closeDetails = useCallback(() => setDetailsId(null), []);
@@ -50,7 +53,7 @@ export function useModals() {
   return {
     isEditModalOpen, setIsEditModalOpen,
     isSplitModalOpen, setIsSplitModalOpen,
-    detailsId, detailsOrigin, openDetails, closeDetails,
+    detailsId, detailsOrigin, detailsInPane, openDetails, closeDetails,
     isAddPersonModalOpen, setIsAddPersonModalOpen,
     isEventCreationModalOpen, setIsEventCreationModalOpen,
     isReceiptScanModalOpen, setIsReceiptScanModalOpen,

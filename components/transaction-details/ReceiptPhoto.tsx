@@ -55,6 +55,45 @@ export const ReceiptPhotoTile: React.FC<{ path: string; t: T; onOpen: () => void
   );
 };
 
+/** The photo as a small thumbnail on the receipt card's header; opens the viewer. */
+export const ReceiptPhotoThumb: React.FC<{ path: string; label: string; onOpen: () => void; busy?: boolean; className?: string }> = ({
+  path,
+  label,
+  onOpen,
+  busy,
+  className,
+}) => {
+  const { url, loading, failed } = useReceiptPhotoUrl(path);
+  const [broken, setBroken] = useState(false);
+  const unavailable = failed || broken;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={unavailable}
+      aria-label={label}
+      className={`relative shrink-0 overflow-hidden rounded-[14px] bg-chip ring-1 ring-inset ring-hair disabled:cursor-default ${className ?? ''}`}
+    >
+      {url && !broken && <img src={url} alt="" className="h-full w-full object-cover object-top" onError={() => setBroken(true)} />}
+      {(loading || busy) && (
+        <span className="absolute inset-0 flex items-center justify-center bg-[var(--paper-scrim)]">
+          <Loader2 size={18} className="animate-spin text-muted" aria-hidden="true" />
+        </span>
+      )}
+      {unavailable && (
+        <span className="absolute inset-0 flex items-center justify-center text-muted">
+          <ImageIcon size={20} aria-hidden="true" />
+        </span>
+      )}
+      {!unavailable && !loading && (
+        <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white">
+          <Camera size={11} aria-hidden="true" />
+        </span>
+      )}
+    </button>
+  );
+};
+
 interface ReceiptPhotoViewerProps {
   path: string;
   t: T;

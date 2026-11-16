@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { TRANSLATIONS } from '../constants';
+import { EVENT_STRINGS } from '../components/event-detail/eventStrings';
 
 describe('build contracts', () => {
   it('uses package-path chunk rules instead of broad "react" substring matching', () => {
@@ -344,8 +345,8 @@ describe('build contracts', () => {
   it('checks in a browser regression for event-detail summary calculations', () => {
     const packageJson = readFileSync('package.json', 'utf8');
     const script = readFileSync('scripts/event-summary-regression.mjs', 'utf8');
-    const summaryTab = readFileSync('components/event-detail/SummaryTab.tsx', 'utf8');
-    const eventTabs = readFileSync('components/event-detail/EventTabs.tsx', 'utf8');
+    const view = readFileSync('components/event-detail/EventDetailView.tsx', 'utf8');
+    const header = readFileSync('components/event-detail/EventHeader.tsx', 'utf8');
 
     expect(packageJson).toContain('"test:event-summary-regression": "node scripts/event-summary-regression.mjs"');
     expect(script).toContain("import { chromium } from 'playwright'");
@@ -353,16 +354,17 @@ describe('build contracts', () => {
     expect(script).toContain('EVENT_SUMMARY_REGRESSION_PASSWORD');
     expect(script).toContain('EVENT_SUMMARY_REGRESSION_EVENT');
     expect(script).toContain('event-summary-regression-success.png');
-    expect(script).toContain('Spending Breakdown');
-    expect(script).toContain('Display Currency');
-    expect(summaryTab).toContain('{t.spendingBreakdown}');
-    expect(summaryTab).toContain('t.settlement');
-    expect(summaryTab).toContain('t.displayCurrency');
-    expect(eventTabs).toContain('label: t.summary');
-    expect(TRANSLATIONS.en.spendingBreakdown).toBe('Spending Breakdown');
-    expect(TRANSLATIONS.en.settlement).toBe('Settlement');
-    expect(TRANSLATIONS.en.displayCurrency).toBe('Display Currency');
-    expect(TRANSLATIONS.en.summary).toBe('Summary');
+    // One screen, no tabs: paid vs share, settle up and categories, currency on the header.
+    expect(script).toContain('Paid vs share');
+    expect(script).toContain('Settle up');
+    expect(script).toContain('Show amounts in');
+    expect(view).toContain('<PaidVsShare');
+    expect(view).toContain('<EventDebtSummary');
+    expect(view).toContain('<EventCategories');
+    expect(header).toContain('aria-label={s.showIn}');
+    expect(EVENT_STRINGS.en.paidVsShare).toBe('Paid vs share');
+    expect(EVENT_STRINGS.en.settleUp).toBe('Settle up');
+    expect(EVENT_STRINGS.en.showIn).toBe('Show amounts in');
   });
 
   it('checks in a browser regression for dashboard wallet and debt summary rendering', () => {

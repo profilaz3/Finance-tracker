@@ -1,6 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
-import { Plus, PiggyBank, Settings } from 'lucide-react';
+import { Home, PieChart, Plus, PiggyBank, ReceiptText, Settings, Users, type LucideIcon } from 'lucide-react';
 import { View } from '../../types';
 import { SyncIndicator, SyncStatus } from '../SyncStatus';
 import { lgStyle } from '../ui/LiquidGlassDefs';
@@ -18,6 +18,9 @@ export const TAB_VIEWS: Record<NavTab, View[]> = {
 
 export const NAV_TABS: NavTab[] = ['home', 'activity', 'events', 'insights'];
 
+/** Sidebar icons (the mobile tab bar is text only). */
+const TAB_ICONS: Record<NavTab, LucideIcon> = { home: Home, activity: ReceiptText, events: Users, insights: PieChart };
+
 export const tabForView = (view: View): NavTab | null =>
   NAV_TABS.find(tab => TAB_VIEWS[tab].includes(view)) ?? null;
 
@@ -31,7 +34,12 @@ interface NavigationLabels {
   add: string;
   budgets: string;
   settings: string;
+  /** The "?" button that lists the keyboard shortcuts. */
+  shortcuts: string;
 }
+
+/** Asks the lazy shortcuts module (components/app/DesktopShortcuts) to show its list. */
+export const SHORTCUTS_HELP_EVENT = 'finance:shortcuts-help';
 
 interface AppNavigationProps {
   currentView: View;
@@ -52,18 +60,24 @@ interface TabButtonProps {
   className: string;
   activeClassName: string;
   pillItem?: boolean;
+  withIcon?: boolean;
+  /** Tooltip naming the key that goes here (desktop sidebar). */
+  title?: string;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ tab, label, currentView, onNavigate, onReselect, className, activeClassName, pillItem }) => {
+const TabButton: React.FC<TabButtonProps> = ({ tab, label, currentView, onNavigate, onReselect, className, activeClassName, pillItem, withIcon, title }) => {
   const isActive = tabForView(currentView) === tab;
+  const Icon = TAB_ICONS[tab];
   return (
     <button
       type="button"
       onClick={() => (isActive ? onReselect() : onNavigate(TAB_VIEWS[tab][0]))}
       aria-current={isActive ? 'page' : undefined}
+      title={title}
       data-pill-item={pillItem ? '' : undefined}
       className={clsx(className, isActive ? activeClassName : 'text-muted')}
     >
+      {withIcon && <Icon size={18} aria-hidden="true" />}
       {label}
     </button>
   );
@@ -122,6 +136,7 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
         onClick={event => onAdd(event.currentTarget)}
         data-add-trigger=""
         aria-haspopup="dialog"
+        title={`${labels.add} (A)`}
         className="mb-3 flex h-11 items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent"
       >
         <Plus size={18} aria-hidden="true" />
@@ -129,7 +144,7 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
       </button>
 
       <nav className="flex flex-col gap-1" aria-label={labels.mainNavigation}>
-        {NAV_TABS.map(tab => (
+        {NAV_TABS.map((tab, index) => (
           <TabButton
             key={tab}
             tab={tab}
@@ -137,7 +152,9 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
             currentView={currentView}
             onNavigate={onNavigate}
             onReselect={onReselect}
-            className="flex h-11 items-center rounded-full px-4 text-left text-[15px] font-semibold"
+            withIcon
+            title={`${labels[tab]} (${index + 1})`}
+            className="flex h-11 items-center gap-3 rounded-full px-4 text-left text-[15px] font-semibold"
             activeClassName="bg-chip text-on-surface"
           />
         ))}
@@ -145,16 +162,17 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
 
       <div className="mt-4 flex flex-col gap-1 border-t border-hair pt-4">
         {([
-          ['budgets', PiggyBank, labels.budgets],
-          ['settings', Settings, labels.settings],
-        ] as const).map(([view, Icon, label]) => (
+          ['budgets', PiggyBank, labels.budgets, 5],
+          ['settings', Settings, labels.settings, 6],
+        ] as const).map(([view, Icon, label, key]) => (
           <button
             key={view}
             type="button"
             onClick={() => (currentView === view ? onReselect() : onNavigate(view))}
             aria-current={currentView === view ? 'page' : undefined}
+            title={`${label} (${key})`}
             className={clsx(
-              'flex h-11 items-center gap-3 rounded-full px-4 text-left text-[15px] font-medium',
+              'flex h-11 items-center gap-3 rounded-full px-4 text-left text-[15px] font-semibold',
               currentView === view ? 'bg-chip text-on-surface' : 'text-muted',
             )}
           >
@@ -167,8 +185,17 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({ currentView, onNav
       <div className="flex-1" />
 
       {/* Desktop has no bottom nav, so surface sync / offline state here (M33). */}
-      <div className="flex justify-start border-t border-hair px-1 pt-4">
+      <div className="flex items-center justify-between gap-2 border-t border-hair px-1 pt-4">
         <SyncStatus showDetails placement="above" />
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(SHORTCUTS_HELP_EVENT))}
+          aria-label={labels.shortcuts}
+          title={`${labels.shortcuts} (?)`}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-muted ring-1 ring-inset ring-hair hover:bg-chip"
+        >
+          ?
+        </button>
       </div>
     </aside>
 

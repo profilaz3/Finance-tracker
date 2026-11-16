@@ -83,6 +83,7 @@ const en = {
   hdrTripExpensesFew: '{count} expenses so far',
   hdrTripNone: 'Nothing spent yet',
   walletsMore: '+{count} more',
+  upcomingThen: 'Then {name}, {when}',
   inHeader: 'In the header',
   inHeaderHint: 'The header already shows this, so it is hidden below it',
 };
@@ -170,6 +171,7 @@ const sr: HeaderStrings = {
   hdrTripExpensesFew: '{count} troška do sada',
   hdrTripNone: 'Još ništa nije potrošeno',
   walletsMore: '+ još {count}',
+  upcomingThen: 'Zatim {name}, {when}',
   inHeader: 'U zaglavlju',
   inHeaderHint: 'Zaglavlje već prikazuje ovaj blok, pa je sakriven ispod njega',
 };

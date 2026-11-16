@@ -76,16 +76,16 @@ export const DebtsCard: React.FC<DebtsCardProps> = ({ debts, people, currency, l
     return (
       <li
         key={debt.personId}
-        className={clsx('flex min-h-[48px] items-center gap-2.5 py-1', (index > 0 || split) && 'border-t border-hair')}
+        className={clsx('flex min-h-[60px] items-center gap-3 py-2', (index > 0 || split) && 'border-t border-hair')}
       >
-        <PersonAvatar person={person} />
+        <PersonAvatar person={person} size={38} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-semibold">{name}</span>
-          {sub && <span className="block truncate text-[12px] font-medium tabular-nums text-muted">{sub}</span>}
-          {!split && <span className={clsx('block text-[12px] font-medium', debt.state === 'paid' ? 'text-pos' : 'text-muted')}>{summary}</span>}
+          <span className="block truncate text-[15px] font-semibold">{name}</span>
+          {sub && <span className="block truncate text-[13px] font-medium tabular-nums text-muted">{sub}</span>}
+          {!split && <span className={clsx('block text-[13px] font-medium', debt.state === 'paid' ? 'text-pos' : 'text-muted')}>{summary}</span>}
         </span>
         {debt.state === 'paid' ? (
-          <span className="flex h-6 shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--paper-pos)_13%,transparent)] px-2.5 text-[12px] font-semibold text-pos">
+          <span className="flex h-7 shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--paper-pos)_13%,transparent)] px-3 text-[12.5px] font-semibold text-pos">
             <Check size={12} strokeWidth={2.6} aria-hidden="true" /> {t.detailsPaidShort}
           </span>
         ) : onRequest ? (
@@ -93,41 +93,41 @@ export const DebtsCard: React.FC<DebtsCardProps> = ({ debts, people, currency, l
             type="button"
             onClick={() => onRequest(debt, person)}
             aria-label={t.detailsRequestFrom.replace('{amount}', money(debt.outstanding)).replace('{name}', name)}
-            className="-my-1 flex h-10 shrink-0 items-center"
+            className="-my-0.5 flex h-11 shrink-0 items-center"
             data-focus-ring="parent"
           >
-            <span className="flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-[12.5px] font-semibold text-on-accent [button:focus-visible_&]:ring-2 [button:focus-visible_&]:ring-accent [button:focus-visible_&]:ring-offset-2">
+            <span className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-on-accent [button:focus-visible_&]:ring-2 [button:focus-visible_&]:ring-accent [button:focus-visible_&]:ring-offset-2">
               <QrCode size={14} aria-hidden="true" /> {t.detailsRequest}
             </span>
           </button>
         ) : null}
-        {split && <span className="min-w-[4rem] shrink-0 text-right text-[14px] font-semibold tabular-nums">{plain(debt.amount)}</span>}
+        {split && <span className="min-w-[4rem] shrink-0 text-right text-[15px] font-semibold tabular-nums">{plain(debt.amount)}</span>}
       </li>
     );
   };
 
   if (!split) {
     return (
-      <section className="paper-tile px-3.5 py-1" aria-label={t.person}>
+      <section className="paper-tile px-4 py-1" aria-label={t.person}>
         <ul>{debts.map(row)}</ul>
       </section>
     );
   }
 
   return (
-    <section className="paper-tile px-3.5 pb-1 pt-3" aria-label={t.detailsSplitWays.replace('{count}', String(debts.length + 1))}>
+    <section className="paper-tile px-4 pb-1.5 pt-4" aria-label={t.detailsSplitWays.replace('{count}', String(debts.length + 1))}>
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-[14px] font-semibold">{t.detailsSplitWays.replace('{count}', String(debts.length + 1))}</h3>
-        <span className={clsx('min-w-0 truncate text-[12px] font-medium', allPaid ? 'text-pos' : 'text-muted')}>{summary}</span>
+        <h3 className="text-[16px] font-semibold">{t.detailsSplitWays.replace('{count}', String(debts.length + 1))}</h3>
+        <span className={clsx('min-w-0 truncate text-[13px] font-medium', allPaid ? 'text-pos' : 'text-muted')}>{summary}</span>
       </div>
-      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-chip" aria-hidden="true">
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-chip" aria-hidden="true">
         <div className="h-full rounded-full bg-pos transition-[width] duration-500" style={{ width: `${Math.round(progress * 100)}%` }} />
       </div>
-      <ul className="mt-1.5">
-        <li className="flex min-h-[48px] items-center gap-2.5 py-1">
-          <PersonAvatar person={split.me ?? { name: t.detailsYou, color: '' }} />
-          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{t.detailsYou}</span>
-          <span className="min-w-[4rem] shrink-0 text-right text-[14px] font-semibold tabular-nums">{plain(split.myPortion)}</span>
+      <ul className="mt-2">
+        <li className="flex min-h-[60px] items-center gap-3 py-2">
+          <PersonAvatar person={split.me ?? { name: t.detailsYou, color: '' }} size={38} />
+          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{t.detailsYou}</span>
+          <span className="min-w-[4rem] shrink-0 text-right text-[15px] font-semibold tabular-nums">{plain(split.myPortion)}</span>
         </li>
         {debts.map(row)}
       </ul>

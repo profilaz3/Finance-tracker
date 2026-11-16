@@ -34,6 +34,13 @@ export interface SettingsViewProps {
     // Teams: which workspace the app shows (null is personal)
     workspaceId?: string | null;
     onWorkspaceChange?: (teamId: string | null) => void;
+    /** Total of the workspace's wallets in the home currency, shown on the Wallets row. */
+    netWorth?: number;
+    onBack?: () => void;
+    /** Rows that open screens of their own. */
+    onOpenBudgets?: () => void;
+    onOpenSubscriptions?: () => void;
+    onCustomizeHome?: () => void;
 }
 
 export const containerVariants: Variants = {

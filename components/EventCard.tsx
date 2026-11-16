@@ -35,6 +35,23 @@ export const formatEventDates = (event: Pick<Event, 'startDate' | 'endDate'>, t:
     return event.endDate ? t.eventEndedOn.replace('{date}', short(event.endDate)) : t.noDatesSet;
 };
 
+/** A short date range for a dated event (the locale's own range format), else the event card's wording. */
+export const eventRange = (event: Pick<Event, 'startDate' | 'endDate'>, language: AppLanguage): string => {
+    const t = TRANSLATIONS[language];
+    if (event.startDate && event.endDate) {
+        const start = new Date(event.startDate);
+        const end = new Date(event.endDate);
+        if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+            try {
+                return new Intl.DateTimeFormat(getIntlLocale(language), { day: 'numeric', month: 'short' }).formatRange(start, end);
+            } catch {
+                // Fall through to the card wording.
+            }
+        }
+    }
+    return formatEventDates(event, t, language);
+};
+
 export const eventStatusLabel = (status: Event['status'], t: Strings): string =>
     status === 'active' ? t.eventStatusActive : status === 'completed' ? t.eventStatusCompleted : t.eventStatusArchived;
 

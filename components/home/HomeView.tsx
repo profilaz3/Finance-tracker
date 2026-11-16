@@ -163,6 +163,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const context = headerContext(data);
   const inHeader = new Set(blocksShownInHeader(activeFace(header, data), shownStats(header.stats, context), context.walletIds));
   const shownLayout = editing ? layout : layout.filter(block => !inHeader.has(block.type));
+  // An odd number of small blocks leaves one beside an empty cell (the wide blocks after it need
+  // two columns), so outside customizing the last small block takes the full pair.
+  const smallBlocks = shownLayout.filter(block => block.size === 's');
+  const widenedId = !editing && smallBlocks.length % 2 === 1 ? smallBlocks[smallBlocks.length - 1].id : null;
   const h = HEADER_STRINGS[language];
 
   const monthName = new Intl.DateTimeFormat(getIntlLocale(language), {
@@ -362,7 +366,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 data-block-id={block.id}
                 className={clsx(
                   'relative flex',
-                  block.size === 's' ? 'col-span-1 min-h-[172px]' : 'col-span-2',
+                  block.size === 's' && block.id !== widenedId ? 'col-span-1 min-h-[172px]' : 'col-span-2',
                   editing && !dragging && 'home-wiggle',
                   dragging && 'z-10 scale-[1.04] opacity-90 drop-shadow-2xl transition-transform',
                 )}

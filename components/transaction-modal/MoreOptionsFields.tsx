@@ -1,11 +1,14 @@
 import React from 'react';
+import clsx from 'clsx';
 import { AnimatePresence, m } from 'motion/react';
-import { AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertCircle, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { TRANSLATIONS } from '../../constants';
 import { Event, Person } from '../../types';
 import { AmountInput } from '../ui/AmountInput';
 import { formatCurrency } from '../../utils/formatters';
 import type { EntryForm } from './useEntryForm';
+import type { EntryStrings } from './entryStrings';
+import { TimeField } from './DateFields';
 
 interface MoreOptionsFieldsProps {
     form: EntryForm;
@@ -15,6 +18,9 @@ interface MoreOptionsFieldsProps {
     onToggle: () => void;
     language: 'en' | 'sr';
     t: typeof TRANSLATIONS['en'];
+    s: EntryStrings;
+    /** Fields shown last when open (the receipt's lines). */
+    children?: React.ReactNode;
 }
 
 const fieldClass = 'h-12 w-full px-4 text-[16px] rounded-[14px] border-none bg-chip text-on-surface outline-none focus:ring-2 focus:ring-accent';
@@ -26,6 +32,7 @@ const moreOptionsSummary = (
     events: Event[],
     language: 'en' | 'sr',
     t: typeof TRANSLATIONS['en'],
+    s: EntryStrings,
 ): string => {
     const { edited } = form;
     const isTransfer = form.kind === 'transfer';
@@ -35,7 +42,7 @@ const moreOptionsSummary = (
         form.feeShown ? t.feeAmount.replace('{amount}', formatCurrency(form.feeShown, form.feeCurrency, language)) : undefined,
     ].filter((part): part is string => !!part);
     if (parts.length > 0) return parts.join(' · ');
-    return isTransfer ? t.moreOptionsHintTransfer : t.moreOptionsHint;
+    return [isTransfer ? s.moreHintTransfer : s.moreHint, edited.receiptData ? s.receipt : ''].filter(Boolean).join(', ');
 };
 
 export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
@@ -45,10 +52,12 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
     showMoreOptions,
     onToggle,
     language,
-    t
+    t,
+    s,
+    children,
 }) => {
     const { edited, setEdited, errors } = form;
-    const summary = moreOptionsSummary(form, people, events, language, t);
+    const summary = moreOptionsSummary(form, people, events, language, t, s);
     const isTransfer = form.kind === 'transfer';
     return (
         <>
@@ -56,15 +65,14 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                 type="button"
                 onClick={onToggle}
                 aria-expanded={showMoreOptions}
-                className="flex h-11 w-full min-w-0 items-center gap-2 rounded-[14px] px-1 text-[15px] text-muted transition-colors hover:text-on-surface"
+                className="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-1.5 text-left text-[14px] text-muted"
             >
-                <span className="shrink-0 font-medium">{t.moreOptions}</span>
-                {!showMoreOptions && (
-                    <span className="min-w-0 flex-1 truncate text-right text-[13px] text-faint">{summary}</span>
-                )}
-                {showMoreOptions
-                    ? <ChevronUp size={16} aria-hidden="true" className="ml-auto shrink-0" />
-                    : <ChevronDown size={16} aria-hidden="true" className="shrink-0" />}
+                <SlidersHorizontal size={17} aria-hidden="true" className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate">
+                    <b className="font-semibold text-on-surface">{s.more}</b>
+                    {!showMoreOptions && <span className="font-medium"> · {summary}</span>}
+                </span>
+                <ChevronDown size={17} aria-hidden="true" className={clsx('shrink-0 transition-transform duration-200', showMoreOptions && 'rotate-180')} />
             </button>
 
             <AnimatePresence initial={false}>
@@ -76,7 +84,8 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                         transition={{ duration: 0.2, ease: 'easeInOut' }}
                         className="overflow-hidden"
                     >
-                        <div className="space-y-4 pb-1">
+                        <div className="space-y-4 px-0.5 pb-1 pt-2">
+                            <TimeField date={edited.date} onChange={date => setEdited(prev => ({ ...prev, date }))} t={t} />
                             {!isTransfer && (
                                 <div>
                                     <label htmlFor="edit-tx-person" className="mb-1.5 block px-1 text-[13px] font-semibold text-muted">{t.person}</label>
@@ -131,7 +140,7 @@ export const MoreOptionsFields: React.FC<MoreOptionsFieldsProps> = ({
                                     </div>
                                 )}
                             </div>
-
+                            {children}
                         </div>
                     </m.div>
                 )}

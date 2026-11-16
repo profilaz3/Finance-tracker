@@ -34,7 +34,7 @@ describe('calculateEventSettlement', () => {
       people: [person('me', 'Me')],
       baseCurrency: 'EUR',
     }));
-    expect(html).toContain('Who Owes Who');
+    expect(html).toContain('pays Me');
     expect((html.match(/data-debt=/g) || []).length).toBe(2);
     expect(html).toContain('Unknown');
   });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { m } from 'motion/react';
 import { X, Image as ImageIcon, Check, Loader2, Users, Palette, Camera, AlertCircle } from 'lucide-react';
 import { Person, Event } from '../types';
@@ -31,6 +31,8 @@ interface EventCreationModalProps {
     onSave?: (updates: Partial<Event>) => void;
     /** Participants are the owner's people; guests see the list but cannot change it. */
     canEditParticipants?: boolean;
+    /** Open at "Who's going" (the event screen's Add people). */
+    focusPeople?: boolean;
 }
 
 const COLORS = [
@@ -48,8 +50,16 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
     event,
     onSave,
     canEditParticipants = true,
+    focusPeople = false,
 }) => {
     const isEdit = !!event;
+    const peopleRef = useRef<HTMLDivElement>(null);
+    // Add people opens the sheet scrolled to who is going, once it has rendered.
+    useEffect(() => {
+        if (!isOpen || !focusPeople) return;
+        const timer = window.setTimeout(() => peopleRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 260);
+        return () => window.clearTimeout(timer);
+    }, [isOpen, focusPeople]);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
@@ -362,7 +372,7 @@ export const EventCreationModal: React.FC<EventCreationModalProps> = ({
                     )}
 
                     {/* People */}
-                    <div>
+                    <div ref={peopleRef} className="scroll-mt-4">
                         <p className={clsx(label, 'flex items-center gap-1.5')}>
                             <Users size={14} aria-hidden="true" /> {t.whosGoing}
                         </p>

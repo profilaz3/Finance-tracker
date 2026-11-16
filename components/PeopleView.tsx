@@ -32,6 +32,8 @@ interface PeopleViewProps {
     homeHeader?: AppState['homeHeader'];
     /** Back to the Shared overview. */
     onBack?: () => void;
+    /** Open beside the list on wide windows: that card is marked. */
+    selectedPersonId?: string;
 }
 
 type Filter = 'all' | 'owe-you' | 'you-owe';
@@ -60,10 +62,12 @@ interface PersonCardProps {
     reminded: boolean;
     onRequest?: () => void;
     onPaidBack?: () => void;
+    /** Open beside the list on wide windows. */
+    selected?: boolean;
 }
 
 /** One person: what is open between you, and the next thing to do about it. */
-const PersonCard: React.FC<PersonCardProps> = ({ line, language, onOpen, onRemind, reminded, onRequest, onPaidBack }) => {
+const PersonCard: React.FC<PersonCardProps> = ({ line, language, onOpen, onRemind, reminded, onRequest, onPaidBack, selected = false }) => {
     const t = TRANSLATIONS[language];
     const s = SHARED_STRINGS[language];
     const { person, balances } = line;
@@ -72,8 +76,13 @@ const PersonCard: React.FC<PersonCardProps> = ({ line, language, onOpen, onRemin
     const status = !first ? t.settled : owesYou ? t.owesYou : s.youOweThem;
     const hasActions = !!(onRemind || onRequest || onPaidBack);
     return (
-        <li className="overflow-hidden rounded-[22px] bg-[var(--paper-tile)] shadow-[var(--paper-tile-shadow)]">
-            <button type="button" onClick={onOpen} className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left active:bg-chip">
+        <li
+            className={clsx(
+                'overflow-hidden rounded-[22px] bg-[var(--paper-tile)] shadow-[var(--paper-tile-shadow)]',
+                selected && 'ring-[2.5px] ring-accent ring-offset-2 ring-offset-[var(--paper-bg)]',
+            )}
+        >
+            <button type="button" onClick={onOpen} aria-current={selected ? 'true' : undefined} className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left active:bg-chip">
                 <PersonAvatar person={person} size={44} />
                 <span className="min-w-0 flex-1">
                     <span className="block truncate text-[16.5px] font-semibold">{person.name}</span>
@@ -147,6 +156,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
     selfId,
     homeHeader,
     onBack,
+    selectedPersonId,
 }) => {
     const t = TRANSLATIONS[language];
     const s = SHARED_STRINGS[language];
@@ -268,7 +278,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
             action={!query && filter === 'all' ? { label: t.addPerson, onClick: onAddPerson } : undefined}
         />
     ) : (
-        <ul className={clsx('flex flex-col gap-2.5', !embedded && 'lg:grid lg:grid-cols-2 lg:items-start')}>
+        // Two columns when the page itself is wide (not when it sits beside an open person).
+        <ul className={clsx('flex flex-col gap-2.5', !embedded && '@2xl:grid @2xl:grid-cols-2 @2xl:items-start')}>
             {shown.map(line => {
                 const first = line.balances[0];
                 const owedToYou = line.balances.some(([, amount]) => amount > 0);
@@ -278,6 +289,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         line={line}
                         language={language}
                         onOpen={() => onSelectPerson(line.person)}
+                        selected={line.person.id === selectedPersonId}
                         reminded={reminded === line.person.id}
                         onRemind={owedToYou && first[1] > 0 ? () => void remind(line) : undefined}
                         onRequest={owedToYou && first[1] > 0 ? () => request(line) : undefined}
@@ -333,6 +345,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                     <Search size={17} className="pointer-events-none absolute left-3.5 text-muted" aria-hidden="true" />
                     <input
                         type="search"
+                        data-shortcut-search=""
                         placeholder={t.searchPeople}
                         aria-label={t.searchPeople}
                         value={query}
@@ -360,6 +373,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                 <input
                                     ref={searchRef}
                                     type="search"
+                                    data-shortcut-search=""
                                     placeholder={s.search}
                                     aria-label={s.search}
                                     value={query}
@@ -378,7 +392,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                     ) : (
                         <>
                             <h1 className={clsx('min-w-0 flex-1 truncate text-[28px] font-bold tracking-[-0.03em]', !onBack && 'pl-1')}>{t.people}</h1>
-                            <HeroIconButton icon={Search} label={s.search} onClick={() => setSearchOpen(true)} />
+                            <HeroIconButton icon={Search} label={s.search} onClick={() => setSearchOpen(true)} data-shortcut-search-open="" />
                             <HeroMenu
                                 label={t.moreActions}
                                 icon={MoreHorizontal}
@@ -416,7 +430,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                 </div>
             </ScreenHero>
 
-            <div className="screen-sheet flex flex-col gap-2.5">
+            <div className="screen-sheet @container flex flex-col gap-2.5">
                 {toolbar}
                 {list}
                 {selfRow}

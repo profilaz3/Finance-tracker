@@ -19,6 +19,8 @@ import { Segmented } from '../ui/Segmented';
 interface AppearanceSettingsProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
+  /** Settings has its own Language and currency page; the Appearance sheet keeps language here. */
+  hideLanguage?: boolean;
 }
 
 type Strings = (typeof TRANSLATIONS)['en'];
@@ -196,7 +198,7 @@ const CustomAccentPanel: React.FC<{
 };
 
 /** Mode, theme, accent, glass and language. Used in Settings and in the Appearance sheet. */
-export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, setState }) => {
+export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, setState, hideLanguage }) => {
   const t = TRANSLATIONS[state.language];
   const appearance = resolveAppearance(state.appearance);
   const systemDark = useSystemDark();
@@ -322,7 +324,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, s
         <p className="text-[13px] text-muted">{t.glassHint}</p>
       </section>
 
-      <section className="flex flex-col gap-2">
+      {!hideLanguage && <section className="flex flex-col gap-2">
         <h3 className="text-[13px] font-semibold text-muted">{t.languageLabel}</h3>
         <Segmented<AppState['language']>
           ariaLabel={t.languageLabel}
@@ -333,7 +335,7 @@ export const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ state, s
             { value: 'sr', label: 'Srpski' },
           ]}
         />
-      </section>
+      </section>}
     </div>
   );
 };

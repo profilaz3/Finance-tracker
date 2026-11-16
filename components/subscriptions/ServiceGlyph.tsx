@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ServiceType } from '../../utils/aiCleanup';
-import { IconTile } from '../ui/IconTile';
+import { IconTile, type IconTileProps } from '../ui/IconTile';
 
 const SERVICE_STYLE: Record<ServiceType, { icon: LucideIcon; color: string }> = {
   streaming: { icon: Tv, color: '#DC2626' },
@@ -42,7 +42,14 @@ const SERVICE_STYLE: Record<ServiceType, { icon: LucideIcon; color: string }> = 
 export const serviceColor = (service: ServiceType): string => (SERVICE_STYLE[service] ?? SERVICE_STYLE.other).color;
 
 /** A subscription's service type on the shared icon tile. */
-export const ServiceGlyph: React.FC<{ service: ServiceType; size?: number; badge?: React.ReactNode }> = ({ service, size = 40, badge }) => {
+export const ServiceGlyph: React.FC<{
+  service: ServiceType;
+  size?: number;
+  badge?: React.ReactNode;
+  shape?: IconTileProps['shape'];
+  tone?: IconTileProps['tone'];
+  className?: string;
+}> = ({ service, size = 40, badge, shape, tone, className }) => {
   const { icon, color } = SERVICE_STYLE[service] ?? SERVICE_STYLE.other;
-  return <IconTile icon={icon} color={color} size={size} badge={badge} />;
+  return <IconTile icon={icon} color={color} size={size} badge={badge} shape={shape} tone={tone} className={className} />;
 };

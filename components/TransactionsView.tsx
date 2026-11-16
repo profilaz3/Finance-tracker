@@ -1,15 +1,28 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useContext, useMemo, useState } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
 import { m, Variants } from 'motion/react';
 import { exportToCSV } from '../services/storageService';
-import { AppState, Transaction, TransactionType } from '../types';
+import { AppState, Category, Transaction, TransactionType } from '../types';
 import { isAIAvailable, ParsedTransaction } from '../services/aiService';
 import { parseWithHabits } from '../services/smartEntry';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TRANSLATIONS } from '../constants';
 import { TransactionsToolbar } from './transactions/TransactionsToolbar';
+import { ActivityDetailsPane } from './transactions/ActivityDetailsPane';
+import { BulkCategorySheet } from './transactions/BulkCategorySheet';
+import { TransactionsTable } from './transactions/TransactionsTable';
+import { List, Table2 } from 'lucide-react';
+import { CONFIG } from '../config';
+import { ACTIVITY_STRINGS } from './transactions/activityStrings';
+import { recategorizableKinds, recategorize, undoRecategorize, type PreviousCategory } from '../domain/bulkCategory';
+import { commitTransactionChanges } from '../services/transactionCommit';
+import { pluralForm } from '../utils/plural';
+import { fill } from './home/parts';
+import { localizeCategoryName } from '../utils/systemText';
+import { DETAILS_PANE_QUERY } from './transaction-details/detailsBus';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { PageActiveContext } from '../hooks/useBackLayer';
 import { TransactionsList } from './transactions/TransactionsList';
-import { TransactionsFab } from './transactions/TransactionsFab';
 import { DuplicateHintBanner } from './transactions/DuplicateHintBanner';
 import { ActivityHero } from './transactions/ActivityHero';
 import { filterTransactions, groupTransactionsByDay } from '../utils/transactionFilters';
@@ -36,9 +49,15 @@ interface TransactionsViewProps {
   onSaveAsTemplate?: (transaction: Transaction) => void;
   onBatchDelete?: (ids: string[]) => void;
   onAddTransaction?: () => void;
-  onOpenSplit?: () => void;
   onOpenCalendar?: () => void;
+  /** The entry open in the side pane (wide windows). */
+  paneDetailsId?: string | null;
+  /** For changing the category of the selected entries (with undo). */
+  setState?: React.Dispatch<React.SetStateAction<AppState>>;
+  onToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info', action?: { label: string; onClick: () => void }) => void;
 }
+
+const TABLE_VIEW_KEY = `${CONFIG.STORAGE_KEY}:activity-view`;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -58,8 +77,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onSaveAsTemplate,
   onBatchDelete,
   onAddTransaction,
-  onOpenSplit,
   onOpenCalendar,
+  paneDetailsId = null,
+  setState,
+  onToast,
 }) => {
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
@@ -76,32 +97,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [isFabOpen, setIsFabOpen] = useState(false);
-  const [isFabVisible, setIsFabVisible] = useState(true);
   const [dismissedDuplicateGroupIds, setDismissedDuplicateGroupIds] = useState<Set<string>>(new Set());
-  const lastScrollTop = useRef(0);
   const aiAvailable = isAIAvailable();
-
-  // The page scrolls as one; the desktop add button hides while scrolling down.
-  useEffect(() => {
-    const scroller = document.getElementById('main-content');
-    if (!scroller) return;
-    const onScroll = () => {
-      const scrollTop = scroller.scrollTop;
-      const scrollDelta = scrollTop - lastScrollTop.current;
-      if (Math.abs(scrollDelta) > 5) {
-        if (scrollDelta > 0 && scrollTop > 50) {
-          setIsFabVisible(false);
-          setIsFabOpen(false);
-        } else {
-          setIsFabVisible(true);
-        }
-      }
-      lastScrollTop.current = scrollTop;
-    };
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => scroller.removeEventListener('scroll', onScroll);
-  }, []);
 
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
@@ -237,6 +234,44 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     exitSelectionMode();
   };
 
+  // Change category of the selected entries: one save, a toast with Undo.
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const categoryKinds = useMemo(
+    () => (isCategorySheetOpen ? recategorizableKinds(state.transactions, selectedIds) : new Set<TransactionType>()),
+    [isCategorySheetOpen, state.transactions, selectedIds],
+  );
+  const applyCategory = async (category: Category) => {
+    if (!setState) return;
+    const ids = new Set(selectedIds);
+    const s = ACTIVITY_STRINGS[state.language];
+    const t = TRANSLATIONS[state.language];
+    let skipped = 0;
+    let previous = new Map<string, PreviousCategory>();
+    setIsCategorySheetOpen(false);
+    exitSelectionMode();
+    const { rows, synced } = await commitTransactionChanges(setState, current => {
+      const result = recategorize(current, ids, category);
+      skipped = result.skipped;
+      previous = result.previous;
+      return result.rows;
+    });
+    const skippedNote = skipped > 0 ? fill(s.skippedNote, { count: skipped }) : '';
+    if (rows.length === 0) {
+      onToast?.([s.movedNone, skippedNote].filter(Boolean).join(' · '), 'info');
+      return;
+    }
+    const form = pluralForm(rows.length, state.language);
+    const moved = fill(form === 'one' ? s.movedOne : form === 'few' ? s.movedFew : s.movedMany, {
+      count: rows.length,
+      name: localizeCategoryName(category, state.language),
+    });
+    // Saved here but not on the server (offline queue or a refusal): say so instead of claiming success.
+    onToast?.(synced ? [moved, skippedNote].filter(Boolean).join(' · ') : t.cleanupSyncFailed, synced ? 'success' : 'warning', {
+      label: t.undo,
+      onClick: () => void commitTransactionChanges(setState, current => undoRecategorize(current, previous, category.id)),
+    });
+  };
+
   const handleBatchExport = () => {
     const selectedTransactions = filteredTransactions.filter(transaction => selectedIds.has(transaction.id));
     exportToCSV(selectedTransactions, state.categories, state.accounts, state.people);
@@ -271,94 +306,172 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const groupedData = useMemo(() => groupTransactionsByDay(filteredTransactions, state.language), [filteredTransactions, state.language]);
   const groupCounts = useMemo(() => groupedData.map(group => group.transactions.length), [groupedData]);
   const flatTransactions = useMemo(() => groupedData.flatMap(group => group.transactions), [groupedData]);
+  const entryIds = useMemo(() => flatTransactions.map(transaction => transaction.id), [flatTransactions]);
+  // Wide windows: the open entry sits beside the list instead of popping up. A parked or peeking
+  // copy of this page never takes the pane.
+  const pageActive = useContext(PageActiveContext);
+  const wide = useMediaQuery(DETAILS_PANE_QUERY) && pageActive;
+  // Wide windows can show the list as a table instead (remembered on this device); the table uses
+  // the full width, so there is no side pane with it and entries open as the pop-up card.
+  const [tableView, setTableView] = useState(() => {
+    try {
+      return localStorage.getItem(TABLE_VIEW_KEY) === 'table';
+    } catch {
+      return false;
+    }
+  });
+  const toggleTableView = () => setTableView(current => {
+    try {
+      localStorage.setItem(TABLE_VIEW_KEY, current ? 'list' : 'table');
+    } catch {
+      // Private window: the choice lasts until reload.
+    }
+    return !current;
+  });
+  const showTable = wide && tableView;
+  const twoPane = wide && !tableView;
+  const warnIfNotSynced = ({ rows, synced }: { rows: Transaction[]; synced: boolean }) => {
+    if (rows.length > 0 && !synced) onToast?.(TRANSLATIONS[state.language].cleanupSyncFailed, 'warning');
+  };
+  const changeCategory = (transaction: Transaction, categoryId: string) => {
+    const category = state.categories.find(item => item.id === categoryId);
+    if (!setState || !category) return;
+    void commitTransactionChanges(setState, current => recategorize(current, new Set([transaction.id]), category).rows).then(warnIfNotSynced);
+  };
+  const changeWallet = (transaction: Transaction, accountId: string) => {
+    if (!setState) return;
+    void commitTransactionChanges(setState, current =>
+      current.filter(item => item.id === transaction.id && item.accountId !== accountId).map(item => ({ ...item, accountId }))).then(warnIfNotSynced);
+  };
 
   return (
     <m.div variants={containerVariants} initial="hidden" animate="visible" exit="exit" className="mx-auto max-w-[920px] pb-6">
-      <ActivityHero
-        state={state}
-        onOpenCalendar={() => onOpenCalendar?.()}
-        onSelect={() => setIsSelectionMode(true)}
-        onExport={() => setIsExportModalOpen(true)}
-        onPrintableReport={handlePdfExport}
-        isExportingPdf={isExportingPdf}
-      />
-
-      <div className="screen-sheet">
-        <TransactionsToolbar
-          state={state}
-          filterType={filterType}
-          setFilterType={setFilterType}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          smartInput={smartInput}
-          setSmartInput={(value) => {
-            setSmartInput(value);
-            setParseError(null);
-          }}
-          isParsing={isParsing}
-          parseError={parseError}
-          aiAvailable={aiAvailable}
-          inputMode={inputMode}
-          setInputMode={setInputMode}
-          isSelectionMode={isSelectionMode}
-          selectedCount={selectedIds.size}
-          allSelected={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
-          hasSelection={selectedIds.size > 0}
-          toggleSelectAll={toggleSelectAll}
-          exitSelectionMode={exitSelectionMode}
-          handleBatchExport={handleBatchExport}
-          handleBatchDelete={handleBatchDelete}
-          onSmartParse={handleSmartParse}
-          filterAccount={filterAccount}
-          setFilterAccount={setFilterAccount}
-          filterCategory={filterCategory}
-          setFilterCategory={setFilterCategory}
-          commonFilters={commonFilters}
-          activeCommonFilterIds={activeCommonFilterIds}
-          onApplyCommonFilter={applyCommonFilter}
-          filterDateFrom={filterDateFrom}
-          setFilterDateFrom={setFilterDateFrom}
-          filterDateTo={filterDateTo}
-          setFilterDateTo={setFilterDateTo}
-          activeFilterCount={activeFilterCount}
-          clearAllFilters={clearAllFilters}
-          resultCount={filteredTransactions.length}
-        />
-
-        {!isSelectionMode && !hasSearchOrFilters && duplicateGroups.length > 0 && (
-          <DuplicateHintBanner
-            language={state.language}
-            groups={duplicateGroups}
-            onReviewGroup={reviewDuplicateGroup}
-            onDismissGroup={(groupId) => {
-              setDismissedDuplicateGroupIds(prev => new Set(prev).add(groupId));
-            }}
+      <div className={twoPane ? 'flex items-start gap-4' : undefined}>
+        <div className={twoPane ? 'min-w-0 flex-1' : undefined}>
+          <ActivityHero
+            state={state}
+            onOpenCalendar={() => onOpenCalendar?.()}
+            onSelect={() => setIsSelectionMode(true)}
+            onExport={() => setIsExportModalOpen(true)}
+            onPrintableReport={handlePdfExport}
+            isExportingPdf={isExportingPdf}
           />
-        )}
 
-        <TransactionsList
-          state={state}
-          filteredTransactions={filteredTransactions}
-          hasAnyTransactions={hasAnyTransactions}
-          hasSearchOrFilters={hasSearchOrFilters}
-          searchQuery={searchQuery}
-          clearAllFilters={clearAllFilters}
-          onAddTransaction={onAddTransaction}
-          groupedData={groupedData}
-          groupCounts={groupCounts}
-          flatTransactions={flatTransactions}
-          isSelectionMode={isSelectionMode}
-          selectedIds={selectedIds}
-          toggleSelection={toggleSelection}
-          setSelectedTransaction={setSelectedTransaction}
-          setIsEditModalOpen={setIsEditModalOpen}
-          setIsSplitModalOpen={setIsSplitModalOpen}
-          deleteTransaction={deleteTransaction}
-          onEditSplitTransaction={onEditSplitTransaction}
-          onDuplicateTransaction={onDuplicateTransaction}
-          onSaveAsTemplate={onSaveAsTemplate}
-        />
+          <div className="screen-sheet">
+            <TransactionsToolbar
+              state={state}
+              filterType={filterType}
+              setFilterType={setFilterType}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              smartInput={smartInput}
+              setSmartInput={(value) => {
+                setSmartInput(value);
+                setParseError(null);
+              }}
+              isParsing={isParsing}
+              parseError={parseError}
+              aiAvailable={aiAvailable}
+              inputMode={inputMode}
+              setInputMode={setInputMode}
+              isSelectionMode={isSelectionMode}
+              selectedCount={selectedIds.size}
+              allSelected={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
+              hasSelection={selectedIds.size > 0}
+              toggleSelectAll={toggleSelectAll}
+              exitSelectionMode={exitSelectionMode}
+              handleBatchExport={handleBatchExport}
+              handleBatchDelete={handleBatchDelete}
+              handleBatchCategory={setState ? () => setIsCategorySheetOpen(true) : undefined}
+              viewToggle={wide && setState ? (
+                <button
+                  type="button"
+                  onClick={toggleTableView}
+                  aria-label={tableView ? ACTIVITY_STRINGS[state.language].showList : ACTIVITY_STRINGS[state.language].showTable}
+                  title={tableView ? ACTIVITY_STRINGS[state.language].showList : ACTIVITY_STRINGS[state.language].showTable}
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--paper-tile)] shadow-[var(--paper-tile-shadow)]"
+                >
+                  {tableView ? <List size={19} aria-hidden="true" /> : <Table2 size={19} aria-hidden="true" />}
+                </button>
+              ) : undefined}
+              onSmartParse={handleSmartParse}
+              filterAccount={filterAccount}
+              setFilterAccount={setFilterAccount}
+              filterCategory={filterCategory}
+              setFilterCategory={setFilterCategory}
+              commonFilters={commonFilters}
+              activeCommonFilterIds={activeCommonFilterIds}
+              onApplyCommonFilter={applyCommonFilter}
+              filterDateFrom={filterDateFrom}
+              setFilterDateFrom={setFilterDateFrom}
+              filterDateTo={filterDateTo}
+              setFilterDateTo={setFilterDateTo}
+              activeFilterCount={activeFilterCount}
+              clearAllFilters={clearAllFilters}
+              resultCount={filteredTransactions.length}
+            />
+
+            {!isSelectionMode && !hasSearchOrFilters && duplicateGroups.length > 0 && (
+              <DuplicateHintBanner
+                language={state.language}
+                groups={duplicateGroups}
+                onReviewGroup={reviewDuplicateGroup}
+                onDismissGroup={(groupId) => {
+                  setDismissedDuplicateGroupIds(prev => new Set(prev).add(groupId));
+                }}
+              />
+            )}
+
+            {/* The table needs rows; with none the list shows its empty states. */}
+            {showTable && filteredTransactions.length > 0 ? (
+              <TransactionsTable
+                state={state}
+                transactions={filteredTransactions}
+                isSelectionMode={isSelectionMode}
+                selectedIds={selectedIds}
+                toggleSelection={toggleSelection}
+                onChangeCategory={changeCategory}
+                onChangeWallet={changeWallet}
+              />
+            ) : (
+            <TransactionsList
+              state={state}
+              filteredTransactions={filteredTransactions}
+              hasAnyTransactions={hasAnyTransactions}
+              hasSearchOrFilters={hasSearchOrFilters}
+              searchQuery={searchQuery}
+              clearAllFilters={clearAllFilters}
+              onAddTransaction={onAddTransaction}
+              groupedData={groupedData}
+              groupCounts={groupCounts}
+              flatTransactions={flatTransactions}
+              isSelectionMode={isSelectionMode}
+              selectedIds={selectedIds}
+              toggleSelection={toggleSelection}
+              setSelectedTransaction={setSelectedTransaction}
+              setIsEditModalOpen={setIsEditModalOpen}
+              setIsSplitModalOpen={setIsSplitModalOpen}
+              deleteTransaction={deleteTransaction}
+              onEditSplitTransaction={onEditSplitTransaction}
+              onDuplicateTransaction={onDuplicateTransaction}
+              onSaveAsTemplate={onSaveAsTemplate}
+              activeId={twoPane ? paneDetailsId : null}
+            />
+            )}
+          </div>
+        </div>
+        {twoPane && <ActivityDetailsPane language={state.language} selectedId={paneDetailsId} entryIds={entryIds} />}
       </div>
+
+      <BulkCategorySheet
+        isOpen={isCategorySheetOpen}
+        onClose={() => setIsCategorySheetOpen(false)}
+        categories={state.categories}
+        kinds={categoryKinds}
+        count={selectedIds.size}
+        language={state.language}
+        onPick={category => void applyCategory(category)}
+      />
 
       <Suspense fallback={null}>
         <ExportModal
@@ -383,15 +496,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         confirmLabel={TRANSLATIONS[state.language].delete}
         cancelLabel={TRANSLATIONS[state.language].cancel}
         type="danger"
-      />
-
-      <TransactionsFab
-        isVisible={isFabVisible}
-        isOpen={isFabOpen}
-        setIsOpen={setIsFabOpen}
-        language={state.language}
-        onAddTransaction={onAddTransaction}
-        onOpenSplit={onOpenSplit}
       />
     </m.div>
   );

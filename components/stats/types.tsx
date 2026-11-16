@@ -1,5 +1,5 @@
 import React from 'react';
-import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction, Event } from '../../types';
+import { Transaction, Category, Currency, ExchangeRates, Account, RecurringTransaction, Event, HomeHeader, View } from '../../types';
 import { isTransferTransaction } from '../../domain/money';
 import { formatDate, getAppLanguage, getIntlLocale, type AppLanguage } from '../../utils/locale';
 import { Segmented } from '../ui/Segmented';
@@ -17,6 +17,10 @@ export interface StatsProps {
   totalExpense: number;
   /** Lets the anomaly explanations mention trips and events of the period. */
   events?: Event[];
+  /** The Home header settings: the screen header takes its colour from them. */
+  homeHeader?: HomeHeader;
+  /** Switches between the Numbers and Ask AI sides of Insights. */
+  onNavigate?: (view: View) => void;
 }
 
 // ─── Internal Time-Frame Types ──────────────────────────────────────────────

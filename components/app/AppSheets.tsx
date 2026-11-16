@@ -3,7 +3,6 @@ import type { AppState, TransactionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { ParsedTransaction } from '../../services/aiService';
 import { lazyWithReload } from '../../utils/lazyWithReload';
-import { GlassSheet } from '../ui/GlassSheet';
 import { useRatesRequests } from '../rates/ratesBus';
 import { useBackLayer } from '../../hooks/useBackLayer';
 
@@ -11,6 +10,8 @@ const ExportModal = lazyWithReload(() => import('../ExportModal').then(m => ({ d
 // Lazy: the appearance sheet opens from the profile menu, so its controls stay out of the entry chunk.
 const AppearanceSettings = lazyWithReload(() => import('../settings/AppearanceSettings').then(m => ({ default: m.AppearanceSettings })));
 const RatesSheet = lazyWithReload(() => import('../rates/RatesSheet').then(m => ({ default: m.RatesSheet })));
+// Lazy so the sheet and its drag code stay out of startup; mounted from the first open on (exit animation).
+const GlassSheet = lazyWithReload(() => import('../ui/GlassSheet').then(m => ({ default: m.GlassSheet })));
 // Lazy (entry chunk budget): preloaded on idle so the first tap opens without a wait.
 const AddMenu = lazyWithReload(() => import('./AddMenu').then(m => ({ default: m.AddMenu })));
 const ProfileMenu = lazyWithReload(() => import('./ProfileMenu').then(m => ({ default: m.ProfileMenu })));
@@ -64,6 +65,11 @@ export const AppSheets: React.FC<AppSheetsProps> = ({
 }) => {
   const t = TRANSLATIONS[state.language];
   // Exchange rates sheet: loaded on first open (Home rates block, Settings), then kept for its exit animation.
+  // The Appearance sheet's code loads on its first open and stays mounted for its exit animation.
+  const [appearanceMounted, setAppearanceMounted] = useState(false);
+  useEffect(() => {
+    if (modals.isAppearanceSheetOpen) setAppearanceMounted(true);
+  }, [modals.isAppearanceSheetOpen]);
   const [ratesMounted, setRatesMounted] = useState(false);
   const [isRatesOpen, setIsRatesOpen] = useState(false);
   useRatesRequests(() => {
@@ -134,16 +140,20 @@ export const AppSheets: React.FC<AppSheetsProps> = ({
           />
         </Suspense>
       )}
-      <GlassSheet
-        isOpen={modals.isAppearanceSheetOpen}
-        onClose={() => modals.setIsAppearanceSheetOpen(false)}
-        title={t.appearanceLabel}
-        closeLabel={t.close}
-      >
-        <Suspense fallback={<div className="min-h-[320px]" aria-hidden="true" />}>
-          <AppearanceSettings state={state} setState={setState} />
+      {appearanceMounted && (
+        <Suspense fallback={null}>
+          <GlassSheet
+            isOpen={modals.isAppearanceSheetOpen}
+            onClose={() => modals.setIsAppearanceSheetOpen(false)}
+            title={t.appearanceLabel}
+            closeLabel={t.close}
+          >
+            <Suspense fallback={<div className="min-h-[320px]" aria-hidden="true" />}>
+              <AppearanceSettings state={state} setState={setState} />
+            </Suspense>
+          </GlassSheet>
         </Suspense>
-      </GlassSheet>
+      )}
       {modals.isExportModalOpen && (
         <Suspense fallback={null}>
           <ExportModal isOpen onClose={() => modals.setIsExportModalOpen(false)} state={state} />

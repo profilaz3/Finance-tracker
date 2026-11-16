@@ -67,7 +67,6 @@ describe('repo rules contracts', () => {
     expect(router).toContain('duplicateTransactionDraft');
     expect(transactionsView).toContain("import { TransactionsToolbar } from './transactions/TransactionsToolbar'");
     expect(transactionsView).toContain("import { TransactionsList } from './transactions/TransactionsList'");
-    expect(transactionsView).toContain("import { TransactionsFab } from './transactions/TransactionsFab'");
     expect(transactionsView).toContain("import { filterTransactions, groupTransactionsByDay } from '../utils/transactionFilters'");
     expect(transactionsView).not.toContain('const groupTransactionsByDay =');
   });

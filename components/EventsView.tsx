@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { Plus, UserPlus, Users, MoreHorizontal } from 'lucide-react';
 import { Illustration } from './ui/Illustration';
 import { AppState, Event, Person } from '../types';
-import { EventCoverArt, EventStatusChip, ParticipantStack, formatEventDates } from './EventCard';
+import { EventCoverArt, EventStatusChip, ParticipantStack, eventRange } from './EventCard';
 import { sortEvents, eventBannerStyle } from '../utils/eventVisuals';
 import { resolveEventParticipants } from '../utils/eventParticipants';
 import { TRANSLATIONS } from '../constants';
@@ -25,33 +25,23 @@ interface EventsViewProps {
     onOpenPeople: () => void;
     onAddPerson: () => void;
     onSelectPerson: (person: Person) => void;
+    /** Beside the open event or person on wide windows: that card is marked. */
+    selectedEventId?: string;
+    selectedPersonId?: string;
 }
 
-/** A short date range for a dated event (the locale's own range format), else the event card's wording. */
-export const eventRange = (event: Pick<Event, 'startDate' | 'endDate'>, language: AppLanguage): string => {
-    const t = TRANSLATIONS[language];
-    if (event.startDate && event.endDate) {
-        const start = new Date(event.startDate);
-        const end = new Date(event.endDate);
-        if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-            try {
-                return new Intl.DateTimeFormat(getIntlLocale(language), { day: 'numeric', month: 'short' }).formatRange(start, end);
-            } catch {
-                // Fall through to the card wording.
-            }
-        }
-    }
-    return formatEventDates(event, t, language);
-};
+/** The ring on the card whose event or person is open beside the list. */
+const SELECTED_RING = 'ring-[2.5px] ring-accent ring-offset-2 ring-offset-[var(--paper-bg)]';
 
 const isImage = (avatar?: string) => !!avatar && /^(data:|http)/.test(avatar);
 
 /** The event happening now: its cover, who is in it, what was spent and where you stand. */
-const NowCard: React.FC<{ event: Event; money: EventMoney; state: AppState; viewerUserId?: string | null; onOpen: () => void }> = ({
+const NowCard: React.FC<{ event: Event; money: EventMoney; state: AppState; viewerUserId?: string | null; selected?: boolean; onOpen: () => void }> = ({
     event,
     money: amounts,
     state,
     viewerUserId,
+    selected = false,
     onOpen,
 }) => {
     const t = TRANSLATIONS[state.language];
@@ -67,7 +57,11 @@ const NowCard: React.FC<{ event: Event; money: EventMoney; state: AppState; view
         <button
             type="button"
             onClick={onOpen}
-            className="relative flex min-h-[156px] w-full flex-col justify-between overflow-hidden rounded-[26px] p-4 text-left text-white shadow-[0_12px_28px_-14px_rgba(0,0,0,0.5)]"
+            aria-current={selected ? 'true' : undefined}
+            className={clsx(
+                'relative flex min-h-[156px] w-full flex-col justify-between overflow-hidden rounded-[26px] p-4 text-left text-white shadow-[0_12px_28px_-14px_rgba(0,0,0,0.5)]',
+                selected && SELECTED_RING,
+            )}
             style={eventBannerStyle(event)}
         >
             {event.imageUrl ? <img src={event.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <EventCoverArt eventId={event.id} />}
@@ -98,7 +92,7 @@ const NowCard: React.FC<{ event: Event; money: EventMoney; state: AppState; view
 };
 
 /** A small card per person in the People strip: what they owe you or you owe them. */
-const PersonChipCard: React.FC<{ line: PersonBalanceLine; language: AppLanguage; onOpen: () => void }> = ({ line, language, onOpen }) => {
+const PersonChipCard: React.FC<{ line: PersonBalanceLine; language: AppLanguage; selected?: boolean; onOpen: () => void }> = ({ line, language, selected = false, onOpen }) => {
     const t = TRANSLATIONS[language];
     const s = SHARED_STRINGS[language];
     const [first, ...others] = line.balances;
@@ -107,7 +101,11 @@ const PersonChipCard: React.FC<{ line: PersonBalanceLine; language: AppLanguage;
         <button
             type="button"
             onClick={onOpen}
-            className="flex w-[150px] shrink-0 snap-start flex-col items-start rounded-[22px] bg-[var(--paper-tile)] p-3.5 text-left shadow-[var(--paper-tile-shadow)]"
+            aria-current={selected ? 'true' : undefined}
+            className={clsx(
+                'flex w-[150px] shrink-0 snap-start flex-col items-start rounded-[22px] bg-[var(--paper-tile)] p-3.5 text-left shadow-[var(--paper-tile-shadow)]',
+                selected && SELECTED_RING,
+            )}
         >
             <Avatar name={person.name} color={person.color} image={isImage(person.avatar) ? person.avatar : undefined} size={38} />
             <span className="mt-2.5 block w-full truncate text-[15px] font-semibold">{person.name}</span>
@@ -126,7 +124,7 @@ const PersonChipCard: React.FC<{ line: PersonBalanceLine; language: AppLanguage;
     );
 };
 
-export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, onSelectEvent, onOpenPeople, onAddPerson, onSelectPerson }) => {
+export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, onSelectEvent, onOpenPeople, onAddPerson, onSelectPerson, selectedEventId, selectedPersonId }) => {
     const t = TRANSLATIONS[state.language];
     const s = SHARED_STRINGS[state.language];
     const tone = resolveHomeHeader(state.homeHeader).tone;
@@ -209,6 +207,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
                                 money={moneyByEvent.get(event.id) ?? { currency: state.baseCurrency, total: 0, mine: 0 }}
                                 state={state}
                                 viewerUserId={viewerUserId}
+                                selected={event.id === selectedEventId}
                                 onOpen={() => onSelectEvent(event)}
                             />
                         ))}
@@ -224,9 +223,15 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
                             </button>
                         )}
                     </div>
-                    <div className="scrollbar-none -mx-2 flex snap-x gap-2.5 overflow-x-auto px-2 pb-2">
+                    <div className="scrollbar-none -mx-2 -mt-1.5 flex snap-x gap-2.5 overflow-x-auto px-2 pb-2 pt-1.5">
                         {strip.map(line => (
-                            <PersonChipCard key={line.person.id} line={line} language={state.language} onOpen={() => onSelectPerson(line.person)} />
+                            <PersonChipCard
+                                key={line.person.id}
+                                line={line}
+                                language={state.language}
+                                selected={line.person.id === selectedPersonId}
+                                onOpen={() => onSelectPerson(line.person)}
+                            />
                         ))}
                         <button
                             type="button"
@@ -269,7 +274,15 @@ export const EventsView: React.FC<EventsViewProps> = ({ state, onCreateEvent, on
                                     : `${amounts.mine > 0 ? s.youreOwed : t.youOwe} ${money(Math.abs(amounts.mine), amounts.currency, state.language)}`;
                                 return (
                                     <li key={event.id} className={clsx(index < earlier.length - 1 && 'border-b border-hair')}>
-                                        <button type="button" onClick={() => onSelectEvent(event)} className="flex min-h-[68px] w-full items-center gap-3 py-2.5 pl-3.5 pr-4 text-left active:bg-chip">
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelectEvent(event)}
+                                            aria-current={event.id === selectedEventId ? 'true' : undefined}
+                                            className={clsx(
+                                                'flex min-h-[68px] w-full items-center gap-3 py-2.5 pl-3.5 pr-4 text-left',
+                                                event.id === selectedEventId ? 'bg-accent-soft' : 'active:bg-chip',
+                                            )}
+                                        >
                                             <span
                                                 aria-hidden="true"
                                                 className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] text-[17px] font-bold text-white"

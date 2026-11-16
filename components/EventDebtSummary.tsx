@@ -2,15 +2,13 @@ import React, { useMemo } from 'react';
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { Check, QrCode } from 'lucide-react';
 import { Illustration } from './ui/Illustration';
-import { getParticipantInitials } from '../utils/eventParticipants';
-import { stableColor } from '../utils/stableColor';
 import { openPaymentRequest } from './payments/paymentBus';
 import { Person, SharedExpense, Currency, ExchangeRates, EventDebt } from '../types';
 import { calculateEventSettlement } from '../domain/events';
 import { getTranslations } from '../utils/i18n';
 import { getAppLanguage } from '../utils/locale';
-import { money } from './home/parts';
 import { MOTION } from '../config';
+import { EVENT_STRINGS, eventAmount } from './event-detail/eventStrings';
 import { participantName, SELF_ID, type EventViewer } from '../domain/eventViewer';
 
 interface EventDebtSummaryProps {
@@ -51,6 +49,7 @@ export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({
 }) => {
     const t = getTranslations();
     const language = getAppLanguage();
+    const s = EVENT_STRINGS[language];
     const reduceMotion = useReducedMotion();
     const debts = useMemo(
         () => calculateEventSettlement(expenses || [], { currency: baseCurrency, rates }),
@@ -104,97 +103,77 @@ export const EventDebtSummary: React.FC<EventDebtSummaryProps> = ({
         );
     }
 
-    const face = (person: Pick<Person, 'name' | 'color' | 'avatar'>, self: boolean) => (
-        <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-bold text-white shadow-[0_0_0_2.5px_var(--paper-tile)]"
-            style={{ background: self && !person.avatar ? 'rgb(var(--accent-rgb))' : person.color || stableColor(person.name) }}
-            aria-hidden="true"
-        >
-            {person.avatar && /^(data:|http)/.test(person.avatar)
-                ? <img src={person.avatar} alt="" className="h-full w-full object-cover" />
-                : <span className={self ? 'text-on-accent' : undefined}>{getParticipantInitials(person.name)}</span>}
-        </span>
-    );
-
     const sentence = (debt: EventDebt) => {
         const from = resolvePerson(debt.from).name;
         const to = resolvePerson(debt.to).name;
-        if (isSelf(debt.from)) return t.settleYouPay.replace('{name}', to);
-        if (isSelf(debt.to)) return t.settlePaysYou.replace('{name}', from);
-        return t.settlePays.replace('{from}', from).replace('{to}', to);
+        if (isSelf(debt.from)) return s.youPay.replace('{name}', to);
+        if (isSelf(debt.to)) return s.paysYou.replace('{name}', from);
+        return s.pays.replace('{from}', from).replace('{to}', to);
     };
 
     return (
-        <div className="flex flex-col gap-1">
-            <h4 className="text-[12px] font-semibold uppercase tracking-wide text-muted">{t.whoOwesWho}</h4>
-            <p className="text-[12px] text-faint">{t.settleUpHint}</p>
-            <ul className="flex flex-col">
-                <AnimatePresence initial={false}>
-                    {debts.map((debt, index) => {
-                        const fromPerson = resolvePerson(debt.from);
-                        const toPerson = resolvePerson(debt.to);
-                        const youPay = isSelf(debt.from);
-                        const youGet = isSelf(debt.to);
-                        return (
-                            <m.li
-                                key={debtKey(debt)}
-                                data-debt={debtKey(debt)}
-                                layout={!reduceMotion}
-                                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 40, transition: { duration: 0.2 } }}
-                                // Below sm the buttons take their own line, so the names and amount always fit.
-                                className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:flex-nowrap ${index < debts.length - 1 ? 'border-b border-hair' : ''}`}
-                            >
-                                <span className="relative flex shrink-0 items-center" aria-hidden="true">
-                                    {face(fromPerson, youPay)}
-                                    <span className={`mx-0.5 flex w-4 items-center ${youPay ? 'text-neg' : youGet ? 'text-pos' : 'text-faint'}`}>
-                                        <span className="h-0 flex-1 border-t-2 border-dashed border-current opacity-70" />
-                                        <svg width="7" height="10" viewBox="0 0 7 10" className="-ml-0.5 shrink-0"><path d="M1.5 1.5 5.5 5l-4 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                    </span>
-                                    {face(toPerson, youGet)}
+        <ul className="flex flex-col">
+            <AnimatePresence initial={false}>
+                {debts.map((debt, index) => {
+                    const fromPerson = resolvePerson(debt.from);
+                    const youPay = isSelf(debt.from);
+                    const youGet = isSelf(debt.to);
+                    const amount = eventAmount(debt.amount, debt.currency, language);
+                    return (
+                        <m.li
+                            key={debtKey(debt)}
+                            data-debt={debtKey(debt)}
+                            layout={!reduceMotion}
+                            initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 40, transition: { duration: 0.2 } }}
+                            // The buttons drop to their own line when the row is too narrow, so the sentence and amount always fit.
+                            className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-3 ${index < debts.length - 1 ? 'border-b border-hair' : ''}`}
+                        >
+                            {/* Who pays whom over the amount, so the buttons keep their room on a phone. */}
+                            <span className="flex min-w-0 flex-1 flex-col">
+                                <span className="break-words text-[14.5px] font-medium leading-snug text-muted">{sentence(debt)}</span>
+                                <span className={`whitespace-nowrap text-[18px] font-bold tabular-nums tracking-[-0.2px] ${youPay ? 'text-neg' : youGet ? 'text-pos' : ''}`}>
+                                    {amount}
                                 </span>
-                                <span className="flex min-w-0 flex-1 flex-col">
-                                    <span className="break-words text-[14px] font-semibold leading-snug">{sentence(debt)}</span>
-                                    <span className={`whitespace-nowrap text-[16px] font-bold tabular-nums ${youPay ? 'text-neg' : youGet ? 'text-pos' : ''}`}>
-                                        {money(debt.amount, debt.currency, language, true)}
-                                    </span>
-                                </span>
-                                {onMarkPaid && (
-                                <span className="flex w-full shrink-0 justify-end gap-2 sm:w-auto">
-                                {youGet && (
-                                    <button
-                                        type="button"
-                                        onClick={() => openPaymentRequest({
-                                            amount: debt.amount,
-                                            currency: debt.currency,
-                                            payerName: fromPerson.name,
-                                            purpose: requestPurpose,
-                                            onSettled: ({ full, amount }) => onMarkPaid(full ? debt : { ...debt, amount }),
-                                        })}
-                                        aria-label={`${t.payRequest}: ${fromPerson.name}, ${money(debt.amount, debt.currency, language, true)}`}
-                                        title={t.payRequest}
-                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
-                                    >
-                                        <QrCode size={16} strokeWidth={2.4} aria-hidden="true" />
-                                    </button>
-                                )}
+                            </span>
+                            {onMarkPaid && (
+                                <span className="ml-auto flex shrink-0 gap-2">
+                                    {youGet && (
+                                        <button
+                                            type="button"
+                                            onClick={() => openPaymentRequest({
+                                                amount: debt.amount,
+                                                currency: debt.currency,
+                                                payerName: fromPerson.name,
+                                                purpose: requestPurpose,
+                                                onSettled: ({ full, amount: paid }) => onMarkPaid(full ? debt : { ...debt, amount: paid }),
+                                            })}
+                                            aria-label={`${t.payRequest}: ${fromPerson.name}, ${amount}`}
+                                            className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[14px] font-semibold text-on-accent"
+                                        >
+                                            <QrCode size={16} strokeWidth={2.4} aria-hidden="true" />
+                                            {s.request}
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => onMarkPaid(debt)}
-                                        aria-label={`${t.markPaid}: ${sentence(debt)}, ${money(debt.amount, debt.currency, language, true)}`}
-                                        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent-soft px-3.5 text-[13px] font-semibold text-accent"
+                                        aria-label={`${t.markPaid}: ${sentence(debt)}, ${amount}`}
+                                        title={t.markPaid}
+                                        className={youGet
+                                            ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent'
+                                            : 'flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent-soft px-3.5 text-[14px] font-semibold text-accent'}
                                     >
-                                        <Check size={15} strokeWidth={2.6} aria-hidden="true" />
-                                        {t.markPaid}
+                                        <Check size={16} strokeWidth={2.6} aria-hidden="true" />
+                                        {!youGet && t.markPaid}
                                     </button>
                                 </span>
-                                )}
-                            </m.li>
-                        );
-                    })}
-                </AnimatePresence>
-            </ul>
-        </div>
+                            )}
+                        </m.li>
+                    );
+                })}
+            </AnimatePresence>
+        </ul>
     );
 };

@@ -27,6 +27,20 @@ export interface ActivityStrings {
   dupMany: string;
   hide: string;
   search: string;
+  paneLabel: string;
+  paneEmpty: string;
+  paneEmptyHint: string;
+  paneKeys: string;
+  changeCategory: string;
+  changeCategoryHint: string;
+  movedOne: string;
+  movedFew: string;
+  movedMany: string;
+  movedNone: string;
+  skippedNote: string;
+  showTable: string;
+  showList: string;
+  sortBy: string;
 }
 
 export const ACTIVITY_STRINGS: Record<'en' | 'sr', ActivityStrings> = {
@@ -55,6 +69,20 @@ export const ACTIVITY_STRINGS: Record<'en' | 'sr', ActivityStrings> = {
     dupMany: '{count} possible duplicates',
     hide: 'Hide',
     search: 'Search',
+    paneLabel: 'Entry details',
+    paneEmpty: 'Pick an entry',
+    paneEmptyHint: 'Its details, receipt and who owes what show up here.',
+    paneKeys: 'Use ↑ and ↓ to go through the list, Esc to close.',
+    changeCategory: 'Change category',
+    changeCategoryHint: 'Transfers and repayments keep theirs.',
+    movedOne: '{count} entry moved to {name}',
+    movedFew: '{count} entries moved to {name}',
+    movedMany: '{count} entries moved to {name}',
+    movedNone: 'Nothing to change',
+    skippedNote: '{count} skipped: transfers, repayments or the other kind',
+    showTable: 'Show as a table',
+    showList: 'Show as a list',
+    sortBy: 'Sort by {column}',
   },
   sr: {
     spentIn: 'Potrošeno, {month}',
@@ -81,5 +109,19 @@ export const ACTIVITY_STRINGS: Record<'en' | 'sr', ActivityStrings> = {
     dupMany: '{count} mogućih duplikata',
     hide: 'Sakrij',
     search: 'Pretraga',
+    paneLabel: 'Detalji unosa',
+    paneEmpty: 'Izaberi unos',
+    paneEmptyHint: 'Ovde se vide detalji, račun i ko kome duguje.',
+    paneKeys: 'Strelicama ↑ i ↓ ideš kroz listu, Esc zatvara.',
+    changeCategory: 'Promeni kategoriju',
+    changeCategoryHint: 'Prenosi i otplate zadržavaju svoju.',
+    movedOne: '{count} unos premešten u {name}',
+    movedFew: '{count} unosa premeštena u {name}',
+    movedMany: '{count} unosa premešteno u {name}',
+    movedNone: 'Nema šta da se promeni',
+    skippedNote: 'Preskočeno {count}: prenosi, otplate ili druga vrsta',
+    showTable: 'Prikaži kao tabelu',
+    showList: 'Prikaži kao listu',
+    sortBy: 'Poređaj po: {column}',
   },
 };

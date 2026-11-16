@@ -223,8 +223,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             animate={MOTION.view.animate}
             exit={MOTION.view.exit}
             transition={MOTION.view.transition}
-            className="mx-auto max-w-[920px] pb-28"
+            className="mx-auto max-w-[920px] pb-28 min-[1180px]:flex min-[1180px]:items-start min-[1180px]:gap-6"
         >
+            {/* Wide windows: the month stays put on the left, the chosen day's entries beside it. */}
+            <div className="min-[1180px]:sticky min-[1180px]:top-8 min-[1180px]:w-[500px] min-[1180px]:shrink-0">
             <ScreenHero tone={tone} label={t.calendar}>
                 <div className="flex h-[60px] items-center gap-2 px-3 md:px-4">
                     <MonthPicker language={state.language} month={month} onChange={value => showMonth(value)} />
@@ -319,8 +321,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </AnimatePresence>
                 </div>
             </ScreenHero>
+            </div>
 
-            <div className="screen-sheet">
+            <div className="screen-sheet min-w-0 flex-1 min-[1180px]:mt-0!">
                 <section aria-labelledby="calendar-day-title">
                     <div className="flex min-h-11 items-center justify-between gap-3 px-2">
                         <h2 id="calendar-day-title" className="min-w-0 truncate text-[18px] font-bold tracking-[-0.3px]">{selectedTitle}</h2>

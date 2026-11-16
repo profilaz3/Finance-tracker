@@ -777,6 +777,21 @@ const PeopleBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
           <span className="mt-auto text-[17px] font-bold">{t.allSettled}</span>
         ) : (
           <>
+            {/* Who the biggest open balance is with, in the space above the total. */}
+            {(() => {
+              const top = people.reduce((best, entry) => (Math.abs(entry.net) > Math.abs(best.net) ? entry : best));
+              return (
+                <span className="mt-2 flex min-w-0 items-baseline gap-1.5 text-[13px]">
+                  <span className="truncate font-semibold">{top.person.name}</span>
+                  <span className={clsx('shrink-0 whitespace-nowrap tabular-nums', top.net >= 0 ? 'text-pos' : 'text-neg')}>
+                    {money(Math.abs(top.net), currency, language)}
+                  </span>
+                  {people.length > 1 && (
+                    <span className="shrink-0 whitespace-nowrap text-muted">{fill(HEADER_STRINGS[language].walletsMore, { count: people.length - 1 })}</span>
+                  )}
+                </span>
+              );
+            })()}
             <Big className={clsx('mt-auto', net >= 0 ? 'text-pos' : 'text-neg')} size={26}>{money(Math.abs(net), currency, language)}</Big>
             <span className="text-[13px] text-muted">{net >= 0 ? t.owesYou : t.youOwe}</span>
           </>
@@ -885,6 +900,12 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
     return (
       <Tile>
         <Label>{t.block_upcoming}</Label>
+        {upcoming[1] && (
+          // What comes after the next one, in the space under the label.
+          <span className="mt-1.5 line-clamp-2 text-[13px] text-muted">
+            {fill(HEADER_STRINGS[language].upcomingThen, { name: upcoming[1].recurring.name, when: dueLabel(upcoming[1].due, data) })}
+          </span>
+        )}
         {next ? (
           <>
             <span className="mt-auto flex items-center gap-2.5">

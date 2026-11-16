@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Handshake, Play, Plus, RotateCcw, Share2, UserRound } from 'lucide-react';
+import { Play, Plus, RotateCcw, UserRound } from 'lucide-react';
 import { SharedExpense, Currency, Person, EventDebt } from '../../types';
 import { SharedExpenseModal } from '../SharedExpenseModal';
 import { ShareEventModal } from '../ShareEventModal';
@@ -12,20 +12,22 @@ import { getPickableParticipants, isOwnEmailPlaceholder, type ViewerPick } from 
 import { ImagePickerSheet } from '../ImagePickerSheet';
 import { calculateEventPersonTotals } from '../../utils/eventSummarySelectors';
 import { convertCurrency } from '../../utils/currencyUtils';
-import { Avatar, Big, compactMoney } from '../home/parts';
+import { Avatar } from '../home/parts';
 import { useImagePicker, base64ToFile, ImageResult } from '../../hooks/useImagePicker';
 import { getSupabaseService } from '../../services/runtimeServices';
 import { useEventDetailViewModel } from './useEventDetailViewModel';
 
-import { EventDetailViewProps, ActiveTab } from './types';
-import { EventHeader } from './EventHeader';
-import { EventTabs } from './EventTabs';
+import { EventDetailViewProps } from './types';
+import { EventHeader, type EventHeaderTile } from './EventHeader';
 import { ExpensesList } from './ExpensesList';
-import { SummaryTab } from './SummaryTab';
+import { PaidVsShare } from './PaidVsShare';
+import { EventCategories } from './EventCategories';
 import { ViewerPickSheet } from './ViewerPickSheet';
+import { EVENT_STRINGS, countText, eventAmount } from './eventStrings';
 import { TRANSLATIONS } from '../../constants';
-import { GlassSheet } from '../ui/GlassSheet';
 import { EventDebtSummary } from '../EventDebtSummary';
+import { resolveHomeHeader } from '../../domain/homeHeader';
+import { getIntlLocale } from '../../utils/locale';
 import { buildSettlementExpense, planBalances, planSettlement, spendingExpenses } from '../../domain/settle';
 import { vibrate, HAPTIC_PATTERNS } from '../../utils/haptics';
 
@@ -33,6 +35,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     event,
     state,
     onBack,
+    inPane = false,
     onUpdateEvent,
     onShareEvent,
     onDeleteEvent,
@@ -43,18 +46,19 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     onDeleteTransaction,
     onShowToast
 }) => {
-    const [activeTab, setActiveTab] = useState<ActiveTab>('shared');
     const [isSharedModalOpen, setIsSharedModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<SharedExpense | undefined>(undefined);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-    const [summaryCurrency, setSummaryCurrency] = useState<Currency>(state.baseCurrency);
+    // Sums show in the currency most of the spending was in until the user picks another.
+    const [chosenCurrency, setChosenCurrency] = useState<Currency | null>(null);
     const [imageVersion, setImageVersion] = useState(0);
-    const [isSettleOpen, setIsSettleOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editAtPeople, setEditAtPeople] = useState(false);
     const t = TRANSLATIONS[state.language];
+    const s = EVENT_STRINGS[state.language];
+    const { language } = state;
 
     // Guests may edit but not delete, reshare or change participants (RLS mirrors this). Ownership
     // compares the sign-in id: the profile id is a person id and never matches event.userId.
@@ -71,9 +75,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     // Back (browser or Android) closes these sheets instead of leaving the event.
     useBackLayer('event-expense', isSharedModalOpen, closeSharedModal);
     useBackLayer('event-share', isShareModalOpen, () => setIsShareModalOpen(false));
-    useBackLayer('event-settle', isSettleOpen, () => setIsSettleOpen(false));
     useBackLayer('event-edit', isEditOpen, () => setIsEditOpen(false));
-    useBackLayer('event-menu', isMenuOpen, () => setIsMenuOpen(false));
 
     // Image picker hook
     const {
@@ -158,34 +160,40 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         setIsSharedModalOpen(true);
     };
 
-    // The owner's profile id (or 'self'), the participant a guest picked, or null (guest not listed).
-    const selfId = viewer.viewerId;
+    const rates = state.rates;
     const spending = useMemo(() => spendingExpenses(allExpensesForSummary), [allExpensesForSummary]);
-    const stats = useMemo(() => {
-        const rates = state.rates.rates;
-        const total = spending.reduce(
-            (sum, expense) => sum + convertCurrency(expense.amount, expense.currency, summaryCurrency, rates),
-            0,
-        );
-        if (!selfId) return { total, share: 0 };
-        // Only the id is read; the current user may not be in eventPeople before a profile loads.
-        // Spending gives the share; everything (settlements too) gives what is still owed.
-        const self = [{ id: selfId } as Person];
-        const [mine] = calculateEventPersonTotals({ people: self, expenses: spending, summaryCurrency, rates });
-        return { total, share: mine.totalOwed };
-    }, [spending, summaryCurrency, state.rates.rates, selfId]);
+    const mainCurrency = useMemo(() => {
+        const byCurrency = new Map<Currency, number>();
+        for (const expense of spending) {
+            byCurrency.set(expense.currency, (byCurrency.get(expense.currency) ?? 0) + convertCurrency(expense.amount, expense.currency, state.baseCurrency, rates.rates));
+        }
+        return [...byCurrency.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? state.baseCurrency;
+    }, [spending, state.baseCurrency, rates.rates]);
+    const summaryCurrency = chosenCurrency ?? mainCurrency;
 
-    const settlementOptions = useMemo(
-        () => ({ currency: summaryCurrency, rates: state.rates }),
-        [summaryCurrency, state.rates],
-    );
-    const debts = useMemo(
-        () => planSettlement(allExpensesForSummary, settlementOptions),
-        [allExpensesForSummary, settlementOptions],
-    );
-    // My balance is what the settle-up plan says I pay or get (rounded once), so this card,
-    // the Summary tab and the suggested payments never differ by a dinar.
-    const myBalance = useMemo(() => (selfId ? planBalances(debts).get(selfId) ?? 0 : 0), [debts, selfId]);
+    // Everyone who is "you" here: the owner's profile id and 'self', or the participant a guest picked.
+    const { selfIds } = viewer;
+    const stats = useMemo(() => {
+        const total = spending.reduce((sum, expense) => sum + convertCurrency(expense.amount, expense.currency, summaryCurrency, rates.rates), 0);
+        // Only the ids are read; the current user may not be in eventPeople before a profile loads.
+        const mine = calculateEventPersonTotals({ people: [...selfIds].map(id => ({ id }) as Person), expenses: spending, summaryCurrency, rates: rates.rates });
+        return {
+            total,
+            share: mine.reduce((sum, entry) => sum + entry.totalOwed, 0),
+            paid: mine.reduce((sum, entry) => sum + entry.totalPaid, 0),
+            paidCount: spending.filter(expense => selfIds.has(expense.paidBy)).length,
+        };
+    }, [spending, summaryCurrency, rates.rates, selfIds]);
+
+    const settlementOptions = useMemo(() => ({ currency: summaryCurrency, rates }), [summaryCurrency, rates]);
+    const debts = useMemo(() => planSettlement(allExpensesForSummary, settlementOptions), [allExpensesForSummary, settlementOptions]);
+    // Balances come from the settle-up plan itself (rounded once), so the header, the rows and the
+    // suggested payments never differ by a dinar.
+    const balances = useMemo(() => planBalances(debts), [debts]);
+    const myBalance = useMemo(() => {
+        const sum = [...selfIds].reduce((total, id) => total + (balances.get(id) ?? 0), 0);
+        return Math.abs(sum) < 0.005 ? 0 : sum;
+    }, [balances, selfIds]);
     // Without a "you" (guest not listed): how much still has to change hands in total.
     const leftToSettle = useMemo(() => debts.reduce((sum, debt) => sum + debt.amount, 0), [debts]);
 
@@ -214,145 +222,182 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         onAddSharedExpense(expense);
     }, [allExpensesForSummary, event.id, onAddSharedExpense, settlementOptions, t.settlement]);
 
-    const balanceLabel = myBalance > 0 ? t.eventYouAreOwed : myBalance < 0 ? t.youOwe : t.settledUp;
-    const statCells = selfId
+    const amount = (value: number) => eventAmount(value, summaryCurrency, language);
+    const hasSelf = selfIds.size > 0;
+    const peopleCount = countText(eventPeople.length, language, s.peopleOne, s.peopleFew, s.peopleOther);
+    const balanceLabel = spending.length === 0 ? s.nothingYet
+        : !hasSelf ? (leftToSettle > 0 ? s.leftToSettle : t.eventAllSettled)
+            : myBalance > 0 ? s.youreOwed : myBalance < 0 ? s.youOwe : s.even;
+    const balance = amount(hasSelf ? Math.abs(myBalance) : leftToSettle);
+
+    // "a third each" for an even split, otherwise what part of the whole is yours.
+    const shareSub = (() => {
+        if (stats.total <= 0) return s.noneYet;
+        const ratio = stats.share / stats.total;
+        const count = eventPeople.length;
+        if (count > 1 && Math.abs(ratio - 1 / count) < 0.005) {
+            return count === 2 ? s.half : count === 3 ? s.third : count === 4 ? s.quarter : s.evenly;
+        }
+        return s.percentOf.replace('{percent}', String(Math.round(ratio * 100)));
+    })();
+    const expenseCount = countText(spending.length, language, s.expensesOne, s.expensesFew, s.expensesOther);
+    const tiles: EventHeaderTile[] = hasSelf
         ? [
-            { label: t.totalSpent, value: compactMoney(stats.total, summaryCurrency, state.language), tone: '' },
-            { label: t.yourShare, value: compactMoney(stats.share, summaryCurrency, state.language), tone: '' },
+            { label: s.spent, value: amount(stats.total), sub: peopleCount },
+            { label: s.yourShare, value: amount(stats.share), sub: shareSub },
             {
-                label: balanceLabel,
-                value: compactMoney(Math.abs(myBalance), summaryCurrency, state.language),
-                tone: myBalance > 0 ? 'text-pos' : myBalance < 0 ? 'text-neg' : 'text-muted',
+                label: s.youPaid,
+                value: amount(stats.paid),
+                sub: stats.paidCount > 0 ? countText(stats.paidCount, language, s.expensesOne, s.expensesFew, s.expensesOther) : s.noneYet,
             },
         ]
         : [
-            { label: t.totalSpent, value: compactMoney(stats.total, summaryCurrency, state.language), tone: '' },
-            { label: t.eventExpensesTab, value: String(spending.length), tone: '' },
-            {
-                label: leftToSettle > 0 ? t.eventLeftToSettle : t.settledUp,
-                value: compactMoney(leftToSettle, summaryCurrency, state.language),
-                tone: leftToSettle > 0 ? '' : 'text-muted',
-            },
+            { label: s.spent, value: amount(stats.total), sub: peopleCount },
+            { label: s.expenses, value: String(spending.length), sub: '' },
+            { label: s.people, value: String(eventPeople.length), sub: '' },
         ];
+
+    // "4 expenses · ends Tue, 17 Nov"
+    const facts = (() => {
+        const day = (value: string) => new Intl.DateTimeFormat(getIntlLocale(language), { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(value));
+        const now = Date.now();
+        let when = '';
+        if (event.startDate && new Date(event.startDate).getTime() > now) when = s.startsOn.replace('{date}', day(event.startDate));
+        else if (event.endDate) when = (event.status === 'completed' || new Date(event.endDate).getTime() < now - 86_400_000 ? s.endedOn : s.endsOn).replace('{date}', day(event.endDate));
+        else if (event.startDate) when = s.startedOn.replace('{date}', day(event.startDate));
+        return [spending.length > 0 ? expenseCount : '', when].filter(Boolean).join(' · ');
+    })();
+
     const viewerLabel = pickedPerson
         ? t.eventYouAre.replace('{name}', pickedPerson.name)
         : viewer.pick === null ? t.eventYouAreNotListed : t.eventWhoAreYou;
-    const openAddExpense = () => {
-        setActiveTab('shared');
-        setIsSharedModalOpen(true);
+    const openAddExpense = () => setIsSharedModalOpen(true);
+    const openEdit = (atPeople: boolean) => {
+        setEditAtPeople(atPeople);
+        setIsEditOpen(true);
     };
+    const tone = resolveHomeHeader(state.homeHeader).tone;
 
     return (
-        <div className="mx-auto flex max-w-[860px] flex-col gap-4 px-1 pb-8">
+        // A container: beside the Shared list on wide windows the page is narrower than the window.
+        <div className="@container mx-auto max-w-[920px] pb-28">
             <EventHeader
                 event={event}
                 eventPeople={eventPeople}
+                tone={tone}
                 onBack={onBack}
+                inPane={inPane}
                 onUpdateEvent={onUpdateEvent}
                 onDeleteEvent={onDeleteEvent}
-                onShowToast={onShowToast}
                 onOpenShareModal={() => setIsShareModalOpen(true)}
-                isMenuOpen={isMenuOpen}
-                setIsMenuOpen={setIsMenuOpen}
+                onEditEvent={() => openEdit(false)}
+                onAddPeople={permissions.canEditParticipants ? () => openEdit(true) : undefined}
                 isUploadingPhoto={isUploadingPhoto}
-                setIsUploadingPhoto={setIsUploadingPhoto}
                 imageVersion={imageVersion}
-                setImageVersion={setImageVersion}
                 fileInputRef={fileInputRef}
                 openPicker={openPicker}
                 handleFileChange={handleFileChange}
-                language={state.language}
+                language={language}
                 permissions={permissions}
-                onEditEvent={() => setIsEditOpen(true)}
+                currency={summaryCurrency}
+                onCurrencyChange={setChosenCurrency}
+                balanceLabel={balanceLabel}
+                balance={balance}
+                facts={facts}
+                tiles={tiles}
+                s={s}
             />
 
-            {/* A guest's answer to "Which one are you?", and the way to change it. */}
-            {viewer.isGuest && (
-                <div className="flex min-h-[48px] items-center gap-2.5 self-start rounded-full bg-chip py-1 pl-1 pr-1 max-w-full">
-                    {pickedPerson ? (
-                        <Avatar name={pickedPerson.name} color={pickedPerson.color} image={pickedPerson.avatar} size={36} />
-                    ) : (
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-tile text-muted" aria-hidden="true">
-                            <UserRound size={18} />
-                        </span>
-                    )}
-                    <span className="min-w-0 truncate text-[14px] font-semibold" data-testid="event-viewer-label">{viewerLabel}</span>
-                    <button
-                        type="button"
-                        onClick={() => setIsPickOpen(true)}
-                        aria-label={viewer.pick === undefined ? undefined : t.eventChangeWho}
-                        className="h-10 shrink-0 rounded-full px-3.5 text-[14px] font-semibold text-accent hover:bg-accent-soft"
-                    >
-                        {viewer.pick === undefined ? t.eventChooseWho : t.change}
-                    </button>
-                </div>
-            )}
-
-            <section className="paper-tile grid grid-cols-3 divide-x divide-[var(--paper-line)] py-3.5">
-                {statCells.map(stat => (
-                    <div key={stat.label} className="flex min-w-0 flex-col justify-between gap-0.5 px-3">
-                        {/* Labels wrap to two lines rather than cutting off ("Ukupno potrošeno"). */}
-                        <span className="text-[12px] font-semibold leading-tight text-muted [overflow-wrap:anywhere]">{stat.label}</span>
-                        <Big size={19} className={stat.tone}>{stat.value}</Big>
+            <div className="screen-sheet flex flex-col gap-4 pb-4">
+                {/* A guest's answer to "Which one are you?", and the way to change it. */}
+                {viewer.isGuest && (
+                    <div className="flex min-h-[48px] max-w-full items-center gap-2.5 self-start rounded-full bg-chip py-1 pl-1 pr-1">
+                        {pickedPerson ? (
+                            <Avatar name={pickedPerson.name} color={pickedPerson.color} image={pickedPerson.avatar} size={36} />
+                        ) : (
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-tile text-muted" aria-hidden="true">
+                                <UserRound size={18} />
+                            </span>
+                        )}
+                        <span className="min-w-0 truncate text-[14px] font-semibold" data-testid="event-viewer-label">{viewerLabel}</span>
+                        <button
+                            type="button"
+                            onClick={() => setIsPickOpen(true)}
+                            aria-label={viewer.pick === undefined ? undefined : t.eventChangeWho}
+                            className="h-10 shrink-0 rounded-full px-3.5 text-[14px] font-semibold text-accent hover:bg-accent-soft"
+                        >
+                            {viewer.pick === undefined ? t.eventChooseWho : t.change}
+                        </button>
                     </div>
-                ))}
-            </section>
-
-            {/* Wraps instead of squeezing: each label stays on one line at 390px. */}
-            <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    onClick={openAddExpense}
-                    className="flex h-12 min-w-[150px] flex-[2_1_auto] items-center justify-center gap-2 whitespace-nowrap rounded-full bg-accent px-4 text-[15px] font-semibold text-on-accent"
-                >
-                    <Plus size={19} aria-hidden="true" />
-                    {t.addExpense}
-                </button>
-                {debts.length > 0 ? (
-                    <button
-                        type="button"
-                        onClick={() => setIsSettleOpen(true)}
-                        className="flex h-12 flex-auto items-center justify-center gap-2 whitespace-nowrap rounded-full bg-chip px-4 text-[15px] font-semibold text-accent sm:flex-none"
-                    >
-                        <Handshake size={18} aria-hidden="true" />
-                        {t.settleUp}
-                    </button>
-                ) : permissions.canShare && (
-                    <button
-                        type="button"
-                        onClick={() => setIsShareModalOpen(true)}
-                        className="flex h-12 flex-auto items-center justify-center gap-2 whitespace-nowrap rounded-full bg-chip px-4 text-[15px] font-semibold sm:flex-none"
-                    >
-                        <Share2 size={18} aria-hidden="true" />
-                        {t.share}
-                    </button>
                 )}
-                {event.status === 'archived' && (
+
+                <div className="flex gap-2">
                     <button
                         type="button"
-                        onClick={() => onUpdateEvent(event.id, { startDate: new Date().toISOString(), status: 'active' })}
-                        className="flex h-12 flex-auto items-center justify-center gap-2 whitespace-nowrap rounded-full bg-chip px-4 text-[15px] font-semibold sm:flex-none"
+                        onClick={openAddExpense}
+                        className="flex h-[52px] min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-accent px-5 text-[16px] font-semibold text-on-accent shadow-[0_10px_24px_-12px_rgb(var(--accent-rgb)/0.7)] active:scale-[0.98]"
                     >
-                        <Play size={17} aria-hidden="true" />
-                        {t.startEvent}
+                        <Plus size={20} aria-hidden="true" />
+                        {t.addExpense}
                     </button>
-                )}
-                {event.status === 'completed' && (
-                    <button
-                        type="button"
-                        onClick={() => onUpdateEvent(event.id, { endDate: undefined, status: 'active' })}
-                        className="flex h-12 flex-auto items-center justify-center gap-2 whitespace-nowrap rounded-full bg-chip px-4 text-[15px] font-semibold sm:flex-none"
-                    >
-                        <RotateCcw size={17} aria-hidden="true" />
-                        {t.reopenEvent}
-                    </button>
-                )}
-            </div>
+                    {event.status !== 'active' && (
+                        <button
+                            type="button"
+                            onClick={() => onUpdateEvent(event.id, event.status === 'completed'
+                                ? { endDate: undefined, status: 'active' }
+                                : { startDate: new Date().toISOString(), status: 'active' })}
+                            className="flex h-[52px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-chip px-4 text-[15px] font-semibold"
+                        >
+                            {event.status === 'completed' ? <RotateCcw size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
+                            {event.status === 'completed' ? s.reopen : s.startEvent}
+                        </button>
+                    )}
+                </div>
 
-            <EventTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+                {spending.length > 0 && (
+                    <div className="grid grid-cols-1 gap-4 @xl:grid-cols-2 @xl:items-start">
+                        <PaidVsShare
+                            people={eventPeople}
+                            spending={spending}
+                            balances={balances}
+                            viewer={viewer}
+                            currency={summaryCurrency}
+                            rates={rates}
+                            language={language}
+                            s={s}
+                        />
+                        <section aria-labelledby="event-settle-title" className="paper-tile px-4 pb-1.5 pt-4">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <h2 id="event-settle-title" className="text-[17px] font-bold tracking-[-0.2px]">{s.settleUp}</h2>
+                                {debts.length > 0 && (
+                                    <span className="text-[13px] font-medium text-muted">
+                                        {countText(debts.length, language, s.paymentsOne, s.paymentsFew, s.paymentsOther)}
+                                    </span>
+                                )}
+                            </div>
+                            <div className={debts.length > 0 ? 'mt-0.5' : 'mb-2.5 mt-3'}>
+                                <EventDebtSummary
+                                    expenses={allExpensesForSummary}
+                                    people={eventPeople}
+                                    baseCurrency={summaryCurrency}
+                                    rates={rates}
+                                    viewer={viewer}
+                                    onMarkPaid={handleMarkPaid}
+                                    hasSpending
+                                    requestPurpose={event.name}
+                                />
+                            </div>
+                        </section>
+                    </div>
+                )}
 
-            <div className="min-h-[240px]">
-                {activeTab === 'shared' && (
+                <section aria-labelledby="event-expenses-title" className="flex flex-col gap-2.5">
+                    <div className="flex items-baseline justify-between gap-3 px-1 pt-1">
+                        <h2 id="event-expenses-title" className="text-[20px] font-bold tracking-[-0.3px]">{s.expenses}</h2>
+                        {unifiedExpenses.length > 0 && (
+                            <span className="text-[13px] font-medium text-muted">{unifiedExpenses.length} · {s.byDay}</span>
+                        )}
+                    </div>
                     <ExpensesList
                         unifiedExpenses={unifiedExpenses}
                         state={state}
@@ -367,20 +412,17 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                         currency={summaryCurrency}
                         viewer={viewer}
                     />
-                )}
+                </section>
 
-                {activeTab === 'summary' && (
-                    <SummaryTab
-                        eventPeople={eventPeople}
-                        allExpensesForSummary={allExpensesForSummary}
-                        summaryCurrency={summaryCurrency}
-                        setSummaryCurrency={setSummaryCurrency}
-                        state={state}
-                        onMarkPaid={handleMarkPaid}
-                        eventName={event.name}
-                        viewer={viewer}
-                    />
-                )}
+                <EventCategories
+                    spending={spending}
+                    categories={state.categories}
+                    currency={summaryCurrency}
+                    rates={rates}
+                    otherLabel={t.other}
+                    language={language}
+                    s={s}
+                />
             </div>
 
             <SharedExpenseModal
@@ -413,27 +455,8 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 people={state.people}
                 userProfile={state.userProfile ?? undefined}
                 canEditParticipants={permissions.canEditParticipants}
+                focusPeople={editAtPeople}
             />
-
-            <GlassSheet
-                isOpen={isSettleOpen}
-                onClose={() => setIsSettleOpen(false)}
-                title={t.settleUp}
-                closeLabel={t.close}
-            >
-                <div className="px-1 pb-2">
-                    <EventDebtSummary
-                        expenses={allExpensesForSummary}
-                        people={eventPeople}
-                        baseCurrency={summaryCurrency}
-                        rates={state.rates}
-                        viewer={viewer}
-                        onMarkPaid={handleMarkPaid}
-                        hasSpending={spending.length > 0}
-                        requestPurpose={event.name}
-                    />
-                </div>
-            </GlassSheet>
 
             <ShareEventModal
                 isOpen={isShareModalOpen}

@@ -103,6 +103,36 @@ export const eventMoney = (event: Event, state: AppState, sessionUserId: string 
   return { currency, total, mine: Math.abs(mine) < 0.005 ? 0 : mine };
 };
 
+export interface PersonEventBalance {
+  event: Event;
+  currency: Currency;
+  /** What they owe you in the event (+) or you owe them (−), in `currency`. */
+  amount: number;
+}
+
+/**
+ * What is open between you and one person inside each event, from the same settle-up plan as
+ * the event screen (in the event's main currency). Events where you are not a participant, or
+ * where you two are even, are left out.
+ */
+export const personEventBalances = (person: Person, state: AppState, sessionUserId: string | null | undefined): PersonEventBalance[] => {
+  const result: PersonEventBalance[] = [];
+  for (const event of state.events) {
+    if (event.status === 'archived') continue;
+    const model = buildEventDetailViewModel({ event, state, sessionUserId, pick: readViewerPick(sessionUserId, event.id) });
+    const { selfIds } = model.viewer;
+    if (selfIds.size === 0 || selfIds.has(person.id) || !model.eventPeople.some(entry => entry.id === person.id)) continue;
+    const { currency } = eventMoney(event, state, sessionUserId);
+    let amount = 0;
+    for (const debt of planSettlement(model.allExpensesForSummary, { currency, rates: state.rates })) {
+      if (debt.from === person.id && selfIds.has(debt.to)) amount += debt.amount;
+      else if (selfIds.has(debt.from) && debt.to === person.id) amount -= debt.amount;
+    }
+    if (Math.abs(amount) >= 0.005) result.push({ event, currency, amount });
+  }
+  return result;
+};
+
 /** Day `day` of `total` while a dated event is on today; null otherwise. */
 export const eventDayOf = (event: Pick<Event, 'startDate' | 'endDate'>, now: Date = new Date()): { day: number; total: number } | null => {
   if (!event.startDate || !event.endDate) return null;

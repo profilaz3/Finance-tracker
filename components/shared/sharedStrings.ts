@@ -28,6 +28,11 @@ interface SharedStrings {
   closeSearch: string;
   youOweThem: string;
   filterBy: string;
+  paneLabel: string;
+  paneEmpty: string;
+  paneEmptyHint: string;
+  peoplePaneEmpty: string;
+  peoplePaneEmptyHint: string;
 }
 
 export const SHARED_STRINGS: Record<'en' | 'sr', SharedStrings> = {
@@ -60,6 +65,11 @@ export const SHARED_STRINGS: Record<'en' | 'sr', SharedStrings> = {
     closeSearch: 'Close search',
     youOweThem: 'You owe',
     filterBy: 'Show people',
+    paneLabel: 'Open event or person',
+    paneEmpty: 'Pick an event or a person',
+    paneEmptyHint: 'Who paid what, who owes whom and how to settle up show up here.',
+    peoplePaneEmpty: 'Pick a person',
+    peoplePaneEmptyHint: 'What is open between you, since when and how it adds up show up here.',
   },
   sr: {
     owedToYou: 'Duguju ti',
@@ -90,5 +100,10 @@ export const SHARED_STRINGS: Record<'en' | 'sr', SharedStrings> = {
     closeSearch: 'Zatvori pretragu',
     youOweThem: 'Duguješ',
     filterBy: 'Prikaži ljude',
+    paneLabel: 'Otvoren događaj ili osoba',
+    paneEmpty: 'Izaberi događaj ili osobu',
+    paneEmptyHint: 'Ovde se vidi ko je šta platio, ko kome duguje i kako da se poravnate.',
+    peoplePaneEmpty: 'Izaberi osobu',
+    peoplePaneEmptyHint: 'Ovde se vidi šta je otvoreno između vas, od kada i kako se sabira.',
   },
 };

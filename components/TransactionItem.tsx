@@ -27,6 +27,8 @@ interface TransactionItemProps {
     onDuplicate?: () => void;
     onSaveAsTemplate?: () => void;
     isLastInGroup?: boolean;
+    /** Open in the Activity side pane. */
+    selected?: boolean;
 }
 
 const TxMark: React.FC<{ icon: typeof Receipt }> = ({ icon: Icon }) => (
@@ -49,7 +51,8 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
     onDelete,
     onDuplicate,
     onSaveAsTemplate,
-    isLastInGroup
+    isLastInGroup,
+    selected = false,
 }) => {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -160,9 +163,11 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
             onClick={handleClick}
             onContextMenu={(e) => e.preventDefault()}
             data-transaction-row
+            data-transaction-id={transaction.id}
             whileTap={{ scale: 0.98 }}
             className={clsx(
-                "group relative cursor-pointer select-none transition-colors duration-100 active:bg-chip",
+                "group relative cursor-pointer select-none transition-colors duration-100",
+                selected ? "bg-accent-soft" : "active:bg-chip",
                 !isLastInGroup && "border-b border-hair",
             )}
         >
@@ -171,6 +176,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = React.memo(({
                 <div
                     role="button"
                     tabIndex={0}
+                    aria-current={selected ? 'true' : undefined}
                     onKeyDown={e => {
                         if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();

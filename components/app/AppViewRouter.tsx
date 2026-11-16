@@ -4,11 +4,11 @@ import { AppState, Event, Person, Transaction, View } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { ParsedTransaction } from '../../services/aiService';
 import { duplicateTransactionDraft } from '../../domain/transactions';
-import { Segmented } from '../ui/Segmented';
 import { PAGE_GAP, type SwipeDirection } from '../../hooks/useSwipePager';
 import { PageActiveContext } from '../../hooks/useBackLayer';
 import { requestSettingsSection } from '../settings/settingsSectionBus';
 import { openTransactionDetails } from '../transaction-details/detailsBus';
+import { requestSubscriptionsTab } from '../../services/subscriptionStore';
 
 const Stats = lazyWithReload(() => import('../Stats').then(m => ({ default: m.Stats })));
 const HomeView = lazyWithReload(() => import('../home').then(m => ({ default: m.HomeView })));
@@ -20,26 +20,14 @@ const CalendarView = lazyWithReload(() => import('../CalendarView').then(m => ({
 const EventsView = lazyWithReload(() => import('../EventsView').then(m => ({ default: m.EventsView })));
 const EventDetailView = lazyWithReload(() => import('../event-detail').then(m => ({ default: m.EventDetailView })));
 const InsightsView = lazyWithReload(() => import('../InsightsView').then(m => ({ default: m.InsightsView })));
+// Shared and People: one page at a time, or on wide windows the list beside the open event or person.
+const SplitWhenWide = lazyWithReload(() => import('../shared/SharedSplit'));
 
 /** Fetch every page in the background so the first swipe or tap to each one is instant. */
 export const preloadViews = (): Promise<unknown> =>
-  [HomeView, TransactionsView, CalendarView, EventsView, PeopleView, Stats, InsightsView, EventDetailView, SettingsView, BudgetsView]
+  // SplitWhenWide wraps Shared and People (every width), so it loads with them.
+  [HomeView, TransactionsView, CalendarView, SplitWhenWide, EventsView, PeopleView, Stats, InsightsView, EventDetailView, SettingsView, BudgetsView]
     .reduce<Promise<unknown>>((chain, view) => chain.then(() => view.preload()).catch(() => undefined), Promise.resolve());
-
-type Strings = (typeof TRANSLATIONS)['en'];
-type StringKey = { [K in keyof Strings]: Strings[K] extends string ? K : never }[keyof Strings];
-
-const INSIGHTS: Array<[View, StringKey]> = [['analytics', 'analytics'], ['insights', 'aiInsights']];
-
-/** The two views behind each tab, switched with a segmented control at the top. */
-const SUB_VIEWS: Partial<Record<View, { label: StringKey; views: Array<[View, StringKey]> }>> = {
-  analytics: { label: 'navInsights', views: INSIGHTS },
-  insights: { label: 'navInsights', views: INSIGHTS },
-};
-
-/** The header group a view belongs to, or null when it shows no sub-view switch. */
-export const subViewGroup = (view: View, selectedEvent: Event | null): string | null =>
-  SUB_VIEWS[view] && !(view === 'events' && selectedEvent) ? SUB_VIEWS[view]!.label : null;
 
 /** A neighbouring page rendered beside the current one while it is being swiped. */
 export interface PagePeek {
@@ -47,13 +35,10 @@ export interface PagePeek {
   dir: SwipeDirection;
   /** Offset from the pager's top, so the page lands where it will sit once it is current. */
   top: number;
-  /** Render the view's own sub-view switch (the current page's switch belongs to another group). */
-  header: boolean;
 }
 /** A neighbour mounted ahead of time, hidden, so a swipe only has to reveal it. */
 export interface ParkedPage {
   view: View;
-  header: boolean;
 }
 export interface PeekControl {
   /** Shows the live neighbour beside the current page, or hides it with null. */
@@ -81,23 +66,6 @@ const concealParked = (el: HTMLElement) => {
   el.style.willChange = '';
 };
 
-const SubViewHeader: React.FC<{ view: View; language: AppState['language']; onNavigate: (view: View) => void; className?: string }> = ({
-  view,
-  language,
-  onNavigate,
-  className = '',
-}) => (
-  <div className={`mx-auto mb-3 mt-2 flex max-w-[420px] justify-center px-2 md:mt-0 ${className}`}>
-    <Segmented<View>
-      ariaLabel={TRANSLATIONS[language][SUB_VIEWS[view]!.label]}
-      value={view}
-      onChange={onNavigate}
-      className="w-full"
-      options={SUB_VIEWS[view]!.views.map(([option, key]) => ({ value: option, label: TRANSLATIONS[language][key] }))}
-    />
-  </div>
-);
-
 /**
  * A page's body. While parked, app updates reach it at background priority: the urgent render
  * keeps its previous element (React skips the subtree) and the catch-up render is interruptible.
@@ -112,7 +80,6 @@ interface PagerPagesProps {
   currentView: View;
   current: React.ReactNode;
   renderPeek: (view: View) => React.ReactNode;
-  renderHeader: (view: View) => React.ReactNode;
   peekControlRef?: React.MutableRefObject<PeekControl | null>;
   fallback?: React.ReactNode;
 }
@@ -127,7 +94,7 @@ interface PagerPagesProps {
  * add no scroll range); revealing one at the start of a swipe is a few style writes instead of
  * rendering a whole page. A neighbour that is not parked yet is mounted on demand as before.
  */
-const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPeek, renderHeader, peekControlRef, fallback }) => {
+const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPeek, peekControlRef, fallback }) => {
   const [peek, setPeek] = useState<PagePeek | null>(null);
   const [parked, setParked] = useState<ParkedPage[]>([]);
   const parkedRef = useRef(parked);
@@ -148,9 +115,7 @@ const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPee
   const [lastView, setLastView] = useState(currentView);
   if (lastView !== currentView) {
     setLastView(currentView);
-    const group = SUB_VIEWS[lastView]?.label ?? null;
-    const header = !!group && group !== (SUB_VIEWS[currentView]?.label ?? null);
-    setParked(prev => (prev.some(page => page.view === lastView) ? prev : [...prev, { view: lastView, header }]));
+    setParked(prev => (prev.some(page => page.view === lastView) ? prev : [...prev, { view: lastView }]));
   }
 
   const conceal = useCallback(() => {
@@ -164,13 +129,13 @@ const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPee
     const target = targetPark.current;
     if (!target) return;
     const current = parkedRef.current;
-    // Pages already mounted stay (a changed header flag just toggles the switch above them).
+    // Pages already mounted stay.
     const kept = target.filter(t => current.some(page => page.view === t.view));
     const missing = target.filter(t => !kept.includes(t));
     const next = missing.length ? [...kept, missing[0]] : kept;
     if (missing.length <= 1) targetPark.current = null;
     const same = next.length === current.length
-      && next.every((page, index) => page.view === current[index].view && page.header === current[index].header);
+      && next.every((page, index) => page.view === current[index].view);
     if (!same) {
       startTransition(() => setParked(next));
     }
@@ -250,7 +215,7 @@ const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPee
     return contentCache.get(view);
   };
 
-  const shell = (view: View, content: React.ReactNode, role: 'current' | 'peek' | 'parked', header: boolean, spec?: PagePeek) => (
+  const shell = (view: View, content: React.ReactNode, role: 'current' | 'peek' | 'parked', spec?: PagePeek) => (
     <div
       key={view}
       ref={(el: HTMLDivElement) => {
@@ -279,7 +244,6 @@ const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPee
         right: 0,
       } : undefined}
     >
-      {role !== 'current' && header ? renderHeader(view) : null}
       <div data-pager-content="">
         <PageActiveContext.Provider value={role === 'current'}>
           <Suspense fallback={role === 'current' ? fallback : null}>
@@ -291,11 +255,11 @@ const PagerPages: React.FC<PagerPagesProps> = ({ currentView, current, renderPee
   );
 
   const byView = new Map<View, React.ReactNode>();
-  byView.set(currentView, shell(currentView, current, 'current', false));
+  byView.set(currentView, shell(currentView, current, 'current'));
   parked.forEach(page => {
-    if (!byView.has(page.view)) byView.set(page.view, shell(page.view, contentFor(page.view), 'parked', page.header));
+    if (!byView.has(page.view)) byView.set(page.view, shell(page.view, contentFor(page.view), 'parked'));
   });
-  if (peek && !byView.has(peek.view)) byView.set(peek.view, shell(peek.view, contentFor(peek.view), 'peek', peek.header, peek));
+  if (peek && !byView.has(peek.view)) byView.set(peek.view, shell(peek.view, contentFor(peek.view), 'peek', peek));
   byView.forEach((_, view) => {
     if (!order.current.includes(view)) order.current.push(view);
   });
@@ -310,6 +274,8 @@ interface AppViewRouterProps {
   /** Shown while the current page's code is still loading. */
   pageFallback?: React.ReactNode;
   state: AppState;
+  /** The entry open in the Activity side pane (wide windows), for its row highlight and arrow keys. */
+  paneDetailsId?: string | null;
   homeEditing: boolean;
   setHomeEditing: (editing: boolean) => void;
   onNavigate: (view: View) => void;
@@ -317,6 +283,8 @@ interface AppViewRouterProps {
   onOpenAdd: () => void;
   selectedEvent: Event | null;
   setSelectedEvent: (event: Event | null) => void;
+  /** The open person (their page is a panel, or on wide windows the right-hand column of Shared). */
+  selectedPerson?: Person | null;
   setSelectedPerson: (person: Person | null) => void;
   setSelectedTransaction: (transaction: Transaction | null) => void;
   setCurrentView: (view: View) => void;
@@ -369,31 +337,21 @@ interface AppViewRouterProps {
   handleOpenAddTransaction: (type?: Transaction['type'], personId?: string) => void;
 }
 
-export const AppViewRouter: React.FC<AppViewRouterProps> = props => {
-  const { currentView, state, selectedEvent, onNavigate, peekControlRef, pageFallback } = props;
-  const group = subViewGroup(currentView, selectedEvent);
-  return (
-    <>
-      {/* Outside the keyed page so the switch persists and its pill glides between sibling views. */}
-      {group && (
-        <SubViewHeader key={group} view={currentView} language={state.language} onNavigate={onNavigate} className="app-view-enter" />
-      )}
-      <PagerPages
-        currentView={currentView}
-        current={<PageContent {...props} />}
-        renderPeek={view => <PageContent {...props} currentView={view} />}
-        renderHeader={view => <SubViewHeader view={view} language={state.language} onNavigate={onNavigate} />}
-        peekControlRef={peekControlRef}
-        fallback={pageFallback}
-      />
-    </>
-  );
-};
+export const AppViewRouter: React.FC<AppViewRouterProps> = props => (
+  <PagerPages
+    currentView={props.currentView}
+    current={<PageContent {...props} />}
+    renderPeek={view => <PageContent {...props} currentView={view} />}
+    peekControlRef={props.peekControlRef}
+    fallback={props.pageFallback}
+  />
+);
 
 /** The body of one page. Also rendered for the live neighbour while swiping. */
 const PageContent: React.FC<AppViewRouterProps> = ({
   currentView,
   state,
+  paneDetailsId = null,
   homeEditing,
   setHomeEditing,
   onNavigate,
@@ -401,6 +359,7 @@ const PageContent: React.FC<AppViewRouterProps> = ({
   onOpenAdd,
   selectedEvent,
   setSelectedEvent,
+  selectedPerson = null,
   setSelectedPerson,
   setSelectedTransaction,
   setCurrentView,
@@ -498,26 +457,38 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         onSaved={message => addToast(message, 'success')}
         onAddRecurring={handleAddRecurring}
         onToast={addToast}
+        onOpenCalendar={() => onNavigate('calendar')}
       />
     )}
     {currentView === 'people' && (
-      <PeopleView
-        people={state.people}
-        onAddPerson={() => setIsAddPersonModalOpen(true)}
-        onSelectPerson={setSelectedPerson}
-        onAddTransaction={handleOpenAddTransaction}
-        onSettleUp={handleSettleUp}
-        baseCurrency={state.baseCurrency}
-        rates={state.rates}
+      <SplitWhenWide
         language={state.language}
-        selfId={state.userProfile?.id}
-        homeHeader={state.homeHeader}
-        onBack={() => onNavigate('events')}
+        personOpen={!!selectedPerson}
+        peopleOnly
+        onAddPerson={() => setIsAddPersonModalOpen(true)}
+        renderList={split => (
+          <PeopleView
+            people={state.people}
+            onAddPerson={() => setIsAddPersonModalOpen(true)}
+            onSelectPerson={setSelectedPerson}
+            selectedPersonId={split ? selectedPerson?.id : undefined}
+            onAddTransaction={handleOpenAddTransaction}
+            onSettleUp={handleSettleUp}
+            baseCurrency={state.baseCurrency}
+            rates={state.rates}
+            language={state.language}
+            selfId={state.userProfile?.id}
+            homeHeader={state.homeHeader}
+            onBack={() => onNavigate('events')}
+          />
+        )}
       />
     )}
     {currentView === 'transactions' && (
       <TransactionsView
         state={state}
+        setState={setState}
+        onToast={addToast}
         setSelectedTransaction={setSelectedTransaction}
         setIsEditModalOpen={setIsEditModalOpen}
         setIsSplitModalOpen={setIsSplitModalOpen}
@@ -535,39 +506,57 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         onSaveAsTemplate={handleSaveAsTemplate}
         onBatchDelete={batchDeleteTransactions}
         onAddTransaction={handleOpenAddTransaction}
-        onOpenSplit={() => setIsSplitExpenseModalOpen(true)}
         onOpenCalendar={() => onNavigate('calendar')}
+        paneDetailsId={paneDetailsId}
       />
     )}
     {currentView === 'events' && (
-      selectedEvent ? (
-        <EventDetailView
-          event={selectedEvent}
-          state={state}
-          onBack={() => setSelectedEvent(null)}
-          onUpdateEvent={handleUpdateEvent}
-          onShareEvent={handleShareEvent}
-          onDeleteEvent={handleDeleteEvent}
-          onAddSharedExpense={handleAddSharedExpense}
-          onUpdateSharedExpense={handleAddSharedExpense}
-          onDeleteSharedExpense={handleDeleteSharedExpense}
-          onEditTransaction={(tx) => {
-            setSelectedTransaction(tx);
-            setIsEditModalOpen(true);
-          }}
-          onDeleteTransaction={deleteTransaction}
-          onShowToast={addToast}
-        />
-      ) : (
-        <EventsView
-          state={state}
-          onCreateEvent={() => setIsEventCreationModalOpen(true)}
-          onSelectEvent={setSelectedEvent}
-          onOpenPeople={() => onNavigate('people')}
-          onAddPerson={() => setIsAddPersonModalOpen(true)}
-          onSelectPerson={setSelectedPerson}
-        />
-      )
+      <SplitWhenWide
+        language={state.language}
+        personOpen={!!selectedPerson}
+        onCreateEvent={() => setIsEventCreationModalOpen(true)}
+        onAddPerson={() => setIsAddPersonModalOpen(true)}
+        renderDetail={selectedEvent ? split => (
+          <EventDetailView
+            key={selectedEvent.id}
+            inPane={split}
+            event={selectedEvent}
+            state={state}
+            onBack={() => setSelectedEvent(null)}
+            onUpdateEvent={handleUpdateEvent}
+            onShareEvent={handleShareEvent}
+            onDeleteEvent={handleDeleteEvent}
+            onAddSharedExpense={handleAddSharedExpense}
+            onUpdateSharedExpense={handleAddSharedExpense}
+            onDeleteSharedExpense={handleDeleteSharedExpense}
+            onEditTransaction={(tx) => {
+              setSelectedTransaction(tx);
+              setIsEditModalOpen(true);
+            }}
+            onDeleteTransaction={deleteTransaction}
+            onShowToast={addToast}
+          />
+        ) : undefined}
+        renderList={split => (
+          <EventsView
+            state={state}
+            onCreateEvent={() => setIsEventCreationModalOpen(true)}
+            onSelectEvent={event => {
+              // Side by side, the right column shows one thing: the event replaces an open person.
+              if (split) setSelectedPerson(null);
+              setSelectedEvent(event);
+            }}
+            onOpenPeople={() => onNavigate('people')}
+            onAddPerson={() => setIsAddPersonModalOpen(true)}
+            onSelectPerson={person => {
+              if (split) setSelectedEvent(null);
+              setSelectedPerson(person);
+            }}
+            selectedEventId={split ? selectedEvent?.id : undefined}
+            selectedPersonId={split ? selectedPerson?.id : undefined}
+          />
+        )}
+      />
     )}
     {currentView === 'calendar' && (
       <CalendarView
@@ -598,17 +587,11 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         language={state.language}
         totalExpense={totalExpense}
         events={state.events}
+        homeHeader={state.homeHeader}
+        onNavigate={onNavigate}
       />
     )}
-    {currentView === 'insights' && (
-      <InsightsView
-        transactions={state.transactions}
-        categories={state.categories}
-        baseCurrency={state.baseCurrency}
-        language={state.language}
-        letterState={state}
-      />
-    )}
+    {currentView === 'insights' && <InsightsView state={state} onNavigate={onNavigate} />}
     {currentView === 'settings' && (
       <SettingsView
         state={state}
@@ -654,6 +637,17 @@ const PageContent: React.FC<AppViewRouterProps> = ({
         onToast={addToast}
         workspaceId={workspaceId}
         onWorkspaceChange={onWorkspaceChange}
+        netWorth={totalBalance}
+        onBack={() => onNavigate('dashboard')}
+        onOpenBudgets={() => onNavigate('budgets')}
+        onOpenSubscriptions={() => {
+          requestSubscriptionsTab();
+          onNavigate('budgets');
+        }}
+        onCustomizeHome={() => {
+          onNavigate('dashboard');
+          setHomeEditing(true);
+        }}
       />
     )}
   </>

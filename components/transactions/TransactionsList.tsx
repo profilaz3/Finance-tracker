@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { m } from 'motion/react';
 import clsx from 'clsx';
-import { GroupedVirtuoso, type TopItemListProps } from 'react-virtuoso';
+import { GroupedVirtuoso, type GroupedVirtuosoHandle, type TopItemListProps } from 'react-virtuoso';
 import { CheckSquare, FilterX, Square } from 'lucide-react';
 import { AppState, Transaction } from '../../types';
 import { EmptyState } from '../EmptyState';
@@ -60,6 +60,8 @@ interface TransactionsListProps {
   onEditSplitTransaction?: (transaction: Transaction) => void;
   onDuplicateTransaction?: (transaction: Transaction) => void;
   onSaveAsTemplate?: (transaction: Transaction) => void;
+  /** The entry open in the side pane: its row is highlighted and kept in view. */
+  activeId?: string | null;
 }
 
 export const TransactionsList: React.FC<TransactionsListProps> = ({
@@ -83,12 +85,24 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
   onEditSplitTransaction,
   onDuplicateTransaction,
   onSaveAsTemplate,
+  activeId = null,
 }) => {
   // The page scrolls as one (header, search, list), so the list virtualises against the app's main scroller.
   const [scrollParent, setScrollParent] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setScrollParent(document.getElementById('main-content'));
   }, []);
+
+  // Keep the entry open in the side pane in view when it changes (the arrow keys can move it off
+  // screen). Only on a change of entry: typing in search or a sync must not scroll the page back to it.
+  const virtuosoRef = useRef<GroupedVirtuosoHandle>(null);
+  const latestRows = useRef(flatTransactions);
+  latestRows.current = flatTransactions;
+  useEffect(() => {
+    if (!activeId) return;
+    const index = latestRows.current.findIndex(transaction => transaction.id === activeId);
+    if (index >= 0) virtuosoRef.current?.scrollIntoView({ index, align: 'center', behavior: 'auto' });
+  }, [activeId]);
 
   if (filteredTransactions.length === 0) {
     return hasAnyTransactions && hasSearchOrFilters ? (
@@ -123,6 +137,7 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
 
   return (
     <GroupedVirtuoso
+      ref={virtuosoRef}
       customScrollParent={scrollParent}
       components={VIRTUOSO_COMPONENTS}
       groupCounts={groupCounts}
@@ -236,6 +251,7 @@ export const TransactionsList: React.FC<TransactionsListProps> = ({
                     onDuplicate={onDuplicateTransaction ? () => onDuplicateTransaction(transaction) : undefined}
                     onSaveAsTemplate={onSaveAsTemplate ? () => onSaveAsTemplate(transaction) : undefined}
                     isLastInGroup={isLast}
+                    selected={transaction.id === activeId}
                   />
                 </div>
               </div>

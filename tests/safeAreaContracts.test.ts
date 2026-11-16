@@ -32,7 +32,6 @@ describe('edge-to-edge safe areas (M32)', () => {
     expect(navigation).toContain('pb-[calc(env(safe-area-inset-bottom)+12px)]');
     expect(navigation).not.toContain('env(safe-area-inset-bottom,20px)');
     expect(read('components/Toast.tsx')).toContain('top-[calc(1rem+env(safe-area-inset-top))]');
-    expect(read('components/transactions/TransactionsFab.tsx')).toContain('bottom-[calc(6rem+env(safe-area-inset-bottom))]');
     expect(read('App.tsx')).toContain('h-[env(safe-area-inset-top)] bg-surface');
   });
 });

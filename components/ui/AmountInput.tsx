@@ -17,6 +17,10 @@ export interface AmountInputProps extends NativeInputProps {
   language: 'en' | 'sr';
   /** Show an empty field instead of "0" when the value is 0 (forms that start blank). */
   emptyWhenZero?: boolean;
+  /** Reads the text instead of `parseAmountInput` (the entry form passes `parseAmountExpression` for sums). */
+  parse?: (text: string, language: 'en' | 'sr') => number | undefined;
+  /** `none` keeps the phone keyboard closed, for a field typed with the app's own keypad. */
+  inputMode?: 'decimal' | 'none';
 }
 
 const toText = (value: number | undefined, language: 'en' | 'sr', emptyWhenZero: boolean) =>
@@ -31,7 +35,7 @@ const toText = (value: number | undefined, language: 'en' | 'sr', emptyWhenZero:
  * when the value changes from outside.
  */
 export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(function AmountInput(
-  { value, onValueChange, language, emptyWhenZero = false, onFocus, ...rest },
+  { value, onValueChange, language, emptyWhenZero = false, parse = parseAmountInput, inputMode = 'decimal', onFocus, ...rest },
   ref
 ) {
   const [text, setText] = useState(() => toText(value, language, emptyWhenZero));
@@ -49,7 +53,7 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(functi
     <input
       ref={ref}
       type="text"
-      inputMode="decimal"
+      inputMode={inputMode}
       autoComplete="off"
       spellCheck={false}
       {...rest}
@@ -60,7 +64,7 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(functi
       }}
       onChange={event => {
         const next = event.target.value;
-        const parsed = parseAmountInput(next, language);
+        const parsed = parse(next, language);
         lastEmitted.current = parsed;
         setText(next);
         onValueChange(parsed, next);
