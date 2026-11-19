@@ -39,3 +39,13 @@ export const requestTemplateDelete = (templateId: string): boolean => request(DE
 
 export const useTemplateDeleteRequests = (handler: (templateId: string) => void): void =>
   useRequests<string>(DELETE_TEMPLATE_EVENT, handler);
+
+interface WalletEntryRequest {
+  accountId: string;
+  kind: 'income' | 'transfer';
+}
+
+const WALLET_ENTRY_EVENT = 'finance:wallet-entry';
+export const requestWalletEntry = (detail: WalletEntryRequest) => request(WALLET_ENTRY_EVENT, detail);
+export const useWalletEntryRequests = (handler: (detail: WalletEntryRequest) => void) =>
+  useRequests(WALLET_ENTRY_EVENT, handler);

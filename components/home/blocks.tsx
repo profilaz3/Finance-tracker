@@ -3,10 +3,8 @@ import clsx from 'clsx';
 import { Plus } from 'lucide-react';
 import type { HomeBlock, HomeBlockType } from '../../types';
 import { topCategories, parseLocalDate } from '../../domain/home';
-import { readableTextOn, squarify } from '../../domain/treemap';
 import { formatNumber, formatPercent, formatShortDate, formatMediumDate, formatMonthYear, getIntlLocale } from '../../utils/locale';
 import { localizeTransactionNote } from '../../utils/systemText';
-import { iconForCategory } from '../../utils/categoryIcons';
 import type { HomeActions, HomeData } from './useHomeData';
 import { HEADER_STRINGS } from './headerStrings';
 import { openRates } from '../rates/ratesBus';
@@ -17,7 +15,7 @@ import { CurrencyFlag, CurrencyPair } from '../ui/CurrencyFlag';
 import { Illustration, type IllustrationName } from '../ui/Illustration';
 import { Sparkline } from '../ui/Sparkline';
 import { DeltaPill, deltaTone } from '../ui/primitives';
-import { Avatar, Big, BlockHead, DateChip, Label, ListRow, Ring, compactMoney, fill, fitFont, money, rowMoney, signedMoney } from './parts';
+import { Avatar, Big, BlockHead, DateChip, Label, ListRow, Ring, SummaryAmount, compactMoney, fill, fitFont, money, rowMoney } from './parts';
 
 export interface BlockProps {
   block: HomeBlock;
@@ -73,8 +71,6 @@ const EmptyArt: React.FC<{ name: IllustrationName; children: React.ReactNode; st
 );
 
 /** Budget share that deserves a heads-up before it runs over. */
-const BUDGET_WARN = 0.8;
-const WARN_COLOR = '#E39B17';
 
 // ---------------------------------------------------------------- Budget
 
@@ -142,14 +138,14 @@ const BudgetBlock: React.FC<BlockProps> = ({ block, data }) => {
             ratio={progress.spentRatio}
             radius={25}
             stroke={7}
-            color={over ? 'var(--paper-neg)' : progress.spentRatio >= BUDGET_WARN ? WARN_COLOR : undefined}
+            color={over ? 'var(--paper-neg)' : undefined}
           >
             <span className={clsx('text-[12px] font-bold tabular-nums tracking-[-0.3px]', over && 'text-neg')}>
               {formatPercent(Math.round(progress.spentRatio * 100), 0, language)}
             </span>
           </Ring>
         </div>
-        <Big className={clsx('mt-auto', over && 'text-neg')}>{money(Math.abs(progress.left), currency, language)}</Big>
+        <Big className={clsx('mt-auto', over && 'text-neg')}><SummaryAmount value={Math.abs(progress.left)} currency={currency} language={language} fitSize={30} /></Big>
         <span className="text-[13px] text-muted">
           {over ? t.amountOver.replace('{amount}', '').trim() : `${t.leftShort} ${fill(t.ofAmount, { amount: money(progress.total, currency, language) })}`}
         </span>
@@ -201,7 +197,7 @@ const BudgetBlock: React.FC<BlockProps> = ({ block, data }) => {
                 <span className="block h-1.5 rounded-full bg-chip">
                   <span
                     className="block h-1.5 rounded-full"
-                    style={{ width: `${Math.min(100, share * 100).toFixed(0)}%`, background: over ? 'var(--paper-neg)' : share >= BUDGET_WARN ? WARN_COLOR : row.color }}
+                    style={{ width: `${Math.min(100, share * 100).toFixed(0)}%`, background: over ? 'var(--paper-neg)' : 'rgb(var(--accent-rgb))' }}
                   />
                 </span>
               </div>
@@ -214,11 +210,6 @@ const BudgetBlock: React.FC<BlockProps> = ({ block, data }) => {
 };
 
 // ---------------------------------------------------------------- Net worth
-
-const splitCents = (value: string): [string, string] => {
-  const match = /^(.*?)([.,]\d{2})(\D*)$/.exec(value);
-  return match ? [match[1], match[2] + match[3]] : [value, ''];
-};
 
 /** Net worth at the end of each elapsed day of the month, ending at today's (or the month-end) total. */
 export const netWorthTrend = (data: HomeData): number[] => {
@@ -235,14 +226,14 @@ export const netWorthTrend = (data: HomeData): number[] => {
 
 const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
   const { t, currency, language, summary } = data;
-  const change = signedMoney(summary.netChange, currency, language);
+  const change = <SummaryAmount value={summary.netChange} currency={currency} language={language} showUnit={false} sign={summary.netChange > 0 ? '+' : ''} />;
   const spentRatio = summary.income > 0 ? summary.spent / summary.income : summary.spent > 0 ? 1 : 0;
 
   if (block.style === 'small') {
     return (
       <Tile>
         <Label>{t.block_networth}</Label>
-        <Big className="mt-auto" size={26}>{money(data.netWorth, currency, language)}</Big>
+        <Big className="mt-auto" size={26}><SummaryAmount value={data.netWorth} currency={currency} language={language} fitSize={26} /></Big>
         {netWorthAsOf(data) && <span className="text-[12px] text-muted">{netWorthAsOf(data)}</span>}
         <span className={clsx('text-[13px] font-semibold', summary.netChange >= 0 ? 'text-pos' : 'text-neg')}>{change}</span>
         <span className="text-[12px] text-muted">{monthLabel(data)}</span>
@@ -250,7 +241,6 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
     );
   }
 
-  const [whole, cents] = splitCents(money(data.netWorth, currency, language, true));
   const accent = block.style === 'card';
   const trend = netWorthTrend(data);
   const statValues = [summary.income, summary.spent, summary.left];
@@ -276,9 +266,8 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
         {asOf && <span className="font-normal"> · {asOf}</span>}
       </span>
       <span className="relative mt-0.5 block min-w-0" style={{ containerType: 'inline-size' }}>
-        <span className="block truncate font-bold leading-[50px] tracking-[-0.04em]" style={{ fontSize: fitFont(46, `${whole}${cents}`, 0.62) }}>
-          {whole}
-          <span className="text-[0.57em] opacity-60">{cents}</span>
+        <span className="block font-bold leading-[1.15] tracking-[-0.04em]">
+          <SummaryAmount value={data.netWorth} currency={currency} language={language} fitSize={46} />
         </span>
       </span>
       <span className={clsx('relative mt-1 text-[13px] font-semibold', !accent && (summary.netChange >= 0 ? 'text-pos' : 'text-neg'))}>
@@ -314,7 +303,7 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
           {data.wallets.slice(0, 4).map(wallet => (
             <span key={wallet.account.id} className="flex h-9 items-center justify-between gap-2 text-sm">
               <span className={clsx('truncate', accent ? 'opacity-85' : 'text-muted')}>{wallet.account.name}</span>
-              <span className="shrink-0 font-semibold">{money(wallet.balance, wallet.account.currency, language)}</span>
+              <span className="shrink-0 font-semibold"><SummaryAmount value={wallet.balance} currency={wallet.account.currency} language={language} /></span>
             </span>
           ))}
         </div>
@@ -324,54 +313,6 @@ const NetWorthBlock: React.FC<BlockProps> = ({ block, data }) => {
 };
 
 // ---------------------------------------------------------------- Categories
-
-const TREEMAP_WIDTH = 326;
-
-const Treemap: React.FC<{ data: HomeData; height: number; max: number }> = ({ data, height, max }) => {
-  const list = topCategories(data.summary.byCategory, max, data.t.other);
-  const rects = squarify(list.map(entry => entry.amount), TREEMAP_WIDTH, height);
-  const total = data.summary.spent;
-  return (
-    <div role="list" className="relative w-full shrink-0" style={{ height }}>
-      {rects.map(rect => {
-        const entry = list[rect.index];
-        const color = readableTextOn(entry.color);
-        const showLabel = rect.w > 52 && rect.h > 34;
-        const showAmount = rect.w > 52 && rect.h > 52;
-        const showIcon = rect.w > 64 && rect.h > 74;
-        const Icon = showIcon ? iconForCategory(data.category(entry.categoryId) ?? entry) : null;
-        return (
-          <div
-            key={entry.categoryId}
-            role="listitem"
-            aria-label={`${entry.name}: ${money(entry.amount, data.currency, data.language)}`}
-            className="absolute p-[2px]"
-            style={{
-              left: `${(rect.x / TREEMAP_WIDTH) * 100}%`,
-              top: `${(rect.y / height) * 100}%`,
-              width: `${(rect.w / TREEMAP_WIDTH) * 100}%`,
-              height: `${(rect.h / height) * 100}%`,
-            }}
-          >
-            <div className="flex h-full w-full flex-col justify-between overflow-hidden rounded-[10px] p-2" style={{ background: entry.color, color }}>
-              {showLabel && (
-                <span className="flex min-w-0 flex-col gap-1">
-                  {Icon && <Icon size={16} strokeWidth={2.2} aria-hidden="true" className="shrink-0 opacity-90" />}
-                  <span className="truncate text-[13px] font-semibold leading-4">{entry.name}</span>
-                </span>
-              )}
-              {showAmount && (
-                <span className="truncate text-[12px] font-medium leading-4 opacity-85">
-                  {money(entry.amount, data.currency, data.language)} · {formatNumber(Math.round((entry.amount / total) * 100))}%
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
 const Donut: React.FC<{ data: HomeData }> = ({ data }) => {
   const list = topCategories(data.summary.byCategory, 6, data.t.other);
@@ -432,7 +373,7 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
     );
   }
 
-  const right = empty ? undefined : money(summary.spent, currency, language);
+  const right = <SummaryAmount value={summary.spent} currency={currency} language={language} />;
   if (empty) {
     return (
       <Tile>
@@ -442,38 +383,7 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
     );
   }
 
-  // A treemap or bar chart of one or two categories says little: list them with their share instead.
-  if (summary.byCategory.length < 3) {
-    return (
-      <Tile>
-        <BlockHead title={t.block_categories} right={right} className="mb-1" />
-        <div className="flex flex-col">
-          {summary.byCategory.map((entry, i) => {
-            const share = summary.spent > 0 ? entry.amount / summary.spent : 0;
-            return (
-              <span key={entry.categoryId} className={clsx('flex items-center gap-3 py-2.5', i > 0 && 'border-t border-hair')}>
-                <CategoryGlyph category={data.category(entry.categoryId) ?? entry} size={38} />
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-[15px] font-semibold">{entry.name}</span>
-                    <span className="shrink-0 text-[15px] font-semibold">{money(entry.amount, currency, language)}</span>
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="h-1.5 flex-1 rounded-full bg-chip">
-                      <span className="block h-1.5 rounded-full" style={{ width: `${(share * 100).toFixed(1)}%`, background: entry.color }} />
-                    </span>
-                    <span className="w-9 shrink-0 text-right text-[12px] font-medium tabular-nums text-muted">{formatPercent(Math.round(share * 100), 0, language)}</span>
-                  </span>
-                </span>
-              </span>
-            );
-          })}
-        </div>
-      </Tile>
-    );
-  }
-
-  if (block.style === 'bars') {
+  if (block.style === 'bars' && summary.byCategory.length > 2) {
     const list = topCategories(summary.byCategory, block.size === 'l' ? 10 : 5, t.other);
     const max = list.reduce((m, entry) => Math.max(m, entry.amount), 0);
     return (
@@ -481,13 +391,13 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
         <BlockHead title={t.block_categories} right={right} />
         <div className="flex flex-col gap-[9px]">
           {list.map(entry => (
-            <div key={entry.categoryId} className="grid grid-cols-[22px_76px_1fr_auto] items-center gap-2 text-[13px]">
+            <div key={entry.categoryId} className="grid grid-cols-[22px_minmax(0,1.5fr)_minmax(0,1fr)_auto] items-center gap-2 text-[13px]">
               <CategoryGlyph category={data.category(entry.categoryId) ?? entry} size={22} className="!rounded-[7px]" />
-              <span className="truncate font-medium text-muted">{entry.name}</span>
-              <span className="h-3.5 rounded-full bg-chip">
-                <span className="block h-3.5 rounded-full" style={{ width: `${((entry.amount / max) * 100).toFixed(1)}%`, background: entry.color }} />
+              <span className="break-words font-medium">{entry.name}</span>
+              <span className="h-1.5 rounded-full bg-chip">
+                <span className="block h-1.5 rounded-full bg-accent" style={{ width: `${((entry.amount / max) * 100).toFixed(1)}%` }} />
               </span>
-              <span className="text-right font-semibold">{money(entry.amount, currency, language)}</span>
+              <span className="text-right font-semibold"><SummaryAmount value={entry.amount} currency={currency} language={language} showUnit={false} /></span>
             </div>
           ))}
         </div>
@@ -498,7 +408,28 @@ const CategoriesBlock: React.FC<BlockProps> = ({ block, data }) => {
   return (
     <Tile>
       <BlockHead title={t.block_categories} right={right} />
-      <Treemap data={data} height={block.size === 'l' ? 330 : 150} max={block.size === 'l' ? 9 : 6} />
+      <ul className="space-y-3">
+        {topCategories(summary.byCategory, block.size === 'l' ? 9 : 5, t.other).map(entry => {
+          const pct = summary.spent > 0 ? 100 * entry.amount / summary.spent : 0;
+          return (
+            <li key={entry.categoryId}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[15px]">
+                <span className="flex min-w-0 items-baseline gap-2 font-medium">
+                  <i aria-hidden="true" className="size-2 shrink-0 self-center rounded-full" style={{ background: entry.color }} />
+                  <span className="break-words">{entry.name}</span>
+                </span>
+                <span className="ml-auto text-right font-semibold tabular-nums">
+                  <SummaryAmount value={entry.amount} currency={currency} language={language} showUnit={false} />
+                  <span className="ml-1.5 text-[12px] font-medium text-muted">{formatPercent(pct, 0, language)}</span>
+                </span>
+              </div>
+              <div aria-hidden="true" className="mt-1.5 h-1 rounded-full bg-chip">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, pct)}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </Tile>
   );
 };
@@ -542,7 +473,7 @@ const DailyBlock: React.FC<BlockProps> = ({ block, data }) => {
     return (
       <Tile>
         <Label>{data.isCurrentMonth ? t.today : formatShortDate(new Date(month.year, month.month, end), language)}</Label>
-        <Big className="mt-1" size={26}>{money(last, currency, language)}</Big>
+        <Big className="mt-1" size={26}><SummaryAmount value={last} currency={currency} language={language} fitSize={26} /></Big>
         {average > 0 && (
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-muted">
             {last > 0 && (
@@ -687,66 +618,33 @@ const WalletsBlock: React.FC<BlockProps> = ({ block, data }) => {
     );
   }
 
-  if (block.style === 'cards') {
-    // Up to three share one row, four make a 2x2; more show the three biggest (in your order) and "+N more".
-    const shown = wallets.length > 4
-      ? (() => {
-        const biggest = new Set([...wallets].sort((a, b) => Math.abs(b.baseBalance) - Math.abs(a.baseBalance)).slice(0, 3));
-        return wallets.filter(wallet => biggest.has(wallet));
-      })()
-      : wallets;
-    const more = wallets.length - shown.length;
-    const tiles = shown.length + (more > 0 ? 1 : 0);
-    return (
-      <Tile>
-        <BlockHead title={t.block_wallets} right={money(total, currency, language)} />
-        <div className={clsx('grid gap-2', tiles === 1 ? 'grid-cols-1' : tiles === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
-          {shown.map(wallet => {
-            const own = wallet.account.currency;
-            const digits = Math.abs(wallet.balance) < 100 && own !== 'RSD' ? 2 : 0;
-            const text = `${wallet.balance < 0 ? '−' : ''}${formatNumber(Math.abs(wallet.balance), { minimumFractionDigits: digits, maximumFractionDigits: digits }, language)}`;
-            return (
-              <span key={wallet.account.id} className="flex min-w-0 flex-col rounded-[18px] bg-chip p-3" style={{ containerType: 'inline-size' }}>
-                <AccountGlyph account={wallet.account} size={28} showCurrency={false} />
-                <span className="mt-2.5 truncate text-[13px] font-medium text-muted">{wallet.account.name}</span>
-                {/* Shrinks to fit instead of cutting the figure off. */}
-                <span
-                  className={clsx('whitespace-nowrap font-bold leading-[22px] tabular-nums tracking-[-0.02em]', wallet.balance < 0 && 'text-neg')}
-                  style={{ fontSize: fitFont(17, text, 0.6) }}
-                >
-                  {text}
-                </span>
-                <span className="text-[12px] font-medium text-muted">{own}</span>
-              </span>
-            );
-          })}
-          {more > 0 && (
-            <span className="flex min-h-[112px] items-center justify-center rounded-[18px] bg-chip p-3 text-[15px] font-semibold text-muted">
-              {fill(HEADER_STRINGS[language].walletsMore, { count: more })}
-            </span>
-          )}
-        </div>
-      </Tile>
-    );
+  const compact = block.style === 'cards';
+  let rows = wallets.slice(0, block.size === 'l' ? 8 : 3);
+  if (compact) {
+    // Preserve wallet order while surfacing the largest holdings when space is limited.
+    const biggest = new Set([...wallets].sort((a, b) => Math.abs(b.baseBalance) - Math.abs(a.baseBalance)).slice(0, 3));
+    rows = wallets.length <= 4 ? wallets : wallets.filter(wallet => biggest.has(wallet));
   }
-
-  const rows = wallets.slice(0, block.size === 'l' ? 8 : 3);
+  const rowCurrency = rows[0].account.currency;
+  const mixed = rows.some(wallet => wallet.account.currency !== rowCurrency);
   return (
     <Tile>
-      <BlockHead title={t.block_wallets} right={money(total, currency, language)} className="mb-1" />
-      <div>
-        {rows.map((wallet, i) => (
-          <ListRow
-            key={wallet.account.id}
-            left={<AccountGlyph account={wallet.account} size={38} />}
-            title={wallet.account.name}
-            sub={wallet.account.currency}
-            amount={money(wallet.balance, wallet.account.currency, language)}
-            amountClassName={wallet.balance < 0 ? 'text-neg' : undefined}
-            last={i === rows.length - 1}
-          />
+      <BlockHead title={t.block_wallets} right={<SummaryAmount value={total} currency={currency} language={language} />} className="mb-1" />
+      {!mixed && rowCurrency !== currency && <span className="text-right text-xs font-medium text-muted">{rowCurrency}</span>}
+      <ul className="divide-y divide-hair">
+        {rows.map(({ account, balance }) => (
+          <li key={account.id} className={clsx('flex flex-wrap items-center gap-x-2.5 gap-y-1', compact ? 'py-2' : 'py-3')}>
+            <AccountGlyph account={account} size={compact ? 28 : 36} showCurrency={false} />
+            <span className="min-w-0 flex-1 break-words text-[15px] font-medium">{account.name}</span>
+            <span className={clsx('ml-auto text-right text-[15px] font-semibold', balance < 0 && 'text-neg')}>
+              <SummaryAmount value={balance} currency={account.currency} language={language} showUnit={mixed} />
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
+      {rows.length < wallets.length && <p className="pt-2 text-[13px] font-medium text-muted">
+        {fill(HEADER_STRINGS[language].walletsMore, { count: wallets.length - rows.length })}
+      </p>}
     </Tile>
   );
 };
@@ -792,7 +690,7 @@ const PeopleBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
                 </span>
               );
             })()}
-            <Big className={clsx('mt-auto', net >= 0 ? 'text-pos' : 'text-neg')} size={26}>{money(Math.abs(net), currency, language)}</Big>
+            <Big className={clsx('mt-auto', net >= 0 ? 'text-pos' : 'text-neg')} size={26}><SummaryAmount value={Math.abs(net)} currency={currency} language={language} fitSize={26} /></Big>
             <span className="text-[13px] text-muted">{net >= 0 ? t.owesYou : t.youOwe}</span>
           </>
         )}
@@ -803,7 +701,7 @@ const PeopleBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
   const rows = people.slice(0, block.size === 'l' ? 7 : 3);
   return (
     <Tile>
-      <BlockHead title={t.block_people} className="mb-1" />
+      <BlockHead title={t.block_people} right={rows.length ? currency : undefined} className="mb-1" />
       {rows.length === 0 ? (
         <EmptyArt name="settled">{t.allSettled}</EmptyArt>
       ) : (
@@ -814,7 +712,7 @@ const PeopleBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
               left={<Avatar name={entry.person.name} color={entry.person.color} image={entry.person.avatar} />}
               title={entry.person.name}
               sub={entry.net >= 0 ? t.owesYou : t.youOwe}
-              amount={money(Math.abs(entry.net), currency, language)}
+              amount={<SummaryAmount value={Math.abs(entry.net)} currency={currency} language={language} showUnit={false} />}
               amountClassName={entry.net >= 0 ? 'text-pos' : 'text-neg'}
               last={i === rows.length - 1}
               onClick={() => actions.openPerson(entry.person)}
@@ -915,8 +813,8 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
                 <span className="block text-[13px] text-muted">{dueLabel(next.due, data)}</span>
               </span>
             </span>
-            <span className={clsx('mt-2 text-[17px] font-bold', next.recurring.type === 'income' && 'text-pos')}>
-              {sign(next.recurring.type)}{money(next.recurring.amount, next.recurring.currency, language, true)}
+            <span style={{ containerType: 'inline-size' }} className={clsx('mt-2 text-[17px] font-bold', next.recurring.type === 'income' && 'text-pos')}>
+              <SummaryAmount value={next.recurring.amount} currency={next.recurring.currency} language={language} sign={sign(next.recurring.type)} fitSize={17} />
             </span>
           </>
         ) : (
@@ -927,9 +825,10 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
   }
 
   const rows = upcoming.slice(0, block.size === 'l' ? 7 : 3);
+  const unit = rows.every(item => item.recurring.currency === rows[0]?.recurring.currency) ? rows[0]?.recurring.currency : undefined;
   return (
     <Tile>
-      <BlockHead title={t.block_upcoming} className="mb-1" />
+      <BlockHead title={t.block_upcoming} right={unit} className="mb-1" />
       {rows.length === 0 ? (
         <EmptyArt name="calendar">{t.nothingUpcoming}</EmptyArt>
       ) : (
@@ -940,7 +839,7 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
               left={<DateChip date={item.due} language={language} />}
               title={item.recurring.name}
               sub={[dueLabel(item.due, data), data.accountName(item.recurring.accountId)].filter(Boolean).join(' · ')}
-              amount={`${sign(item.recurring.type)}${money(item.recurring.amount, item.recurring.currency, language, true)}`}
+              amount={<SummaryAmount value={item.recurring.amount} currency={item.recurring.currency} language={language} sign={sign(item.recurring.type)} showUnit={!unit} />}
               amountClassName={item.recurring.type === 'income' ? 'text-pos' : undefined}
               last={i === rows.length - 1}
             />
@@ -956,10 +855,11 @@ const UpcomingBlock: React.FC<BlockProps> = ({ block, data }) => {
 const RecentBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
   const { t, language } = data;
   const rows = data.recent.slice(0, block.size === 'l' ? 6 : 3);
+  const unit = rows.every(entry => entry.currency === rows[0]?.currency) ? rows[0]?.currency : undefined;
   return (
     <Tile>
       <div className="mb-1 flex items-baseline justify-between gap-3">
-        <h3 className="text-[17px] font-bold tracking-[-0.3px]">{t.block_recent}</h3>
+        <h3 className="text-[17px] font-bold tracking-[-0.3px]">{t.block_recent}{unit && <span className="ml-2 text-[13px] font-medium text-muted">{unit}</span>}</h3>
         <button type="button" onClick={actions.openActivity} className="-my-2.5 -mr-2 flex min-h-10 items-center px-2 text-sm font-semibold text-accent">
           {t.navActivity}
         </button>
@@ -983,7 +883,7 @@ const RecentBlock: React.FC<BlockProps> = ({ block, data, actions }) => {
                 }
                 title={title}
                 sub={[category !== title ? category : null, data.accountName(transaction.accountId)].filter(Boolean).join(' · ') || formatShortDate(parseLocalDate(transaction.date), language)}
-                amount={`${income ? '+' : '−'}${money(transaction.amount, transaction.currency, language, true)}`}
+                amount={<SummaryAmount value={transaction.amount} currency={transaction.currency} language={language} sign={income ? '+' : '−'} showUnit={!unit} />}
                 amountClassName={income ? 'text-pos' : undefined}
                 last={i === rows.length - 1}
                 onClick={() => actions.openTransaction(transaction)}
@@ -1066,7 +966,7 @@ const QuickAddBlock: React.FC<BlockProps> = ({ data, actions }) => {
           >
             <CategoryGlyph category={data.category(template.categoryId)} size={26} className="!rounded-full" />
             <span className="truncate">{template.name}</span>
-            {template.amount != null && <span className="shrink-0 font-medium text-muted">{money(template.amount, template.currency, language, true)}</span>}
+            {template.amount != null && <span className="shrink-0 font-medium text-muted"><SummaryAmount value={template.amount} currency={template.currency} language={language} /></span>}
           </button>
         ))}
         <button

@@ -242,11 +242,12 @@ describe('build contracts', () => {
     expect(script).toContain('account-edit-regression-success.png');
     expect(script).toContain("/^settings$|^podešavanja$/i");
     expect(script).toContain("/^wallets\\b|^novčanici\\b/i");
-    // The balance is a labelled button that opens a decimal text editor ("1.500,50" or "1500.50").
-    expect(script).toContain("/^edit balance:|^izmeni stanje:/i");
+    // The wallet actions disclosure leads to the balance correction editor.
+    expect(script).toContain("/^wallet actions:|^radnje za novčanik:/i");
+    expect(script).toContain("/^correct balance$|^ispravi stanje$/i");
     expect(script).toContain("/^current balance$|^trenutno stanje$/i");
     expect(script).toContain('formatWithDecimalComma');
-    expect(accountItem).toContain('aria-label={`${t.editBalance}: ${account.name}, ');
+    expect(accountItem).toContain('aria-label={`${s.walletActions}: ${account.name}, ');
     expect(accountItem).toContain('label={t.currentBalance}');
     expect(balanceInput).toContain('inputMode="decimal"');
     expect(TRANSLATIONS.en.editBalance).toBe('Edit balance');
@@ -385,7 +386,7 @@ describe('build contracts', () => {
     expect(script).toContain("getByRole('heading', { name: /^wallets$|^novčanici$/i, level: 3 })");
     expect(script).toContain('const debtLabel = /owes you|you owe|duguje ti|duguješ/i;');
     expect(script).toContain('Expected people debt cards to show open balances');
-    expect(homeBlocks).toContain('<BlockHead title={t.block_wallets} right={money(total, currency, language)}');
+    expect(homeBlocks).toContain('<BlockHead title={t.block_wallets} right={<SummaryAmount value={total} currency={currency}');
     expect(homeBlocks).toContain('{net >= 0 ? t.owesYou : t.youOwe}');
     // People cards say who owes whom next to each amount; the totals use the same sums as Home.
     expect(peopleView).toContain('const status = !first ? t.settled : owesYou ? t.owesYou : s.youOweThem;');

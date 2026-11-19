@@ -1,6 +1,10 @@
 /** Copy for the Settings screen's header and rows, kept out of `constants.ts` so it loads with the screen. */
 export const SETTINGS_STRINGS = {
   en: {
+    walletActions: 'Wallet actions',
+    addIncome: 'Add income',
+    transferHere: 'Transfer here',
+    correctBalance: 'Correct balance',
     editProfile: 'Edit name and photo',
     setUpProfile: 'Set up your profile',
     setUpHint: 'Your name and photo on splits and shared events',
@@ -45,6 +49,10 @@ export const SETTINGS_STRINGS = {
     allShortcuts: 'Show all shortcuts',
   },
   sr: {
+    walletActions: 'Radnje za novčanik',
+    addIncome: 'Dodaj prihod',
+    transferHere: 'Prenesi ovde',
+    correctBalance: 'Ispravi stanje',
     editProfile: 'Izmeni ime i fotografiju',
     setUpProfile: 'Podesi svoj profil',
     setUpHint: 'Tvoje ime i fotografija na podelama i zajedničkim događajima',

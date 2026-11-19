@@ -1,7 +1,7 @@
 import React from 'react';
 import clsx from 'clsx';
 import type { Currency } from '../../types';
-import { formatMoney, getIntlLocale } from '../../utils/locale';
+import { formatMoney, formatNumber, formatSummaryNumber, getIntlLocale } from '../../utils/locale';
 import { stableColor } from '../../utils/stableColor';
 import type { AppLanguage } from '../../utils/locale';
 
@@ -9,6 +9,23 @@ import type { AppLanguage } from '../../utils/locale';
 export const money = (amount: number, currency: Currency, language: AppLanguage, precise = false): string => {
   const digits = precise || (Math.abs(amount) < 100 && currency !== 'RSD') ? 2 : 0;
   return formatMoney(amount, currency, language, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
+
+/** A summary figure keeps significant cents and puts the unit after the digits in both languages. */
+export const SummaryAmount: React.FC<{
+  value: number;
+  currency: Currency;
+  language: AppLanguage;
+  showUnit?: boolean;
+  sign?: string;
+  fitSize?: number;
+}> = ({ value, currency, language, showUnit = true, sign = '', fitSize }) => {
+  const number = sign + formatSummaryNumber(value, currency, language);
+  return (
+    <span className="whitespace-nowrap tabular-nums" style={fitSize ? { fontSize: fitFont(fitSize, number + (showUnit ? ' ' + currency : '')) } : undefined}>
+      {number}{showUnit && <span className="text-[0.76em] font-medium opacity-75"> {currency}</span>}
+    </span>
+  );
 };
 
 /** Short form for tight spots: 247.1K, 1.2M. Falls back to `money` below 100,000 unless `always`. */
@@ -30,7 +47,9 @@ export const compactMoney = (amount: number, currency: Currency, language: AppLa
 /** One format for a row of figures: all compact when any of them needs it, otherwise all in full. */
 export const rowMoney = (amounts: number[], currency: Currency, language: AppLanguage): string[] => {
   const compact = amounts.some(amount => Math.abs(amount) >= 100_000);
-  return amounts.map(amount => (compact ? compactMoney(amount, currency, language, true) : money(amount, currency, language)));
+  return amounts.map(amount => compact
+    ? formatNumber(amount, { notation: 'compact', maximumFractionDigits: Math.abs(amount) < 1_000_000 ? 0 : 1 }, language)
+    : formatSummaryNumber(amount, currency, language));
 };
 
 export const signedMoney = (amount: number, currency: Currency, language: AppLanguage, precise = false): string =>
@@ -67,7 +86,7 @@ export const fitFont = (size: number, text: string, glyph = 0.6): string =>
 export const Big: React.FC<{ children: React.ReactNode; size?: number; className?: string }> = ({ children, size = 30, className }) => (
   <span className={clsx('block min-w-0', className)} style={{ containerType: 'inline-size' }}>
     <span
-      className="block truncate font-bold"
+      className="block truncate font-bold tabular-nums"
       style={{
         fontSize: typeof children === 'string' ? fitFont(size, children) : size,
         lineHeight: `${size + 4}px`,
@@ -116,7 +135,7 @@ export const ListRow: React.FC<{
         <span className="truncate text-[15px] font-semibold">{title}</span>
         {sub && <span className="truncate text-[13px] text-muted">{sub}</span>}
       </span>
-      <span className={clsx('shrink-0 text-[15px] font-semibold', amountClassName)}>{amount}</span>
+      <span className={clsx('shrink-0 text-right text-[15px] font-semibold tabular-nums', amountClassName)}>{amount}</span>
     </>
   );
   const className = clsx('flex h-[58px] w-full items-center gap-3', !last && 'border-b border-hair');

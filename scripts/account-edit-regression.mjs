@@ -70,8 +70,8 @@ const getAccountRowById = (page, accountId) => page.locator(`li[id="${accountId}
 
 const getRowNameInput = (row) => row.getByRole('textbox', { name: walletNameLabel });
 
-// The balance is a button labelled "Edit balance: <name>, <amount>" whose text is the amount.
-const getRowBalanceDisplay = (row) => row.getByRole('button', { name: /^edit balance:|^izmeni stanje:/i });
+// The wallet actions button includes the displayed balance.
+const getRowBalanceDisplay = (row) => row.getByRole('button', { name: /^wallet actions:|^radnje za novčanik:/i });
 
 // "1.234,56": grouping dots and a decimal comma, the format the balance editor must read
 // besides plain "1234.56".
@@ -116,7 +116,9 @@ const waitForBalanceToSettle = async (row, timeoutMs = 7000) => {
 };
 
 const setDisplayedBalance = async (row, amount, { decimalComma = false } = {}) => {
-  await getRowBalanceDisplay(row).click();
+  const actions = getRowBalanceDisplay(row);
+  if (await actions.getAttribute('aria-expanded') !== 'true') await actions.click();
+  await row.getByRole('button', { name: /^correct balance$|^ispravi stanje$/i }).click();
   // Full-width editor below the row: a decimal text field labelled "Current balance".
   const balanceInput = row.getByRole('textbox', { name: /^current balance$|^trenutno stanje$/i });
   await balanceInput.waitFor({ timeout: 15000 });

@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Account } from '../types';
 import { useDragControls } from 'motion/react';
 import { Reorder } from 'motion/react-m';
-import { GripVertical, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { IconPicker } from './IconPicker';
 import { AccountGlyph } from './ui/AccountGlyph';
+import { requestWalletEntry } from '../hooks/entryBus';
+import { SETTINGS_STRINGS } from './settings/settingsStrings';
 import { BalanceInput } from './BalanceInput';
 import clsx from 'clsx';
 import { formatCurrency } from '../utils/formatters';
@@ -14,6 +16,7 @@ import { TRANSLATIONS } from '../constants';
 
 interface AccountItemProps {
     account: Account;
+    canTransfer: boolean;
     onUpdate: (id: string, updates: Partial<Account>) => void;
     onDelete?: (id: string) => void;
     getAccountBalance: (account: Account) => number;
@@ -22,12 +25,15 @@ interface AccountItemProps {
 
 export const AccountItem: React.FC<AccountItemProps> = React.memo(({
     account,
+    canTransfer,
     onUpdate,
     onDelete,
     getAccountBalance,
     language
 }) => {
     const t = TRANSLATIONS[language];
+    const s = SETTINGS_STRINGS[language];
+    const [expanded, setExpanded] = useState(false);
     const dragControls = useDragControls();
     const [isEditingIcon, setIsEditingIcon] = useState(false);
     const [isEditingBalance, setIsEditingBalance] = useState(false);
@@ -86,7 +92,6 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
             id={account.id}
             dragListener={false}
             dragControls={dragControls}
-            className="touch-none"
         >
             <div className="paper-tile group relative flex flex-col gap-2 py-3 pl-2 pr-2">
                 <div className="flex items-center gap-2.5">
@@ -94,7 +99,7 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
                 <div
                     onPointerDown={(e) => dragControls.start(e)}
                     aria-hidden="true"
-                    className="flex h-11 w-7 shrink-0 cursor-grab items-center justify-center rounded-lg text-faint active:cursor-grabbing"
+                    className="flex h-11 w-7 shrink-0 touch-none cursor-grab items-center justify-center rounded-lg text-faint active:cursor-grabbing"
                 >
                     <GripVertical size={18} />
                 </div>
@@ -158,45 +163,49 @@ export const AccountItem: React.FC<AccountItemProps> = React.memo(({
                             className="pointer-events-none absolute right-2.5 text-faint transition-opacity peer-focus:opacity-0"
                         />
                     </span>
-                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2">
-                        <span className="truncate pl-2 text-[12px] text-muted">{typeLabel} · {account.currency}</span>
-                        {/* Balance: tapping opens a full-width editor below the row */}
-                        <button
-                            type="button"
-                            onClick={() => setIsEditingBalance(editing => !editing)}
-                            aria-expanded={isEditingBalance}
-                            aria-label={`${t.editBalance}: ${account.name}, ${formatCurrency(currentBalance, account.currency)}`}
-                            className="-mr-1 flex min-h-10 shrink-0 items-center gap-1.5 rounded-[12px] px-2 text-right transition-colors hover:bg-chip"
-                        >
-                            <span className={clsx(
-                                "text-[15px] font-semibold tabular-nums",
-                                currentBalance < 0 ? "text-neg" : ""
-                            )}>
-                                {formatCurrency(currentBalance, account.currency)}
-                            </span>
-                            <Pencil size={13} className="shrink-0 text-faint" aria-hidden="true" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Delete */}
-                {onDelete && (
                     <button
                         type="button"
-                        onClick={() => setIsConfirmingDelete(true)}
-                        aria-label={`${t.delete}: ${account.name}`}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full text-muted transition-colors hover:bg-chip hover:text-neg"
+                        onClick={() => {
+                            setExpanded(!expanded);
+                            setIsEditingBalance(false);
+                        }}
+                        aria-expanded={expanded}
+                        aria-label={`${s.walletActions}: ${account.name}, ${formatCurrency(currentBalance, account.currency)}`}
+                        className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-left hover:bg-chip"
                     >
-                        <Trash2 size={17} aria-hidden="true" />
+                        <span className="min-w-0 flex-1 text-[12px] text-muted">{typeLabel} · {account.currency}</span>
+                        <span className={clsx('text-[15px] font-semibold tabular-nums', currentBalance < 0 && 'text-neg')}>
+                            {formatCurrency(currentBalance, account.currency)}
+                        </span>
+                        <ChevronDown size={16} aria-hidden="true" className={clsx('text-muted', expanded && 'rotate-180')} />
                     </button>
-                )}
                 </div>
+                </div>
+                {expanded && (
+                    <div className="flex flex-wrap items-center gap-2 px-1">
+                        <button type="button" onClick={() => requestWalletEntry({ accountId: account.id, kind: 'income' })}
+                            className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-on-accent">{s.addIncome}</button>
+                        {canTransfer && (
+                            <button type="button" onClick={() => requestWalletEntry({ accountId: account.id, kind: 'transfer' })}
+                                className="min-h-11 rounded-full bg-chip px-4 text-sm font-semibold">{s.transferHere}</button>
+                        )}
+                        <button type="button" aria-expanded={isEditingBalance} onClick={() => setIsEditingBalance(!isEditingBalance)}
+                            className="min-h-11 rounded-full px-3 text-sm text-muted hover:bg-chip">{s.correctBalance}</button>
+                        {onDelete && (
+                            <button type="button" onClick={() => setIsConfirmingDelete(true)} aria-label={`${t.delete}: ${account.name}`}
+                                className="ml-auto grid size-11 place-items-center rounded-full text-muted hover:bg-chip hover:text-neg">
+                                <Trash2 size={17} aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+                )}
                 {isEditingBalance && (
-                    <div className="pl-9">
+                    <div className="px-1">
                         <BalanceInput
                             currency={account.currency}
                             initialAmount={currentBalance}
                             label={t.currentBalance}
+                            showBalancePreview
                             onSave={(val) => {
                                 const newInitial = calculateAdjustedInitialBalance({
                                     currentBalance,

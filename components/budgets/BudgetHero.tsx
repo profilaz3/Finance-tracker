@@ -1,15 +1,13 @@
 import React, { useId } from 'react';
-import clsx from 'clsx';
 import { ArrowLeft, MoreHorizontal, Pencil, Repeat, SlidersHorizontal, Trash2, TrendingUp } from 'lucide-react';
 import type { Currency, HomeHeaderTone } from '../../types';
 import type { AppLanguage } from '../../utils/locale';
-import { formatPercent } from '../../utils/locale';
+import { formatPercent, formatSummaryNumber } from '../../utils/locale';
 import { pluralText } from '../../utils/plural';
 import type { BudgetProgress } from '../../domain/home';
 import { ringSegments } from '../../domain/budgetView';
-import { HeroIconButton, HeroMenu, ON_COLOUR, ScreenHero, type HeroMenuItem } from '../ui/ScreenHero';
+import { HeroIconButton, HeroMenu, ScreenHero, type HeroMenuItem } from '../ui/ScreenHero';
 import { fill, fitFont } from '../home/parts';
-import { plainAmount } from '../stats/analyticsStrings';
 import type { BudgetStrings } from './budgetStrings';
 
 const SIZE = 124;
@@ -37,8 +35,8 @@ const BudgetRing: React.FC<{ spentRatio: number; monthElapsed: number; label: st
   });
   return (
     <figure role="img" aria-label={label} className="flex shrink-0 flex-col items-center">
-      <span className="relative" style={{ width: SIZE, height: SIZE }}>
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true" className="-rotate-90 overflow-visible">
+      <span className="relative size-[76px]">
+        <svg width="100%" height="100%" viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true" className="-rotate-90 overflow-visible">
           <defs>
             <pattern id={hatch} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <rect width="2.5" height="5" fill="#fff" />
@@ -60,8 +58,8 @@ const BudgetRing: React.FC<{ spentRatio: number; monthElapsed: number; label: st
           )}
         </svg>
         <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <span className="text-[26px] font-bold tabular-nums tracking-[-0.03em]">{centre}</span>
-          <span className="mt-1 text-[12px] font-medium text-white/70">{centreSub}</span>
+          <span className="text-[16px] font-semibold tabular-nums tracking-[-0.03em]">{centre}</span>
+          <span className="mt-0.5 text-[10px] font-medium text-white/70">{centreSub}</span>
         </span>
       </span>
       <figcaption aria-hidden="true" className="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-white/70">
@@ -80,7 +78,6 @@ interface BudgetHeroProps {
   daysLeft: number;
   currency: Currency;
   language: AppLanguage;
-  locale: string;
   backLabel: string;
   subscriptionsLabel: string;
   removeLabel: string;
@@ -95,12 +92,12 @@ interface BudgetHeroProps {
   s: BudgetStrings;
 }
 
-/** "November budget": the ring, what is left for each day, and the spent and limit tiles. */
+/** "November budget": remaining amount, daily allowance, a supporting ring and an editable limit. */
 export const BudgetHero: React.FC<BudgetHeroProps> = ({
-  tone, title, monthLabel, progress, daysLeft, currency, language, locale, backLabel, subscriptionsLabel, removeLabel,
+  tone, title, monthLabel, progress, daysLeft, currency, language, backLabel, subscriptionsLabel, removeLabel,
   spendingFast, onPace, hasBudget, onBack, onEdit, onSubscriptions, onRemove, s,
 }) => {
-  const amount = (value: number) => plainAmount(Math.abs(value), currency, locale);
+  const amount = (value: number) => formatSummaryNumber(Math.abs(value), currency, language);
   const withCode = (value: number) => `${amount(value)} ${currency}`;
   const monthly = progress.total > 0;
   const over = monthly && progress.left < 0;
@@ -126,19 +123,11 @@ export const BudgetHero: React.FC<BudgetHeroProps> = ({
       <div className="px-4 pb-[42px] pt-2 md:px-5 md:pb-5">
         {monthly ? (
           <div className="flex items-center gap-4 sm:gap-6">
-            <BudgetRing
-              spentRatio={progress.spentRatio}
-              monthElapsed={progress.monthElapsed}
-              centre={pct}
-              centreSub={s.ringSpent}
-              caption={s.today}
-              label={fill(s.ringLabel, { pct, today: formatPercent(progress.monthElapsed * 100, 0, language) })}
-            />
             <div className="min-w-0 flex-1" style={{ containerType: 'inline-size' }}>
               <p className="text-[14px] font-medium text-white/75">{over ? s.overBy : s.leftToSpend}</p>
               <p
                 className="whitespace-nowrap font-bold leading-[1.1] tracking-[-0.035em] tabular-nums"
-                style={{ fontSize: fitFont(36, `${over ? '−' : ''}${big} ${currency}`, 0.62) }}
+                style={{ fontSize: fitFont(48, `${over ? '−' : ''}${big} ${currency}`, 0.62) }}
               >
                 {over ? '−' : ''}{big}
                 <span className="ml-1 text-[0.44em] font-semibold tracking-normal text-white/60">{currency}</span>
@@ -146,7 +135,7 @@ export const BudgetHero: React.FC<BudgetHeroProps> = ({
               <p className="mt-0.5 text-[13.5px] leading-snug text-white/75">
                 {over
                   ? fill(s.overSub, { spent: withCode(progress.spent), limit: withCode(progress.total) })
-                  : fill(s.perDayFor, { amount: amount(progress.left / daysLeft), days })}
+                  : fill(s.perDayFor, { amount: amount(currency === 'RSD' ? Math.round(progress.left / daysLeft) : progress.left / daysLeft), days })}
               </p>
               {!over && (
                 <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[12.5px] font-semibold">
@@ -155,6 +144,14 @@ export const BudgetHero: React.FC<BudgetHeroProps> = ({
                 </span>
               )}
             </div>
+            <BudgetRing
+              spentRatio={progress.spentRatio}
+              monthElapsed={progress.monthElapsed}
+              centre={pct}
+              centreSub={s.ringSpent}
+              caption={s.today}
+              label={fill(s.ringLabel, { pct, today: formatPercent(progress.monthElapsed * 100, 0, language) })}
+            />
           </div>
         ) : (
           <div style={{ containerType: 'inline-size' }}>
@@ -178,22 +175,12 @@ export const BudgetHero: React.FC<BudgetHeroProps> = ({
         )}
 
         {monthly && (
-          <div className="mt-4 grid grid-cols-2 gap-2.5">
-            <div className={clsx(ON_COLOUR, 'rounded-[20px] px-4 py-3')}>
-              <p className="text-[13px] font-medium text-white/75">{s.spent}</p>
-              <p className="whitespace-nowrap text-[19px] font-bold tabular-nums tracking-[-0.01em]">{amount(progress.spent)}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onEdit('monthly')}
-              aria-label={`${s.changeMonthly}: ${withCode(progress.total)}`}
-              className={clsx(ON_COLOUR, 'rounded-[20px] px-4 py-3 text-left')}
-            >
-              <span className="block text-[13px] font-medium text-white/75">{s.monthlyLimit}</span>
-              <span className="flex items-center gap-1.5 whitespace-nowrap text-[19px] font-bold tabular-nums tracking-[-0.01em]">
-                {amount(progress.total)}
-                <Pencil size={14} aria-hidden="true" className="text-white/60" />
-              </span>
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 border-t border-white/25 pt-1 text-[13px] text-white/80">
+            <span>{s.spent} <b className="ml-1 text-white tabular-nums">{amount(progress.spent)}</b></span>
+            <button type="button" onClick={() => onEdit('monthly')} aria-label={`${s.changeMonthly}: ${withCode(progress.total)}`}
+              className="inline-flex min-h-11 flex-wrap items-center gap-1.5 rounded-md text-left focus-visible:outline-white">
+              {s.monthlyLimit} <b className="text-white tabular-nums">{amount(progress.total)}</b>
+              <Pencil size={13} aria-hidden="true" />
             </button>
           </div>
         )}

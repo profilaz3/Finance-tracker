@@ -502,13 +502,12 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const resultTotal = parsedReceipt ? parsedReceipt.receiptData?.total || parsedReceipt.amount || 0 : 0;
   const canConfirm = resultTotal > 0 && !!targetAccountId;
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (includePhoto = keepPhoto) => {
     if (!parsedReceipt || !canConfirm || savingPhoto) return;
 
     let photo: string | null = null;
-    if (keepPhoto && imagePreview) {
+    if (includePhoto && imagePreview) {
       setSavingPhoto(true);
-      setPhotoError(null);
       try {
         const blob = imagePreview.startsWith('data:') ? dataUrlToBlob(imagePreview) : await fetchAsBlob(imagePreview);
         photo = await uploadReceiptPhoto(blob);
@@ -1035,6 +1034,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                       type="checkbox"
                       role="switch"
                       checked={keepPhoto}
+                      disabled={savingPhoto}
                       onChange={event => {
                         setKeepPhoto(event.target.checked);
                         setPhotoError(null);
@@ -1057,9 +1057,17 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                     </span>
                   </label>
                   {photoError && (
-                    <p role="alert" className="mt-1.5 flex items-center gap-1.5 px-1 text-[13px] font-medium text-neg">
-                      <AlertCircle size={14} aria-hidden="true" /> {photoError}
-                    </p>
+                    <div>
+                      <p role="alert" className="mt-1.5 flex items-center gap-1.5 px-1 text-[13px] font-medium text-neg">
+                        <AlertCircle size={14} aria-hidden="true" /> {photoError}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" disabled={!canConfirm || savingPhoto} onClick={() => void handleConfirm(false)}
+                          className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-50">{t.receiptWithoutPhoto}</button>
+                        <button type="button" disabled={!canConfirm || savingPhoto} onClick={() => void handleConfirm(true)}
+                          className="min-h-11 rounded-full bg-chip px-4 text-sm font-semibold disabled:opacity-50">{savingPhoto ? t.receiptPhotoUploading : t.receiptRetryUpload}</button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -1069,11 +1077,12 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 <button
                   type="button"
                   onClick={resetState}
+                  disabled={savingPhoto}
                   className="h-12 flex-1 rounded-full bg-chip text-[15px] font-semibold text-on-surface"
                 >
                   {t.scanAnother}
                 </button>
-                <button
+                {!photoError && <button
                   type="button"
                   onClick={() => void handleConfirm()}
                   // Nothing to save until there is an amount (a bill without one, a receipt typed in).
@@ -1082,7 +1091,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 >
                   {savingPhoto ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}
                   {savingPhoto ? t.receiptPhotoUploading : t.addTransactionAction}
-                </button>
+                </button>}
               </div>
               {canSplit && (
                 <button

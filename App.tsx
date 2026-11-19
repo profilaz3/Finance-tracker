@@ -37,7 +37,7 @@ import { preloadViews, type PeekControl } from './components/app/AppViewRouter';
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
-import { useAddMenuRequests } from './hooks/entryBus';
+import { useAddMenuRequests, useWalletEntryRequests } from './hooks/entryBus';
 import { useReceiptPhotoCleanup } from './hooks/useReceiptPhotoCleanup';
 import { useTransactionDetailsRequests } from './components/transaction-details/detailsBus';
 import { usePasswordRecovery } from './hooks/usePasswordRecovery';
@@ -625,6 +625,14 @@ const App: React.FC = () => {
 
   useKeyboardShortcuts(shortcutHandlers);
   // The desktop Activity "+" asks for the Add sheet through hooks/entryBus.ts.
+  useWalletEntryRequests(({ accountId, kind }) => {
+    const accounts = scopedState.accounts;
+    if (!accounts.some(account => account.id === accountId)) return;
+    const draft = createTransactionDraft({ createId, accountId, accounts, baseCurrency: state.baseCurrency, type: kind });
+    // An incoming transfer draft opens with this wallet as To and prompts for From.
+    setSelectedTransaction(kind === 'transfer' ? { ...draft, type: 'income' } : draft);
+    modals.setIsEditModalOpen(true);
+  });
   useAddMenuRequests(modals.openAddMenu);
   useTransactionDetailsRequests(modals.openDetails);
   useReceiptPhotoCleanup(state.transactions, currentUserId);

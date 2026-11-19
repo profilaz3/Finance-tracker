@@ -1,3 +1,5 @@
+import type { NbsCurrency } from '../../utils/nbsRates';
+import type { RateRange } from '../../domain/exchangeRates';
 import { useEffect, useRef } from 'react';
 
 /**
@@ -7,16 +9,24 @@ import { useEffect, useRef } from 'react';
 
 const RATES_EVENT = 'finance:rates';
 
-export const openRates = (): void => {
+export interface RatesSelection {
+  currency: NbsCurrency;
+  range: RateRange;
+}
+
+const requestRates = (selection?: RatesSelection): void => {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(RATES_EVENT));
+  window.dispatchEvent(new CustomEvent(RATES_EVENT, { detail: selection }));
 };
 
-export const useRatesRequests = (handler: () => void): void => {
+export const openRates = (): void => requestRates();
+export const openRatesFor = (currency: NbsCurrency, range: RateRange): void => requestRates({ currency, range });
+
+export const useRatesRequests = (handler: (selection?: RatesSelection) => void): void => {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
   useEffect(() => {
-    const listener = () => handlerRef.current();
+    const listener = (event: Event) => handlerRef.current((event as CustomEvent<RatesSelection>).detail);
     window.addEventListener(RATES_EVENT, listener);
     return () => window.removeEventListener(RATES_EVENT, listener);
   }, []);

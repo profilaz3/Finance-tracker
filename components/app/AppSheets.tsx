@@ -3,7 +3,7 @@ import type { AppState, TransactionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { ParsedTransaction } from '../../services/aiService';
 import { lazyWithReload } from '../../utils/lazyWithReload';
-import { useRatesRequests } from '../rates/ratesBus';
+import { useRatesRequests, type RatesSelection } from '../rates/ratesBus';
 import { useBackLayer } from '../../hooks/useBackLayer';
 
 const ExportModal = lazyWithReload(() => import('../ExportModal').then(m => ({ default: m.ExportModal })));
@@ -72,7 +72,9 @@ export const AppSheets: React.FC<AppSheetsProps> = ({
   }, [modals.isAppearanceSheetOpen]);
   const [ratesMounted, setRatesMounted] = useState(false);
   const [isRatesOpen, setIsRatesOpen] = useState(false);
-  useRatesRequests(() => {
+  const [ratesSelection, setRatesSelection] = useState<RatesSelection>();
+  useRatesRequests(selection => {
+    if (selection) setRatesSelection(selection);
     setRatesMounted(true);
     setIsRatesOpen(true);
   });
@@ -161,7 +163,7 @@ export const AppSheets: React.FC<AppSheetsProps> = ({
       )}
       {ratesMounted && (
         <Suspense fallback={null}>
-          <RatesSheet isOpen={isRatesOpen} onClose={() => setIsRatesOpen(false)} state={state} />
+          <RatesSheet selection={ratesSelection} isOpen={isRatesOpen} onClose={() => setIsRatesOpen(false)} state={state} />
         </Suspense>
       )}
       {signOutMounted && (

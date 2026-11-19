@@ -158,7 +158,10 @@ export const EntryTiles: React.FC<EntryTilesProps> = ({ form, accounts, categori
             />
         );
     } else if (panel === 'wallet') {
-        picker = walletList(accounts, edited.accountId, form.pickAccount, isTransfer ? t.fromWallet : t.wallet);
+        const sources = isTransfer && !edited.accountId
+            ? accounts.filter(wallet => wallet.id !== form.targetAccountId)
+            : accounts;
+        picker = walletList(sources, edited.accountId, form.pickAccount, isTransfer ? t.fromWallet : t.wallet);
     } else if (panel === 'target' && isTransfer) {
         picker = walletList(
             accounts.filter(wallet => wallet.id !== edited.accountId || wallet.id === form.targetAccountId),

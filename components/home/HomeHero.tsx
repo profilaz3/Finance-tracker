@@ -15,7 +15,7 @@ import {
 } from '../../domain/homeHeader';
 import { pointsSince, rangeStart, rangeStats } from '../../domain/exchangeRates';
 import { belgradeToday } from '../../utils/nbsRates';
-import { formatDate, formatNumber, formatPercent, formatShortDate, getIntlLocale, type AppLanguage } from '../../utils/locale';
+import { formatDate, formatSummaryNumber, formatNumber, formatPercent, formatShortDate, getIntlLocale, type AppLanguage } from '../../utils/locale';
 import { pluralForm } from '../../utils/plural';
 import { useStatusBarOverHeader } from '../../hooks/useStatusBarOverHeader';
 import { useNbsHistory } from '../rates/useNbsHistory';
@@ -59,8 +59,7 @@ const plural = (count: number, language: AppLanguage, one: string, few: string, 
 
 /** The number without its currency (the code sits beside it, smaller). Cents only for small foreign amounts. */
 const figure = (amount: number, currency: Currency, language: AppLanguage): string => {
-  const digits = Math.abs(amount) < 100 && currency !== 'RSD' ? 2 : 0;
-  return formatNumber(Math.abs(amount), { minimumFractionDigits: digits, maximumFractionDigits: digits }, language);
+  return formatSummaryNumber(Math.abs(amount), currency, language);
 };
 
 const moneyText = (amount: number, currency: Currency, language: AppLanguage): string => `${figure(amount, currency, language)} ${currency}`;

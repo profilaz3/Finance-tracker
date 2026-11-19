@@ -196,7 +196,6 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ state, setState, onBac
           daysLeft={daysLeft}
           currency={currency}
           language={language}
-          locale={locale}
           backLabel={t.back}
           subscriptionsLabel={t.subscriptions}
           removeLabel={t.removeBudget}
@@ -222,7 +221,6 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({ state, setState, onBac
           suggestions={suggestions}
           currency={currency}
           language={language}
-          locale={locale}
           onEditLimits={categoryId => openEdit(categoryId ? { categoryId } : undefined)}
           onRaise={raise}
           s={s}

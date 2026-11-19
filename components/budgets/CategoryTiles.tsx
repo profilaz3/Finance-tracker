@@ -3,14 +3,13 @@ import clsx from 'clsx';
 import { Sparkles } from 'lucide-react';
 import type { Category, Currency } from '../../types';
 import type { AppLanguage } from '../../utils/locale';
-import { formatPercent } from '../../utils/locale';
+import { formatPercent, formatSummaryNumber } from '../../utils/locale';
 import { pluralText } from '../../utils/plural';
 import { localizeCategoryName } from '../../utils/systemText';
 import type { BudgetCategoryProgress, CategorySpend } from '../../domain/home';
 import type { RaiseSuggestion } from '../../domain/budgetView';
 import { CategoryGlyph } from '../ui/CategoryGlyph';
 import { fill, fitFont } from '../home/parts';
-import { plainAmount } from '../stats/analyticsStrings';
 import type { BudgetStrings } from './budgetStrings';
 
 const HATCH = 'repeating-linear-gradient(-45deg, var(--paper-neg) 0 3px, transparent 3px 6px)';
@@ -26,7 +25,6 @@ interface CategoryTilesProps {
   suggestions: Map<string, RaiseSuggestion>;
   currency: Currency;
   language: AppLanguage;
-  locale: string;
   onEditLimits: (focusCategoryId?: string) => void;
   onRaise: (categoryId: string, limit: number) => void;
   s: BudgetStrings;
@@ -34,9 +32,9 @@ interface CategoryTilesProps {
 
 /** Category limits as tiles: the ones within their limit two to a row, the ones over it full width. */
 export const CategoryTiles: React.FC<CategoryTilesProps> = ({
-  rows, unlimited, categories, today, daysLeft, suggestions, currency, language, locale, onEditLimits, onRaise, s,
+  rows, unlimited, categories, today, daysLeft, suggestions, currency, language, onEditLimits, onRaise, s,
 }) => {
-  const amount = (value: number) => plainAmount(value, currency, locale);
+  const amount = (value: number) => formatSummaryNumber(value, currency, language);
   const nameOf = (id: string, fallback: string) => {
     const category = categories.get(id);
     return category ? localizeCategoryName(category, language) : fallback;
@@ -49,7 +47,7 @@ export const CategoryTiles: React.FC<CategoryTilesProps> = ({
     // A container: beside the header on wide windows this column is narrower than the window.
     <section aria-labelledby="budget-categories-title" className="@container flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-3 px-1">
-        <h2 id="budget-categories-title" className="text-[19px] font-bold tracking-[-0.3px]">{s.categories}</h2>
+        <h2 id="budget-categories-title" className="text-[19px] font-bold tracking-[-0.3px]">{s.categories} <span className="ml-1 text-[13px] font-medium text-muted">{currency}</span></h2>
         <button type="button" onClick={() => onEditLimits()} className="-mr-2 h-10 rounded-full px-2 text-[14.5px] font-semibold text-accent">
           {s.editLimits}
         </button>
@@ -76,7 +74,7 @@ export const CategoryTiles: React.FC<CategoryTilesProps> = ({
                 {amount(row.left)} <span className="text-[12.5px] font-medium tracking-normal text-muted">{s.left}</span>
               </p>
               <div aria-hidden="true" className="relative mt-2.5 h-2 rounded-full bg-chip">
-                <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(Math.min(1, ratio) * 100).toFixed(1)}%`, background: row.color }} />
+                <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(Math.min(1, ratio) * 100).toFixed(1)}%`, background: 'rgb(var(--accent-rgb))' }} />
                 <span className="absolute -inset-y-1 w-[2px] -translate-x-1/2 rounded-full bg-on-surface ring-2 ring-[var(--paper-tile)]" style={{ left: mark }} />
               </div>
               <p className="mt-2 text-[12px] leading-snug text-muted">
@@ -117,7 +115,7 @@ export const CategoryTiles: React.FC<CategoryTilesProps> = ({
                 <span className="text-[12.5px] font-semibold tabular-nums text-muted">{formatPercent((row.spent / row.limit) * 100, 0, language)}</span>
               </div>
               <div aria-hidden="true" className="mt-2.5 flex h-2 overflow-hidden rounded-full bg-chip">
-                <span style={{ width: `${((row.limit / row.spent) * 100).toFixed(1)}%`, background: row.color }} />
+                <span style={{ width: `${((row.limit / row.spent) * 100).toFixed(1)}%`, background: 'rgb(var(--accent-rgb))' }} />
                 <span className="flex-1 opacity-70" style={{ background: HATCH }} />
               </div>
               {suggestion && (

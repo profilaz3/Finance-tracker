@@ -92,6 +92,13 @@ export const formatNumber = (
     return getNumberFormat(getIntlLocale(language), options).format(safeValue);
 };
 
+/** Number portion of a money summary. The surrounding view labels its currency. */
+export const formatSummaryNumber = (value: number, currency: Currency, language: AppLanguage): string =>
+    formatNumber(value, {
+        minimumFractionDigits: currency !== 'RSD' && !Number.isInteger(value) ? 2 : 0,
+        maximumFractionDigits: 2,
+    }, language);
+
 /** Percentage (value already in 0-100) with locale decimal separator, e.g. "12,5%" in Serbian. */
 export const formatPercent = (
     value: number,

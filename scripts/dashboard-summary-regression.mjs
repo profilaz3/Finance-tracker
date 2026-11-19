@@ -55,7 +55,7 @@ const waitForDashboardHydration = async page => {
   await page.waitForFunction(() => {
     const text = document.body.innerText;
     const hasDashboard = /Wallets|Novčanici/i.test(text);
-    const hasWalletAmounts = /\b(?:USD|EUR|RSD)\s*-?\d/.test(text);
+    const hasWalletAmounts = /\d\s*(?:USD|EUR|RSD)\b/.test(text);
 
     return hasDashboard && hasWalletAmounts;
   }, { timeout: 15000 });

@@ -290,6 +290,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 >
                     {state.accounts.map(acc => (
                         <AccountItem
+                            canTransfer={state.accounts.length > 1}
                             key={acc.id}
                             account={acc}
                             onUpdate={handleUpdateAccount}

@@ -29,6 +29,8 @@ import {
 import { resolveHomeHeader } from '../../domain/homeHeader';
 import { calculateAccountBalance } from '../../utils/financialSelectors';
 import { fill } from '../home/parts';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import type { RatesSelection } from './ratesBus';
 import { RateChart } from './RateChart';
 import { useNbsHistory } from './useNbsHistory';
 import { RATES_STRINGS } from './ratesStrings';
@@ -36,6 +38,7 @@ import { RATES_STRINGS } from './ratesStrings';
 type Strings = (typeof RATES_STRINGS)['en'];
 
 interface RatesSheetProps {
+  selection?: RatesSelection;
   isOpen: boolean;
   onClose: () => void;
   state: Pick<AppState, 'language' | 'rates' | 'accounts' | 'transactions' | 'homeHeader'>;
@@ -72,20 +75,12 @@ const Hero: React.FC<{
   onCurrency: (currency: NbsCurrency) => void;
   rate: number;
   scrub: RatePoint | null;
-  onScrub: (point: RatePoint | null) => void;
   stats: RangeStats | null;
-  points: RatePoint[];
-  range: RateRange;
-  onRange: (range: RateRange) => void;
-  rangeAvailable: (range: RateRange) => boolean;
-  loading: boolean;
+  children?: React.ReactNode;
   sourceLine: string;
   language: AppLanguage;
   s: Strings;
-}> = ({ currency, onCurrency, rate, scrub, onScrub, stats, points, range, onRange, rangeAvailable, loading, sourceLine, language, s }) => {
-  const drawn = useMemo(() => downsample(points), [points]);
-  const longRange = range === '1Y' || range === '5Y';
-  const chartDate = (date: string) => (longRange ? formatMediumDate(day(date), language) : formatShortDate(day(date), language));
+}> = ({ currency, onCurrency, rate, scrub, stats, children, sourceLine, language, s }) => {
   const shown = scrub ? scrub[1] : rate;
   // While scrubbing: that day, and how far it is from today's rate.
   const scrubDiff = scrub ? scrub[1] - rate : 0;
@@ -146,6 +141,30 @@ const Hero: React.FC<{
         )}
       </div>
 
+      {children}
+    </>
+  );
+};
+
+const ChartSection: React.FC<{
+  currency: NbsCurrency;
+  range: RateRange;
+  points: RatePoint[];
+  scrub: RatePoint | null;
+  onScrub: (point: RatePoint | null) => void;
+  onRange: (range: RateRange) => void;
+  rangeAvailable: (range: RateRange) => boolean;
+  loading: boolean;
+  previousDate?: string | null;
+  sourceLine: string;
+  language: AppLanguage;
+  s: Strings;
+}> = ({ currency, range, points, scrub, onScrub, onRange, rangeAvailable, loading, previousDate, sourceLine, language, s }) => {
+  const drawn = useMemo(() => downsample(points), [points]);
+  const longRange = range === '1Y' || range === '5Y';
+  const chartDate = (date: string) => (longRange ? formatMediumDate(day(date), language) : formatShortDate(day(date), language));
+  return (
+    <>
       <div className="-mx-2 mt-3">
         {drawn.length > 1 ? (
           <RateChart
@@ -178,7 +197,7 @@ const Hero: React.FC<{
           className="w-fit"
           options={RATE_RANGES.map((value) => ({ value, label: <span className="px-1">{s.range[value]}</span>, disabled: !rangeAvailable(value) }))}
         />
-        {(scrub || stats?.previousDate) && <span className="truncate text-[12px] font-semibold text-white/70">{sourceLine}</span>}
+        {(scrub || previousDate) && <span className="truncate text-[12px] font-semibold text-white/70">{sourceLine}</span>}
       </div>}
     </>
   );
@@ -235,7 +254,7 @@ const CodeChip: React.FC<{ code: Currency; onSwitch?: () => void; switchLabel?: 
 
 const Converter: React.FC<{
   currency: NbsCurrency;
-  onCurrency: (currency: NbsCurrency) => void;
+  onCurrency?: (currency: NbsCurrency) => void;
   rate: number;
   language: AppLanguage;
   s: Strings;
@@ -255,7 +274,7 @@ const Converter: React.FC<{
   const toCode: Currency = toRsd ? 'RSD' : currency;
   const error = unreadable ? t.amountUnreadable : negative ? t.amountAboveZero : null;
   const other = PAIRS.find((code) => code !== currency) ?? 'EUR';
-  const switchChip = { onSwitch: () => onCurrency(other), switchLabel: fill(s.switchCurrency, { currency: other }) };
+  const switchChip = onCurrency ? { onSwitch: () => onCurrency(other), switchLabel: fill(s.switchCurrency, { currency: other }) } : {};
 
   return (
     <section className="paper-tile flex flex-col gap-3 p-4" aria-labelledby={`${inputId}-title`}>
@@ -382,13 +401,21 @@ const Banner: React.FC<{ text: string; onRetry?: () => void; s: Strings }> = ({ 
 // ------------------------------------------------------------------ sheet
 
 /** NBS middle rates for EUR and USD: one pair at a time in the header with its chart, then the range, a converter and what the user's own wallets in that currency are worth. */
-export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }) => {
+export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state, selection }) => {
   const language = state.language;
   const t = TRANSLATIONS[language];
   const s = RATES_STRINGS[language];
-  const [currency, setCurrency] = useState<NbsCurrency>('EUR');
-  const [range, setRange] = useState<RateRange>('3M');
+  const mobile = useMediaQuery('(max-width: 767px)');
+  const [appliedSelection, setAppliedSelection] = useState(selection);
+  const [currency, setCurrency] = useState<NbsCurrency>(selection?.currency ?? 'EUR');
+  const [range, setRange] = useState<RateRange>(selection?.range ?? '3M');
   const [scrub, setScrub] = useState<RatePoint | null>(null);
+  if (selection && selection !== appliedSelection) {
+    setAppliedSelection(selection);
+    setCurrency(selection.currency);
+    setRange(selection.range);
+    setScrub(null);
+  }
   const today = belgradeToday();
   const from = rangeStart(today, range);
   const { history, status, retry } = useNbsHistory(from, isOpen);
@@ -439,6 +466,12 @@ export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }
     setScrub(null);
   };
 
+  const chart = (
+    <ChartSection currency={currency} range={range} points={points} scrub={scrub} onScrub={setScrub}
+      onRange={changeRange} rangeAvailable={rangeAvailable} loading={status === 'loading'}
+      previousDate={stats?.previousDate} sourceLine={sourceLine} language={language} s={s} />
+  );
+  const rangeRow = stats && points.length > 1 && <RangeRow stats={stats} range={range} language={language} s={s} />;
   return (
     <GlassSheet
       isOpen={isOpen}
@@ -454,24 +487,24 @@ export const RatesSheet: React.FC<RatesSheetProps> = ({ isOpen, onClose, state }
             onCurrency={changeCurrency}
             rate={rate}
             scrub={scrub}
-            onScrub={setScrub}
             stats={stats}
-            points={points}
-            range={range}
-            onRange={changeRange}
-            rangeAvailable={rangeAvailable}
-            loading={status === 'loading'}
             sourceLine={sourceLine}
             language={language}
             s={s}
-          />
+          >
+            {!mobile && chart}
+          </Hero>
         ),
       }}
     >
       <div className="flex flex-col gap-3 pb-1 pt-1">
         {failed && <Banner text={bannerText} onRetry={status === 'error' ? retry : undefined} s={s} />}
-        {stats && points.length > 1 && <RangeRow stats={stats} range={range} language={language} s={s} />}
-        {rate > 0 && <Converter currency={currency} onCurrency={changeCurrency} rate={rate} language={language} s={s} t={t} />}
+        {!mobile && rangeRow}
+        {rate > 0 && (
+          <Converter currency={currency} onCurrency={mobile ? undefined : changeCurrency} rate={rate} language={language} s={s} t={t} />
+        )}
+        {mobile && <div className={clsx('hero-bg rounded-[24px] px-4 pb-4 pt-1', tone === 'dark' && 'hero-dark')}>{chart}</div>}
+        {mobile && rangeRow}
         {holding && value && (
           <HoldingRow
             currency={currency}

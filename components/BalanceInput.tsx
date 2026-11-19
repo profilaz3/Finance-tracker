@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
+import { formatMoney } from '../utils/locale';
 import { Currency } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { Check, X } from 'lucide-react';
@@ -16,6 +17,7 @@ interface BalanceInputProps {
     ariaLabel?: string;
     /** Show the currency inside the field; turn off when the row already shows it. */
     showCurrency?: boolean;
+    showBalancePreview?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
     label,
     ariaLabel,
     showCurrency = true,
+    showBalancePreview = false,
 }) => {
     const [value, setValue] = useState(() => formatAmountForInput(initialAmount, language));
     const [invalid, setInvalid] = useState(false);
@@ -44,8 +47,8 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
         inputRef.current?.select();
     }, []);
 
+    const amount = parseAmountInput(value, language);
     const handleSave = () => {
-        const amount = parseAmountInput(value, language);
         if (amount === undefined) {
             setInvalid(true);
             inputRef.current?.focus();
@@ -138,6 +141,11 @@ export const BalanceInput: React.FC<BalanceInputProps> = ({
                     <X size={18} aria-hidden="true" />
                 </button>
             </div>
+            {showBalancePreview && amount !== undefined && (
+                <output className="px-1 text-sm font-medium tabular-nums">
+                    {formatMoney(initialAmount, currency, language)} → {formatMoney(amount, currency, language)}
+                </output>
+            )}
             {invalid && (
                 <p id={errorId} role="alert" className="px-1 text-[12px] font-medium text-neg">{t.splitErrorInvalidAmount}</p>
             )}
